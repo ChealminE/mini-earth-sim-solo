@@ -533,37 +533,6 @@ async def handle_ws_message(ws: WebSocket, msg: dict):
         serial_rescan_event.set()
 
 
-# "기본 실험" 목록은 파일로 관리하지 않고 basic_experiments/ 폴더를 직접 스캔해서 만든다.
-# info.json이 있는 폴더만 자동으로 목록에 뜨므로, 새 실험을 추가하려면
-# basic_experiments/<새폴더>/{info.json, code.ino}만 넣으면 끝 (index.json 수정 불필요).
-# 아래 mount보다 먼저 등록해야 이 경로가 정적 파일 서빙에 가로채이지 않는다.
-@app.get("/basic_experiments/index.json")
-async def basic_experiments_index():
-    base = RESOURCE_DIR / "basic_experiments"
-    items = []
-    for entry in sorted(base.iterdir()):
-        if not entry.is_dir():
-            continue
-        info_path = entry / "info.json"
-        if not info_path.exists():
-            continue
-        try:
-            info = json.loads(info_path.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError):
-            continue  # info.json이 깨져 있으면 목록에서 조용히 제외
-        items.append({
-            "id": entry.name,
-            "title": info.get("title", entry.name),
-            "board": info.get("board", "기타"),
-            "sensors": info.get("sensors", []),
-            # 실험 준비 화면은 보드 이름표를 '보드 종류'와 '통신 방식'으로 나눠 고르게 한다.
-            # 따로 적어 두면 그 값을 쓰고, 없으면 화면이 이름표("우노 R3 + HM-10 (BLE)")에서 알아서 나눈다.
-            **({"boardType": info["boardType"]} if info.get("boardType") else {}),
-            **({"link": info["link"]} if info.get("link") else {}),
-        })
-    return items
-
-
 # style.css, js/*.js 등 정적 파일 서빙 (반드시 위의 라우트들 뒤에 등록해야
 # "/", "/data", "/ws"가 이 마운트에 가로채이지 않음)
 app.mount("/js", StaticFiles(directory=RESOURCE_DIR / "js"), name="js")
@@ -572,7 +541,6 @@ app.mount("/css", StaticFiles(directory=RESOURCE_DIR / "css"), name="css")
 # three.js·Chart.js를 인터넷(CDN) 대신 여기서 준다 - 인터넷이 없거나 느린 교실에서도 3D·그래프가 뜨게
 app.mount("/vendor", StaticFiles(directory=RESOURCE_DIR / "vendor"), name="vendor")
 app.mount("/texture_image", StaticFiles(directory=RESOURCE_DIR / "texture_image"), name="textures")
-app.mount("/basic_experiments", StaticFiles(directory=RESOURCE_DIR / "basic_experiments"), name="basic_experiments")
 # 1인칭 탐험 모드 (firstperson/index.html) - html=True라 /firstperson/ 으로 접속하면 index.html이 열림
 app.mount("/firstperson", StaticFiles(directory=RESOURCE_DIR / "firstperson", html=True), name="firstperson")
 
@@ -942,18 +910,6 @@ def mqtt_on_message(topic: str, payload: bytes):
     submit_incoming(obj, dev_id)
 
 
-async def start_embedded_broker(port: int) -> bool:
-    global mqtt_publish
-    from mqtt_broker import MiniBroker
-    broker = MiniBroker(on_message=mqtt_on_message)
-    try:
-        await broker.start("0.0.0.0", port)
-    except OSError:
-        return False
-    mqtt_publish = lambda topic, data: broker.publish(topic, data)
-    return True
-
-
 def start_external_mqtt(host: str, port: int) -> bool:
     """Mosquitto 등 따로 켜 둔 브로커에 '구독자'로 붙는다 (paho-mqtt 필요)."""
     global mqtt_publish
@@ -1053,20 +1009,12 @@ if __name__ == "__main__":
         main_loop = asyncio.get_running_loop()
         asyncio.create_task(session_tick())
 
-        if not args.no_mqtt:
-            if args.mqtt_host:
-                ok = await main_loop.run_in_executor(None, start_external_mqtt, args.mqtt_host, args.mqtt_port)
-                if ok:
-                    server_info["mqtt"] = {"mode": "external", "host": args.mqtt_host, "port": args.mqtt_port}
-            elif await start_embedded_broker(args.mqtt_port):
-                server_info["mqtt"] = {"mode": "embedded", "host": ip, "port": args.mqtt_port}
-                print(f"  WiFi(MQTT) 브로커:     {ip}:{args.mqtt_port} (서버에 내장, ESP32 코드의 MQTT_SERVER에 이 주소)")
-            else:
-                # 1883 포트가 이미 쓰이고 있으면 대개 Mosquitto가 서비스로 켜져 있는 경우라 그쪽에 붙는다
-                print(f"  [MQTT] {args.mqtt_port} 포트를 이미 다른 프로그램(Mosquitto 등)이 쓰고 있어 그 브로커에 연결합니다")
-                ok = await main_loop.run_in_executor(None, start_external_mqtt, "127.0.0.1", args.mqtt_port)
-                if ok:
-                    server_info["mqtt"] = {"mode": "external", "host": ip, "port": args.mqtt_port}
+        # 4차 A3: 내장 MQTT 브로커(mqtt_broker.py)는 직접 실험과 함께 지웠다. 이 파일의 센서 중계 부분은
+        # A4에서 정적 파일 서버로 다시 쓸 때 통째로 걷어 낸다 — 그때까지 서버가 뜨도록 내장 브로커 호출만 뺐다.
+        if not args.no_mqtt and args.mqtt_host:
+            ok = await main_loop.run_in_executor(None, start_external_mqtt, args.mqtt_host, args.mqtt_port)
+            if ok:
+                server_info["mqtt"] = {"mode": "external", "host": args.mqtt_host, "port": args.mqtt_port}
         print("=" * 55)
 
         if not args.no_browser:

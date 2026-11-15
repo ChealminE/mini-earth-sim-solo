@@ -13,9 +13,9 @@
 //   R7 모형 = 점선, 한 지점 = 범례 꼬리표     R8 기간은 정해진 세 개(전체·1950~·1980~)
 // 자료 기간 차이(3차 마스터 결정 6): 자료가 없는 구간은 옅은 빗금 + "자료 없음(1989년부터)", 이어 붙은 경계(seg)는 세로 점선 + 설명.
 //
-// 끌어 놓기는 마우스 전용(터치는 하지 않음 — 3차 결정 4). 이벤트 흐름은 직접 실험 탭 js/tab-live.js 의 카드 끌기
-// (pointerdown → setPointerCapture → pointermove 에서 elementFromPoint 로 놓을 곳 표시 → pointerup)와 같게 해서
-// 나중에 그 탭이 이 모듈로 옮겨 오기 쉽게 했다. 대체 조작: 카드 Enter/Space·[＋] = 넣기, 칩 [✕]·Delete = 빼기.
+// 끌어 놓기는 마우스 전용(터치는 하지 않음 — 3차 결정 4). 이벤트 흐름: pointerdown → setPointerCapture →
+// pointermove 에서 elementFromPoint 로 놓을 곳 표시 → pointerup (예전 직접 실험 탭의 카드 끌기와 같은 방식 — 그 탭은
+// 4차 A3에서 지웠다). 대체 조작: 카드 Enter/Space·[＋] = 넣기, 칩 [✕]·Delete = 빼기.
 // ============================================================================
 
 // ── 계산 (DOM 없음, node 검사: tools/test_catalog.js) ──

@@ -116,8 +116,9 @@ BODY = {"aerial": body_of(aerial_html), "fp": body_of(fp_html)}
 
 AERIAL_JS = ["js/earth-model.js", "js/earth-data.js", "js/sources.js", "js/theme.js", "js/icons.js",
              "js/source-tip.js", "js/earth-system.js", "js/earth-visual.js", "js/common.js", "js/ir-scope.js", "js/data-catalog.js", "js/graph-workspace.js", "js/worksheet.js", "js/tab-current.js",
-             "js/tab-future.js", "js/inquiry-steps.js", "js/inquiry.js", "js/live-fit.js", "js/xlsx-lite.js", "js/tab-live.js",
-             "js/live-analysis.js", "js/live-setup.js", "js/live-file.js", "js/main.js"]
+             "js/tab-future.js", "js/inquiry-steps.js", "js/inquiry.js", "js/xlsx-lite.js", "js/main.js"]
+# 4차 A3: 직접 실험 스크립트 5개(live-fit·tab-live·live-analysis·live-setup·live-file)를 뺐다.
+# xlsx-lite.js 는 남긴다 — downloadBlob 을 tab-future.js·inquiry.js·worksheet.js 가 쓴다(마스터 §6-2).
 FP_JS = ["js/earth-model.js", "js/earth-data.js", "js/earth-system.js", "firstperson/fp-world.js", "firstperson/fp-weather.js",
          "firstperson/fp-audio.js", "firstperson/fp-minimap.js", "firstperson/fp-field.js",
          "firstperson/fp-tools.js", "firstperson/fp-player.js", "firstperson/fp-main.js"]
@@ -188,8 +189,6 @@ CARDS = [
      "관측 자료로 본 지구의 지금 — 대기 CO₂·기온·바다 pH·화석연료 배출 (NOAA·HadCRUT5·HOT·GCP)", ""),
     ("future", "globe", "미래 예측",
      "1750~2200년 · 사람이 내보낸 탄소가 지구를 어떻게 바꾸는지 재생하고, IPCC 시나리오와 직접 설계로 미래를 예측", ""),
-    ("live", "beaker", "직접 실험",
-     "센서 실시간 측정 — 이 단일 파일 버전에서는 쓸 수 없습니다 (server.py 필요)", "off"),
     ("fp", "compass", "탐험",
      "1인칭 시점으로 걸어다니며 환경을 조사하는 탐험 모드", ""),
 ]
@@ -268,11 +267,6 @@ window.__boot__ = function (w, mode, tab) {
     d.querySelectorAll('[data-tab-go]').forEach(function (a) {
       var go = a.getAttribute('data-tab-go');
       a.removeAttribute('href');
-      if (go === 'live') {   // 센서 탭은 단일 파일에서 쓸 수 없다 (시작 화면 카드도 꺼져 있음)
-        a.setAttribute('aria-disabled', 'true');
-        a.title = '단일 파일 버전에서는 직접 실험을 쓸 수 없습니다';
-        return;
-      }
       a.style.cursor = 'pointer';
       a.addEventListener('click', function (e) { e.preventDefault(); w.switchTab(go); });
     });
@@ -285,26 +279,6 @@ window.__boot__ = function (w, mode, tab) {
       fpGo.addEventListener('click', function (e) { e.preventDefault(); open_('fp', w.firstPersonQuery()); });
     }
 
-    // 센서 탭은 server.py(WebSocket)가 있어야 돈다. 단일 파일에서는 막고 이유를 알린다.
-    var btn = d.getElementById('startStopBtn');
-    if (btn) {
-      btn.disabled = true;
-      btn.title = '단일 파일 버전에서는 센서 연결을 쓸 수 없습니다';
-      // disabled 만으로는 초록색 그대로라 눌리는 것처럼 보인다
-      btn.style.opacity = '.4';
-      btn.style.cursor = 'not-allowed';
-    }
-    var live = d.getElementById('tab-live');
-    if (live) {
-      var note = d.createElement('div');
-      note.style.cssText = 'margin:10px 0;padding:11px 14px;border-radius:9px;line-height:1.7;' +
-        'background:#2a2118;border:1px solid #6b4f2a;color:#e8c893;font-size:12.5px';
-      note.innerHTML = '이 <b>단일 HTML 파일</b> 버전에서는 실시간 센서 측정을 쓸 수 없습니다. ' +
-        '센서 값은 <b>server.py</b> 가 중계하는데, 파일 하나만으로는 그 서버가 없기 때문입니다.<br>' +
-        '실제 측정을 하려면 저장소를 받아 <b>run_server.bat</b> 을 실행한 뒤 ' +
-        '<b>http://127.0.0.1:8000</b> 으로 접속하세요.';
-      live.insertBefore(note, live.firstChild);
-    }
   } else {
     // 1인칭에는 "처음으로" 링크가 없다. 포인터락이 풀려 있을 때만 껍데기 버튼을 보여 준다.
     document.getElementById('back').classList.add('on');
@@ -370,8 +344,7 @@ page = """<!DOCTYPE html>
   <div class="grid">
 %s
   </div>
-  <div class="footer-hint">이 파일 하나에 전부 들어 있습니다 — 더블클릭하면 바로 열립니다.<br>
-  실시간 센서 측정만 server.py 가 필요합니다.</div>
+  <div class="footer-hint">이 파일 하나에 전부 들어 있습니다 — 더블클릭하면 바로 열립니다.</div>
 </div>
 <div id="viewer"><iframe id="frame" allow="pointer-lock; fullscreen; autoplay"></iframe></div>
 <div id="loading">불러오는 중…</div>

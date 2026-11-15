@@ -8,15 +8,14 @@ renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.1;
 
-// 3D 바탕색: 탭마다 다르다. 현재 실태·미래 예측은 종이색(css/theme.css --paper), 직접 실험 탭은 예전 그대로
-// 검정(렌더러 기본값)을 넘긴다 - 직접 실험 탭은 동료가 테마를 옮길 때까지 바꾸지 않는다.
-const LIVE_BACKDROP = 0x000000;
+// 3D 바탕색: 현재 실태·미래 예측·시작 화면 모두 종이색(css/theme.css --paper)을 넘긴다. 적외선 보기는 --ir-bg.
+// (4차 A3: 검정 바탕을 쓰던 직접 실험 탭을 지웠다.)
 function setSceneBackdrop(hex) { renderer.setClearColor(hex, 1); }
 
 const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 100);
 // 화각은 세로 기준 38°다. 3D 칸이 세로로 길면 같은 세로 화각에서 모형 양옆이 잘린다.
 // setCameraFit(a)를 부른 화면(현재 실태·미래 예측)에서만, 칸의 종횡비가 a보다 좁을 때 세로 화각을 넓혀
-// 가로로 보이는 폭을 종횡비 a일 때와 같게 둔다. 부르지 않은 화면(직접 실험 탭·시작 화면)은 예전과 똑같다.
+// 가로로 보이는 폭을 종횡비 a일 때와 같게 둔다. 부르지 않은 화면(시작 화면)은 예전과 똑같다.
 // 거꾸로 칸이 넓고 낮으면(3차 B1의 좌측 위 3D 칸, 약 3.5:1) 세로 38°로는 받침대 아래가 잘린다. 그래서 세로 화각의
 // 최솟값(minFov)도 함께 받는다. 장면 크기·배치·카메라 거리는 그대로 두고 화각만 넓힌다.
 const CAM_FOV = 38;
@@ -1775,16 +1774,18 @@ function stepScene(S) {
 }
 
 // ================= 화면별 아크릴은 필요할 때만 만들기 =================
-// 대시보드(index.html)에는 현재 실태·미래 예측·직접 실험 세 화면이 들어 있지만, 시작 화면에서 하나를
-// 골라 들어오므로 한 번에 하나만 보인다. 예전처럼 세 화면 아크릴을 다 만들면 둘은 만들기만 하고 안 쓰는
+// 대시보드(index.html)에는 현재 실태·미래 예측 두 화면이 들어 있지만, 시작 화면에서 하나를
+// 골라 들어오므로 한 번에 하나만 보인다. 두 화면 아크릴을 다 만들면 하나는 만들기만 하고 안 쓰는
 // 셈이라(나무·물·건물 한 세트씩), 지금 연 화면 것만 만든다. 나머지는 state만 가진 빈 껍데기로 두고,
 // 그 화면을 실제로 열 때 ensureSceneBuilt()가 같은 객체를 채운다 - 탭 코드가 들고 있는 sceneFuture 같은
 // 변수가 그대로 같은 객체를 가리키므로 탭 코드는 고칠 필요가 없다.
-const DASHBOARD_TAB = new URLSearchParams(location.search).get('tab') || 'current';
-// paper: 종이 테마 탭(현재 실태·미래 예측)의 씬인가 - 2차 개편 D의 새 3D 표현은 이 씬에서만 만든다
+// 없는 탭(예전 주소 ?tab=live 등)은 main.js 가 현재 실태를 여므로 여기서도 현재 실태 아크릴을 처음부터 만든다.
+const DASHBOARD_TAB = new URLSearchParams(location.search).get('tab') === 'future' ? 'future' : 'current';
+// paper: 종이 테마 씬인가 - 대시보드 두 탭은 모두 종이 테마(2차 개편 D의 새 3D 표현). 종이가 아닌 예전 모습은
+// 이제 시작 화면(select.html, buildAcrylicScene() 기본값)만 쓴다.
 // predictFx: 받침대 연산 효과(2차 F6)를 만들 씬인가 - 미래 예측 탭만
 function sceneFor(tab) {
-  const opts = { paper: tab !== 'live', predictFx: tab === 'future' };
+  const opts = { paper: true, predictFx: tab === 'future' };
   return tab === DASHBOARD_TAB ? Object.assign(buildAcrylicScene(opts), { opts }) : { dormant: true, opts, state: {} };
 }
 function ensureSceneBuilt(S) {
