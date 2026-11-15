@@ -29,12 +29,15 @@ const MINI_REFRESH = 0.1;              // 초당 10회면 충분하다 (매 프�
 // 패턴이 안 보였다. 지금 손에 든 도구의 기록만 골라 값에 따라 색을 칠한다.
 // 축은 고정이다 - 기록 범위에 맞춰 늘이면 도심만 열 번 재도 노이즈가 빨강~파랑으로 퍼진다.
 //   온도  : 0 → 36 °C, 파랑 → 흰색 → 빨강 (18 °C 근처가 흰색)
-//   CO2   : 설정 CO2 대비 −60 → +120 ppm, 초록 → 노랑 → 주황 (슬라이더를 바꿔도 공간 패턴이 같게)
+//   CO2   : 그해 전 지구 평균 대비 −50 → +50 ppm, 초록 → 노랑 → 주황 (연도를 바꿔도 공간 패턴이 같게)
+//           4차 D2: 예전 −60 → +120 은 실제 폭보다 넓어 바다(0)·도심(+25)이 모두 노랑 근처에 몰렸다. 실제 폭(fp-model zoneCO2,
+//           2023~2100): 녹지 −30~−45 · 나무 밑 −85~−122 · 바다 0 · 도심 0~+25 · 배기구 곁 +110 이상. 0(바다 = 배경)을 가운데
+//           노랑에 두고 ±50 으로 잡으면 녹지는 초록, 도심은 주황 쪽으로 갈린다. 나무 밑·배기구 곁은 양 끝에 붙는다(색이 넘치지 않음).
 //   pH    : 7.65 → 8.25, 주황 → 노랑 → 파랑
 //   해수 분석기: Ω 0.8 → 3.5, 빨강(1 밑 = 용해) → 주황 → 청록
 const DOT_SCALE = {
   temp: { lo: 0, hi: 36, stops: ['#38a0ff', '#f2ecdc', '#e8402f'], label: '온도', fmt: v => v.toFixed(0) + '°', val: r => r.value },
-  co2:  { lo: -60, hi: 120, stops: ['#4fc36a', '#e8d25a', '#e8642a'], label: 'CO₂ 평균 대비', fmt: v => (v > 0 ? '+' : '') + v.toFixed(0), val: r => r.value - r.co2 },
+  co2:  { lo: -50, hi: 50, stops: ['#4fc36a', '#e8d25a', '#e8642a'], label: 'CO₂ 평균 대비', fmt: v => (v > 0 ? '+' : '') + v.toFixed(0), val: r => r.value - r.co2 },
   ph:   { lo: 7.65, hi: 8.25, stops: ['#e8683a', '#e2d35c', '#4a9be0'], label: 'pH', fmt: v => v.toFixed(2), val: r => r.value },
   sea:  { lo: 0.8, hi: 3.5, stops: ['#e2483a', '#f0b45c', '#5dcaa5'], label: 'Ω', fmt: v => v.toFixed(1), val: r => r.value },
 };
@@ -50,6 +53,12 @@ function dotColor(S, v) {
 FPMinimap.init = function () {
   this.el = document.getElementById('minimap');
   if (!this.el) return;
+  this.box = document.getElementById('minimapBox') || this.el;
+  // 4차 D2: 범례 글자는 캔버스 밖 HTML(#minimapLegend, 토큰 색·--fs-1). 바뀔 때만 다시 쓴다
+  this.lgName = document.getElementById('mmName');
+  this.lgBar = document.getElementById('mmBar');
+  this.lgHi = document.getElementById('mmHi');
+  this._lgKey = '';
   this.ctx = this.el.getContext('2d');
   this.applyMode();
 };
@@ -62,15 +71,33 @@ FPMinimap.toggle = function () {
 FPMinimap.applyMode = function () {
   const w = MINI_SIZES[this.mode];
   if (!this.el) return;
-  if (w === 0) { this.el.style.display = 'none'; return; }
-  this.el.style.display = 'block';
-  // 맵이 6x3(가로:세로 = 2:1)이라 캔버스도 그 비율에 여백만 더한다
-  const h = Math.round(w / 2) + 14;
+  if (w === 0) { this.box.style.display = 'none'; return; }
+  this.box.style.display = '';
+  // 맵이 6x3(가로:세로 = 2:1)이라 캔버스도 그 비율에 여백만 더한다 (글자 줄은 캔버스 밖으로 뺐다)
+  const h = Math.round((w - 12) / 2) + 12;
   this.el.width = w;
   this.el.height = h;
   this.el.style.width = w + 'px';
   this.el.style.height = h + 'px';
+  this.box.style.width = w + 'px';
   this._t = MINI_REFRESH;   // 다음 프레임에 바로 다시 그리게
+};
+
+// 범례: 손에 든 도구의 기록이 있으면 [이름 최소 ▬▬ 최대], 없으면 'M 지도 크기' 안내
+FPMinimap.legend = function (L) {
+  const key = L ? L.label : '';
+  if (key === this._lgKey || !this.lgName) return;
+  this._lgKey = key;
+  if (!L) {
+    this.lgName.innerHTML = '<span class="key">M</span>지도 크기';
+    this.lgBar.hidden = true;
+    this.lgHi.textContent = '';
+    return;
+  }
+  this.lgName.textContent = `${L.label} ${L.fmt(L.lo)}`;
+  this.lgBar.style.background = `linear-gradient(90deg, ${L.stops.join(', ')})`;
+  this.lgBar.hidden = false;
+  this.lgHi.textContent = L.fmt(L.hi);
 };
 
 FPMinimap.update = function (dt) {
@@ -88,7 +115,7 @@ FPMinimap.draw = function () {
   const BW = FPWorld.BOX_W, BD = FPWorld.BOX_D, Z = FPWorld.ZONE_W;
   const PAD = 6;
   const mw = W - PAD * 2, mh = mw / (BW / BD);     // 지도 영역
-  const oy = PAD + 4;
+  const oy = PAD;
   const X = wx => PAD + (wx + BW / 2) / BW * mw;
   const Y = wz => oy + (wz + BD / 2) / BD * mh;
 
@@ -158,7 +185,7 @@ FPMinimap.draw = function () {
         c.fillStyle = dotColor(S, S.val(r));
         c.beginPath(); c.arc(X(r.x), Y(r.z), rad, 0, Math.PI * 2); c.fill(); c.stroke();
       }
-      this._legend = S;   // 범례는 아래 글자 줄에 ('M 지도' 자리) - 지도 위를 가리지 않게
+      this._legend = S;   // 범례는 지도 아래 HTML 줄(#minimapLegend)에 — 지도 위를 가리지 않게
     } else {
       this._legend = null;
     }
@@ -198,32 +225,8 @@ FPMinimap.draw = function () {
   c.lineWidth = 1;
   c.beginPath(); c.arc(px, py, 3, 0, Math.PI * 2); c.fill(); c.stroke();
 
-  // 아래 눈금: 현재 구역과 조작 안내
-  c.fillStyle = '#8fa3ad';
-  c.font = '10px sans-serif';
-  c.textAlign = 'left';
-  c.fillText(FPPlayer.currentZone(), PAD, H - 3);
-  const L = FPField && FPField.rows.length ? this._legend : null;
-  if (!L) {
-    c.textAlign = 'right';
-    c.fillText('M 지도', W - PAD, H - 3);
-    return;
-  }
-  // 범례: [이름 최소 ▬▬▬ 최대] 를 오른쪽 아래에
-  c.font = '9px sans-serif';
-  const hiTxt = L.fmt(L.hi), loTxt = L.fmt(L.lo);
-  const LW = Math.round(W * 0.2), LH = 4;
-  const xr = W - PAD - c.measureText(hiTxt).width - 3;
-  const lx = xr - LW, ly = H - 9;
-  c.textAlign = 'right';
-  c.fillStyle = '#d6e2e8';
-  c.fillText(hiTxt, W - PAD, H - 3);
-  const g = c.createLinearGradient(lx, 0, lx + LW, 0);
-  L.stops.forEach((col, i) => g.addColorStop(i / (L.stops.length - 1), col));
-  c.fillStyle = g;
-  c.fillRect(lx, ly, LW, LH);
-  c.fillStyle = '#d6e2e8';
-  c.fillText(`${L.label} ${loTxt}`, lx - 3, H - 3);
+  // 범례(HTML). 구역 이름은 HUD 가 보여 주므로 지도에는 다시 적지 않는다(4차 D2)
+  this.legend(FPField && FPField.rows.length ? this._legend : null);
 };
 
 function roundRect(c, x, y, w, h, r) {

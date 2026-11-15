@@ -60,11 +60,9 @@ function fit() {
 window.addEventListener('resize', fit);
 fit();
 
-// ── HUD 요소 ──
+// ── 설정창 요소 ──
 // 4차 B4(마스터 D5): 교사용 CO₂ 직접 입력(#co2Slider)을 뺐다. CO₂는 늘 배출 경로·연도의 결과다.
-const hudCars = document.getElementById('hudCars');
-const hudSea = document.getElementById('hudSea');
-const hudCoral = document.getElementById('hudCoral');
+// 4차 D2: HUD 의 자동차·바다·산호 줄(hudCars·hudSea·hudCoral)을 뺐다 — HUD 는 아래 'HUD' 절.
 // 배출 경로·연도 → 전 지구 CO₂ (3차 E4)
 const fpScenario = document.getElementById('fpScenario');
 const fpYear = document.getElementById('fpYear');
@@ -92,14 +90,27 @@ Icons.fill();
 // 계측기가 값을 '확정'했을 때만 기록한다 (수렴 중인 값은 아직 못 믿는 값이라서)
 FPTools.onMeasured = (tool, value, reading) => FPField.record(tool, value, reading);
 
-// ── HUD ─────────────────────────────────────────────────────────────────────
+// ── HUD (4차 D2) ────────────────────────────────────────────────────────────
+// 왼쪽 위 한 덩어리: 지금 구역 · 연도 배지 · 든 도구. 측정값(CO₂·바다 6값·산호)과 좌표·자동차 수는 뺐다 —
+// HUD 가 재야 할 값을 늘 보여 주면 측정할 이유가 사라진다(D §2). 측정값은 도구 표시창과 기록 알림에만.
 const hudZone = document.getElementById('hudZone');
-const hudPos = document.getElementById('hudPos');
-const hudMode = document.getElementById('hudMode');
+const hudZoneSub = document.getElementById('hudZoneSub');
+const hudYear = document.getElementById('hudYear');
+const hudTool = document.getElementById('hudTool');
 const waterOverlay = document.getElementById('waterOverlay');
-const hudCo2 = document.getElementById('hudCo2');
-// 서 있는 구역의 대기 키 (fp-player.js currentZone 과 같은 경계)
+// 서 있는 구역 (fp-player.js currentZone 과 같은 경계). 학생 말로는 바다·녹지·도시 세 구역이다
 const zoneKeyAt = () => (FPPlayer.underwater || FPPlayer.pos.x < -FPWorld.ZONE_W / 2 ? 'ocean' : FPPlayer.pos.x > FPWorld.ZONE_W / 2 ? 'city' : 'green');
+const ZONE_NAME = { ocean: '바다', green: '녹지', city: '도시' };
+// 연도 배지 글. 기본은 과거 / 현재 / 기준 미래(고른 경로) — '현재' = FPModel.NOW_YEAR(마스터 D6).
+// E(타임라인)·F(나의 미래)·T(우리 사회의 미래)가 이 함수를 바꿔 끼워 '나의 미래' 같은 이름을 채운다.
+FPScenario.badge = () => {
+  const y = FPScenario.year, now = FPModel.NOW_YEAR;
+  if (y < now) return { text: `${y}년 · 과거`, era: 'past' };
+  if (y === now) return { text: `${y}년 · 현재`, era: 'now' };
+  return { text: `${y}년 · 기준 미래 (${FPScenario.PRESETS[FPScenario.preset]})`, era: 'future' };
+};
+// 글이 바뀔 때만 DOM 을 건드린다 (초당 8번 같은 글을 다시 쓰면 레이아웃만 다시 계산된다)
+const setText = (el, v) => { if (el.textContent !== v) el.textContent = v; };
 let hudTimer = 0;
 
 // ── 프레임 루프 ─────────────────────────────────────────────────────────────
@@ -168,32 +179,13 @@ function animate() {
   hudTimer += dt;
   if (hudTimer > 0.12) {
     hudTimer = 0;
-    hudZone.textContent = FPPlayer.currentZone();
-    // 1유닛=50m 환산으로 미터 표기 - 스케일을 체감하게 하려는 의도
-    hudPos.textContent =
-      `X ${(FPPlayer.pos.x * 50).toFixed(0)}m · Z ${(FPPlayer.pos.z * 50).toFixed(0)}m · 고도 ${((FPPlayer.pos.y - FPWorld.OCEAN_BASE) * 50).toFixed(1)}m`;
-    const mode = [];
-    if (FPPlayer.inWater) mode.push('수영');
-    else if (FPPlayer.sprinting) mode.push('달리기');
-    hudMode.textContent = mode.length ? mode.join(' · ') : '걷기';
-    // 전 지구 = 조감과 같은 모형의 그 해 값 / 이 지점 = 구역 대기(도심 증가분·녹지 흡수 — 해양은 배경 그대로, 4차 C3)
-    hudCo2.textContent = `CO₂ 전 지구 평균 ${FPWorld.co2.toFixed(0)} ppm (조감과 같은 모형 · ${FPScenario.label()})`
-      + ` · 이 지점 공기 ${FPModel.zoneCO2(zoneKeyAt(), fpSample()).toFixed(0)} ppm`;
-    const gas = FPWorld.gasCarCount, ev = FPWorld.cars.length - gas;
-    hudCars.textContent = `내연 ${gas} · 전기 ${ev}`;
-    // 개방 해역 대표값 = 그해 엔진 표층 해양(조감 미래 예측과 같은 수온·pH·Ω, 4차 C4).
-    // 해수 pCO₂가 대기와 조금 다른 것은 바다가 대기를 몇 해 늦게 따라가기 때문이다(엔진 표층 DIC) — '평형 중' 문구는 지웠다.
-    const sea = openSeaState();
-    hudSea.textContent =
-      `${sea.temp.toFixed(1)}°C · 해수 pCO₂ ${sea.pco2.toFixed(0)}` +
-      ` · pH ${sea.pH.toFixed(2)} · Ω ${sea.omega.toFixed(2)}` +
-      ` · 어류 ${FPWorld.aliveFish}/${FPWorld.fish.length} · 수초 ${FPWorld.alivePlants}/${FPWorld.plantTotal}`;
-    // 산호는 자리마다 다르게 반응한다: 따뜻한 곳은 백화, 차가운 냉수대는 석회화 저해
-    const om = FPWorld.coldPoolOmega;
-    hudCoral.textContent =
-      `백화 ${Math.round(FPWorld.coralBleaching * 100)}% · 석회화 저해 ${Math.round(FPWorld.coralCalcLoss * 100)}%` +
-      ` · 냉수대 Ω ${om.toFixed(2)}` + (om < 1 ? ` ⚠ 골격 용해 (산호 ${FPWorld.coralDissolving}개)` : '');
-    hudCoral.classList.toggle('warn', om < 1);
+    setText(hudZone, ZONE_NAME[zoneKeyAt()]);
+    setText(hudZoneSub, FPPlayer.underwater ? '수중' : (FPPlayer.inWater ? '헤엄치는 중' : ''));
+    const b = FPScenario.badge();
+    setText(hudYear, b.text);
+    if (hudYear.dataset.era !== b.era) hudYear.dataset.era = b.era;
+    const sel = FPTools.selected;
+    setText(hudTool, sel >= 0 && HOTBAR_LABELS[sel] ? HOTBAR_LABELS[sel] : '없음');
   }
 
   renderer.render(FPWorld.scene, camera);

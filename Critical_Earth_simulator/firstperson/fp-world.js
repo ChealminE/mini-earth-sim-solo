@@ -1427,7 +1427,7 @@ FPWorld.refresh = function () { if (FPWorld.sample) applyWorldState(FPWorld.samp
 // 변화폭이 0.48로 줄어든 만큼, '눈에 보이는 변화'는 pH 자체가 아니라
 // 아라고나이트 포화도 Ω와 수온으로 만든다. 아래 백화/석회화 참고.
 // 4차 C4: 1인칭 바다는 그해 엔진의 표층 해양 상태(DIC)를 쓴다 — 개방 해역 pH·Ω = 엔진 o.pH·o.omega.
-// (쓰는 곳이 없던 oceanPH()는 지웠다 — HUD는 openSeaState()를 읽는다.)
+// (쓰는 곳이 없던 oceanPH()는 지웠다. openSeaState()는 산호·어류 갱신이 읽는다 — HUD 바다 줄은 4차 D2에서 뺐다.)
 
 // ── 산호에 일어나는 두 가지 서로 다른 일 ────────────────────────────────────
 // 예전엔 pH 하나로 백화와 개체수 감소를 전부 굴렸는데, 기작이 틀렸다.

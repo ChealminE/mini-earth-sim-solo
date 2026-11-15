@@ -28,6 +28,13 @@ const SPOT_KO = {
   airOcean: '해양 대기', airGreen: '녹지 대기', airCity: '도심 대기',
 };
 const KIND_KO = { temp: '온도', ph: 'pH', co2: 'CO2', sea: '해수분석' };
+// 기록 알림(토스트) 글: 항목 + 값 + 단위. 자릿수는 계측기 분해능(fp-tools TOOL_SPEC.res)과 같게
+function recordText(r) {
+  if (r.kind === 'co2') return `CO₂ ${r.value.toFixed(0)} ppm`;
+  if (r.kind === 'temp') return `온도 ${r.value.toFixed(1)} °C`;
+  if (r.kind === 'ph') return `pH ${r.value.toFixed(2)}` + (r.waterTemp != null ? ` (수온 ${r.waterTemp.toFixed(1)} °C)` : '');
+  return `Ω ${r.value.toFixed(2)}` + (r.sw ? ` · 수온 ${r.sw.temp.toFixed(1)} °C` : '');
+}
 // 바다를 잰 기록은 냉수대·경계·개방 해역으로 나눠 적는다 (유빙과의 거리로 정하는 위치 구분)
 const SEA_CLASS_KO = { cold: '냉수대', edge: '냉수대 경계', open: '개방 해역' };
 const CORAL_NEAR = 0.06;   // 산호에서 이 거리(실척 3m) 안에서 잰 바다 기록은 '산호 곁'으로 본다
@@ -76,6 +83,9 @@ FPField.record = function (tool, value, reading) {
   };
   this.rows.push(row);
   if (this.transect) this.addTransectPoint(row);
+  // 4차 D2: HUD 에서 측정값을 뺐으므로, 확정된 값은 이 짧은 알림으로 한 번 보여 준다(예: '도심 대기 CO₂ 449 ppm · 기록 #12').
+  // 과제 완료 알림이 이걸 덮어써야 하므로 checkTasks 보다 먼저 띄운다.
+  this.toast(`${row.spotKo} ${recordText(row)} · 기록 #${row.n}`, 2600);
   this.checkTasks();
   this.refresh();
   this.flash();

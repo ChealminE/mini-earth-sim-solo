@@ -200,8 +200,10 @@ for (const p of PATHS) {
   const tools = code('firstperson/fp-tools.js');
   check('옛 구역 오프셋·적분 삭제 (CO2_ZONE·zoneCO2Target·AIR_TAU_Z, 도심 +55~+120·해양 −15~−30)',
     !/CO2_ZONE|zoneCO2Target|AIR_TAU_Z|FPAir\.D\b|this\.D\[/.test(tools));
-  // 측정(fp-tools measureCO2)과 HUD '이 지점 공기'(fp-main, C4에서 FPAir.zoneCO2 대신 직접)가 같은 함수를 부른다
-  check('구역 CO₂ 계산은 FPModel.zoneCO2 하나 (fp-tools 측정·fp-main HUD)', /FPModel\.zoneCO2\(/.test(tools) && /FPModel\.zoneCO2\(/.test(code('firstperson/fp-main.js'))
+  // 측정(fp-tools measureCO2)이 FPModel.zoneCO2 를 부른다. 4차 D2: HUD '이 지점 공기' 줄은 뺐다(측정값을 HUD 에 두지 않음, D §2) —
+  // HUD(fp-main)가 CO₂ 를 따로 계산·표시하지 않는지도 함께 본다
+  const mainCode = code('firstperson/fp-main.js');
+  check('구역 CO₂ 계산은 FPModel.zoneCO2 하나 (fp-tools 측정), HUD 에 CO₂ 값 없음 (D2)', /FPModel\.zoneCO2\(/.test(tools) && !/zoneCO2\(|hudCo2|FPWorld\.co2/.test(mainCode)
     && !/\* 260|\* 110|55 \+ 60/.test(tools));
 }
 
@@ -313,6 +315,22 @@ for (const p of PATHS) {
   check('1인칭 코드가 가리키는 등록부 키가 전부 있음', missing.length === 0, missing.length ? missing.join(', ') : `${refs.size}개`);
   check('AR6 증폭 근거 = 발췌본 A.1.2 (verified 두 키의 page)', ['fp_land_amp', 'fp_ocean_amp'].every(k => /IPCC_AR6_WG1_SPM\.md 15행/.test(SOURCES[k].page))
     && /1\.59 \[1\.34 to 1\.83\]/.test(read('docs/refs/발췌/IPCC_AR6_WG1_SPM.md')) && /0\.88 \[0\.68 to 1\.01\]/.test(read('docs/refs/발췌/IPCC_AR6_WG1_SPM.md')));
+}
+
+// ── D2 HUD 재설계 (정적 검사) ────────────────────────────────────────────────
+{
+  const strip = f => read(f).replace(/<!--[\s\S]*?-->/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
+  const html = strip('firstperson/index.html');
+  const hud = (html.match(/<div id="hud">([\s\S]*?)\n<\/div>/) || [, ''])[1];
+  check('D2 HUD = 구역 · 연도 배지 · 든 도구 (hudZone·hudYear·hudTool)', /id="hudZone"/.test(hud) && /id="hudYear"/.test(hud) && /id="hudTool"/.test(hud));
+  check('D2 HUD 에서 측정값·좌표·자동차 줄을 뺐다 (hudCo2·hudSea·hudCoral·hudPos·hudCars·hudMode 없음)',
+    !/hudCo2|hudSea|hudCoral|hudPos|hudCars|hudMode/.test(html + strip('firstperson/fp-main.js').replace(/\/\/.*$/gm, '')));
+  check('D2 HUD 에 dim(옅은 작은 글자) 없음', !/\bdim\b/.test(hud) && !/#hud[^{]*\.dim/.test(strip('firstperson/style.css')));
+  const mm = read('firstperson/fp-minimap.js');
+  const co2 = /co2:\s*\{\s*lo:\s*(-?\d+),\s*hi:\s*(-?\d+)/.exec(mm);
+  check('D2 미니맵 CO₂ 색 범위 = 실제 폭(녹지 −30~−45 · 도심 0~+25)을 덮되 넓지 않게 (|lo|,|hi| ≤ 60, 0 이 가운데)',
+    co2 && -co2[1] <= 60 && +co2[2] <= 60 && +co2[1] < -45 && +co2[2] > 25 && +co2[1] + +co2[2] === 0, co2 ? `${co2[1]} ~ +${co2[2]}` : '없음');
+  check('D2 미니맵 캔버스에 글자를 그리지 않음 (범례는 HTML #minimapLegend)', !/fillText/.test(mm) && /id="minimapLegend"/.test(html));
 }
 
 // ── 표 (세이브포인트에 붙인다) ───────────────────────────────────────────────
