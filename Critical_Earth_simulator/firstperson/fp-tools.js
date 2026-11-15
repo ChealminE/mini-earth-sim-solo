@@ -76,8 +76,6 @@ const BODY_TEMPS = {
 };
 Object.assign(SPOT, BODY_TEMPS);
 const ANIMAL_SPOT = { '토끼': 'bodyRabbit', '사슴': 'bodyDeer', '늑대': 'bodyWolf', '곰': 'bodyBear' };
-// 곰은 겨울에 동면한다. 동면 중에는 대사를 낮춰 체온이 크게 떨어진다(실제로 31°C 근처).
-const BEAR_HIBERNATE_T = 31.0;
 const AIR_MIX_H = 0.06;        // 지면에서 이 높이(실척 3m) 안쪽은 지면 열의 영향을 받는다
 const AIR_SAMPLE_DIST = 0.3;   // 허공을 겨눴을 때 대기를 뜨는 거리 (실척 15m)
 // 대기 -> 그 아래 지면의 대응 관계 (지면 열 섞임 계산용)
@@ -87,6 +85,7 @@ const SPOT_GROUND = { airOcean: 'sea', airGreen: 'green', airCity: 'city' };
 const SEA_SPOTS = { sea: 1, ice: 1, airOcean: 1 };
 // SPOT.base 값들은 계절이 없던 시절 '여름 정오' 기준으로 맞춰 둔 값이다.
 // 그래서 여름을 0점으로 삼아 그 차이만 더한다 (여름에는 이 항이 0).
+// 4차 B3에서 계절 선택을 빼 지금은 늘 0이다. C2가 연평균 기준값으로 바꿀 때 이 함수째 정리한다.
 function seasonTempOffset(spot) {
   const S = seasonDef(), SUM = SEASONS.summer;
   return SEA_SPOTS[spot] ? (S.seaT - SUM.seaT) : (S.temp - SUM.temp);
@@ -107,10 +106,6 @@ function measureTemperature(spot, x, z, ppm, aboveGround) {
   // (바다는 열용량이 커서 원래 일교차가 0.6°C뿐이었고, 지점 간 차이는 이제 냉수대가 만든다.)
   // 어류는 변온동물이라 체온이 곧 그 자리의 수온이다.
   if (spot === 'sea' || spot === 'bodyFish') return seaTempAt(x, z, ppm);
-  // 곰은 겨울에 동면해 체온이 크게 내려간다
-  if (spot === 'bodyBear' && FPWorld.season === 'winter') {
-    return BEAR_HIBERNATE_T + Math.sin(x * 37.1 + z * 21.7) * 0.3;
-  }
   // 같은 구역 안에서도 지점마다 조금씩 다르게 (측정하는 맛)
   const jitter = Math.sin(x * 37.1 + z * 21.7) * 0.5 + Math.sin(x * 11.3 - z * 53.9) * 0.35;
   // 정온동물은 개체차만 있고 환경에는 반응하지 않는다 (흔들림도 훨씬 작다)
@@ -146,87 +141,45 @@ function isSeaHit(hit) {
 //    흡수량 자체도 커져서(CO2 비료 효과) 낮아지는 폭이 함께 커진다.
 //  - 해양: 바닷물이 CO2를 녹여 흡수하므로 역시 평균보다 낮다.
 //    이 흡수가 바로 해수 pH를 떨어뜨리는 원인이라, pH 측정값과 같은 이야기를 한다.
-// 낮에는 이 값, 밤에는 night 쪽 값으로 옮겨 간다.
-//  - 녹지: 낮에는 광합성이 CO2를 빨아들여 평균보다 낮지만, 밤에는 광합성이 멎고
-//    호흡만 남아 오히려 평균보다 높아진다. 부호가 뒤집히는 이 지점이
-//    "식물은 CO2를 먹기만 한다"는 흔한 오개념을 깨는 자리다.
-//  - 도심: 밤에는 지표 부근 대기가 얇게 갇혀(야간 안정층) 배출된 CO2가 흩어지지 못한다.
-//    교통량이 줄어드는데도 도심 CO2는 밤에 더 높게 잡히는 이유다.
-//  - 해양: 밤낮 차이가 거의 없다. 흡수가 물리·화학 과정이라 빛과 무관하기 때문이다.
+// 4차 B3(마스터 D2, 낮 고정): 밤 값(nightOff·nightRise)과 해륙풍 이류를 뺐다.
+// 구역 대기는 이제 '정오 정상 상태값' — 예전 zoneCO2Target(12) 와 같다.
 const CO2_ZONE = {
-  city:  { off: 55,  rise: 120,  nightOff: 110, nightRise: 150 },
-  green: { off: -30, rise: -40,  nightOff: 35,  nightRise: 45 },
-  ocean: { off: -15, rise: -30,  nightOff: -10, nightRise: -25 },
+  city:  { off: 55,  rise: 120 },
+  green: { off: -30, rise: -40 },
+  ocean: { off: -15, rise: -30 },
 };
-// ── 구역 대기 CO2를 상태 변수로 (해륙풍 이류) ──────────────────────────────────
-// 위 CO2_ZONE은 원래 측정값에 바로 더하는 고정 오프셋이었다. 구역마다 차이(공간 변이)는
-// 있어도 서로 주고받는 흐름(상호작용)이 없었다. 이제 그 오프셋을 '국지 평형값(목표)'으로
-// 다시 읽고, 실제 값은 그 목표를 향해 다가가면서 바람을 타고 이웃 구역과 섞이게 한다.
-//
-//   dC_z/dt = (C_bg + off_z(t) − C_z) / τ_z            국지 평형으로 수렴 (기존 오프셋 재현)
-//           + w(t) · (C_upwind(z) − C_z) / τ_adv       해륙풍에 의한 이류
-//
-// C_bg는 슬라이더(전 지구 평균) + 계절 진동이다. 공간적으로 균일하므로 이류항에서는 빠지고,
-// 실제로 상태로 들고 있는 건 '배경에서 벗어난 몫' D_z = C_z − C_bg 이다. 식은 같고
-// 정상 상태도 같다. 다른 점은 슬라이더를 옮겼을 때뿐인데, 슬라이더는 배출 사건이 아니라
-// "어떤 세상인가"를 고르는 장치라서 배경은 즉시 바뀌는 쪽이 맞다 - 그래야 CO2센서가
-// 예전처럼 슬라이더에 바로 반응한다. 느리게 따라가는 건 바다다(fp-world.js 해수 pCO2).
-//
-// w(t) = 해륙풍. 낮에는 해풍(바다 → 해변 → 녹지 → 도심), 밤에는 육풍(반대).
-// 이미 있는 낮·밤 주기(daylight)에 그대로 얹는다: w = 2·daylight − 1 (+1 한낮 해풍, −1 한밤 육풍).
-// 해변은 바다 구역 동쪽 끝(해양-녹지 경계)이라 바람 사슬은 바다 → 녹지 → 도심 세 칸이다.
-// 사슬 맨 앞 구역은 바람이 불어오는 쪽에 이웃이 없으므로 이류항이 0이다.
-//
-// 시간 단위: τ는 게임 시간(하루 = 실시간 300초)이다. 시각을 멈춰 둬도(기본값) 공기는
-// 계속 섞인다 - 시각 정지는 "그 시각의 조건을 붙잡아 둔 것"이지 물리를 멈춘 게 아니다.
-// 그래서 정오에 멈춰 두면 낮 정상 상태로, 자정에 멈추면 밤 정상 상태로 수렴한다.
+// 구역 대기 CO2 = 배경(전 지구 평균 + 계절 진동) + 그 구역의 몫 D_z.
+//   dD_z/dt = (off_z + rise_z·k − D_z) / τ_z      국지 평형으로 수렴
+// 연도·배출 경로를 바꿔 k(co2k)가 바뀌면 D_z 가 τ 동안 새 정상값으로 옮겨 간다. 배경은 즉시 바뀐다.
+// 해수 pCO2 동적 평형(fp-world.js stepSeaCO2)이 같은 0.2초 틱(onTick)에 붙어 있다 —
+// C4에서 해수 쪽을 통째로 바꾸므로 그때까지 틱과 게임일 환산(AIR_DAY_S)을 남긴다.
 const AIR_TAU_Z = 0.1;       // 국지 평형 수렴 시간 [게임 일] = 실시간 30초
-const AIR_TAU_ADV = 0.25;    // 해륙풍 이류 시간 [게임 일] = 실시간 75초
 const AIR_TICK = 0.2;        // 상태 갱신 주기 [실시간 초] - 렌더 루프가 아니라 이 틱에서 돈다
-const AIR_CHAIN = ['ocean', 'green', 'city'];   // 해풍이 지나가는 순서 (서 → 동)
+// 게임 1일 = 실시간 300초. 예전 시간 흐름(DAY_SECONDS)에서 온 환산이고, τ(AIR_TAU_Z·SEA_TAU_SW)가
+// 게임일 단위라 남겨 둔다. 시간 흐름 자체는 B3에서 없어졌다.
+const AIR_DAY_S = 300;
+const AIR_ZONES = ['ocean', 'green', 'city'];
 const FPAir = {
-  D: { ocean: 0, green: 0, city: 0 },   // 배경(슬라이더+계절)에서 벗어난 몫 [ppm]
-  windK: 1,      // 바람 세기 배수. 0이면 바람 끔 (보정·비교용)
-  w: 0,          // 지금의 해륙풍 (+해풍 / −육풍)
+  D: { ocean: 0, green: 0, city: 0 },   // 배경(전 지구 평균+계절)에서 벗어난 몫 [ppm]
   _acc: 0,
-  elapsedDays: 0,   // 공기·바다가 흘러온 게임 시간 [일]. 시각을 멈춰도 흐른다 (야장 game_time)
+  elapsedDays: 0,   // 공기·바다가 흘러온 게임 시간 [일] (야장 game_time)
   onTick: [],    // 같은 틱에 같이 돌아야 하는 다른 상태 (해수 pCO2 등)
 };
-// 국지 평형값 = 예전 고정 오프셋 그대로 (낮 값과 밤 값 사이를 햇빛 세기로 섞는다)
-function zoneCO2Target(zone, hour) {
+// 국지 평형값 = 정오의 고정 오프셋
+function zoneCO2Target(zone) {
   const Z = CO2_ZONE[zone] || CO2_ZONE.green;
-  const k = FPWorld.co2k;
-  const lit = daylight(hour == null ? FPWorld.hour : hour);   // 1=한낮, 0=한밤
-  const off = Z.nightOff + (Z.off - Z.nightOff) * lit;
-  const rise = Z.nightRise + (Z.rise - Z.nightRise) * lit;
-  return off + rise * k;
-}
-function seaBreeze(hour) {
-  return (2 * daylight(hour == null ? FPWorld.hour : hour) - 1) * FPAir.windK;
+  return Z.off + Z.rise * FPWorld.co2k;
 }
 // 한 번 적분. dtDay = 게임 시간 [일]. 틱이 짧아(τ의 1% 미만) 오일러로 충분하다.
 FPAir.step = function (dtDay) {
-  const w = seaBreeze();
-  this.w = w;
-  const D = this.D, next = {};
-  AIR_CHAIN.forEach((z, i) => {
-    const up = w > 0 ? AIR_CHAIN[i - 1] : AIR_CHAIN[i + 1];   // 바람이 불어오는 쪽 이웃
-    let d = (zoneCO2Target(z) - D[z]) / AIR_TAU_Z;
-    if (up) d += Math.abs(w) * (D[up] - D[z]) / AIR_TAU_ADV;
-    next[z] = D[z] + d * dtDay;
-  });
-  Object.assign(D, next);
+  const D = this.D;
+  for (const z of AIR_ZONES) D[z] += (zoneCO2Target(z) - D[z]) / AIR_TAU_Z * dtDay;
   this.elapsedDays += dtDay;
   for (const f of this.onTick) f(dtDay);
 };
-// 처음 열었을 때는 지금 시각의 정상 상태에서 시작한다 (바람 포함 정상 상태를 직접 굴려서 구함)
+// 처음 열었을 때는 정상 상태에서 시작한다
 FPAir.reset = function () {
-  for (const z of AIR_CHAIN) this.D[z] = zoneCO2Target(z);
-  for (let i = 0; i < 400; i++) {
-    const saved = this.onTick; this.onTick = [];
-    this.step(0.01);
-    this.onTick = saved;
-  }
+  for (const z of AIR_ZONES) this.D[z] = zoneCO2Target(z);
   this.elapsedDays = 0;
 };
 // 매 프레임 불리지만 실제 적분은 0.2초마다 한 번
@@ -234,16 +187,12 @@ FPAir.update = function (dt) {
   this._acc += dt;
   while (this._acc >= AIR_TICK) {
     this._acc -= AIR_TICK;
-    this.step(AIR_TICK / DAY_SECONDS);
+    this.step(AIR_TICK / AIR_DAY_S);
   }
 };
 // 구역 대기 CO2 [ppm] = 배경 + 그 구역의 몫
 FPAir.zoneCO2 = function (zone, ppm) {
   return (ppm == null ? FPWorld.co2 : ppm) + seasonDef().co2 + (this.D[zone] != null ? this.D[zone] : this.D.green);
-};
-FPAir.windLabel = function () {
-  if (Math.abs(this.w) < 0.15) return '무풍';
-  return this.w > 0 ? '해풍' : '육풍';
 };
 
 // 어떤 지점이 나무 수관에 얼마나 가까운지 (0=밖, 1=줄기 바로 옆)
@@ -254,8 +203,9 @@ function treeShadeAt(x, z) {
 }
 function measureCO2(ppm, x, z, zone, px, pz) {
   const k = FPWorld.co2k;
-  const lit = FPWorld.daylight != null ? FPWorld.daylight : 1;   // 1=한낮, 0=한밤
-  // 구역 대기 = 배경 + 그 구역 상태(FPAir). 국지 평형(낮·밤 오프셋)과 해륙풍 이류가 정한다.
+  // 4차 B3: 낮 고정이라 햇빛 세기 1. 아래 밤 호흡 항(resp)은 0이 되고, 식 정리는 C3에서 한다.
+  const lit = 1;
+  // 구역 대기 = 배경 + 그 구역 상태(FPAir, 정오 정상 상태값).
   // 배경의 계절 진동(킬링 곡선): 북반구 식생이 봄에 CO2를 뱉고 여름내 빨아들여 가을에 최저가 된다.
   // 슬라이더 값은 연평균이고, 실제로 재는 값은 이만큼 계절을 탄다.
   let v = FPAir.zoneCO2(zone, ppm);

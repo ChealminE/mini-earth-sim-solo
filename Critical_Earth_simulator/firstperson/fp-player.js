@@ -381,7 +381,6 @@ function bindInput(P, canvas) {
     P.keys[e.code] = true;
     if (e.code === 'F5' || e.code === 'KeyV') { P.thirdPerson = !P.thirdPerson; e.preventDefault(); }
     if (e.code === 'KeyG') P.flying = !P.flying;    // F는 야장이 가져갔다
-    if (e.code === 'KeyT' && !e.repeat) FPWorld.timeFlowing = !FPWorld.timeFlowing;
     if (e.code === 'KeyM' && !e.repeat) FPMinimap.toggle();
     if (e.code === 'KeyR') P.respawn();
     if (e.code === 'KeyH') document.getElementById('helpPanel').classList.toggle('hidden');

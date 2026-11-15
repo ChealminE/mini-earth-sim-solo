@@ -34,7 +34,6 @@
   <div class="hud-line dim">자동차: <span id="hudCars">-</span></div>
   <div class="hud-line dim">바다: <span id="hudSea">-</span></div>
   <div class="hud-line dim">산호: <span id="hudCoral">-</span></div>
-  <div class="hud-line dim" id="hudTime">낮 12:00</div>
   <div class="hud-line dim key-hint"><b>H</b> 조작법 · <b>E</b> 설정 · <b>F</b> 야장·과제 · <b>M</b> 지도 · <b>1~4</b> 도구</div>
 </div>
 
@@ -51,9 +50,8 @@
     <tr><td><span class="key">G</span></td><td>비행 모드 켜기/끄기</td></tr>
     <tr><td><span class="key">V</span> 또는 <span class="key">F5</span></td><td>1인칭 / 3인칭 전환</td></tr>
     <tr><td><span class="key">R</span></td><td>출발 지점으로 되돌아가기</td></tr>
-    <tr><td><span class="key">E</span></td><td>설정창 열기/닫기 (CO₂·시각)</td></tr>
+    <tr><td><span class="key">E</span></td><td>설정창 열기/닫기 (배출 경로·연도)</td></tr>
     <tr><td><span class="key">F</span></td><td>야장 열기/닫기 (탐구 과제·측정 기록·통계·횡단 조사·CSV)</td></tr>
-    <tr><td><span class="key">T</span></td><td>시간 흐름 켜기/끄기 (낮↔밤)</td></tr>
     <tr><td><span class="key">M</span></td><td>미니맵 크기 (보통 → 크게 → 끄기)</td></tr>
     <tr><td><span class="key">1</span>~<span class="key">9</span></td><td>단축바에서 도구 선택</td></tr>
     <tr><td>좌클릭</td><td>든 도구로 바라보는 지점 측정</td></tr>
@@ -68,16 +66,13 @@
     한 번에 잽니다. 차가운 물은 CO₂를 더 많이 녹이고(헨리 법칙) Ω가 낮습니다.
     <b>Ω가 1 밑이면 빨간색</b> — 산호·조개 껍데기가 녹는 물입니다.</p>
   <p class="note"><b>3 CO₂센서</b> — 해양 · 녹지 · 도심에서 값이 다릅니다. 도심이 가장 높고,
-    <b>나무 근처</b>는 광합성 때문에 특히 낮게 나옵니다. (수중에서는 측정 불가)
-    구역 공기는 <b>해륙풍</b>을 타고 섞입니다 — 낮에는 해풍이 도심을 환기하고,
-    <b>밤에는 육풍이 도심 CO₂를 바다 쪽으로 실어 나릅니다.</b> (HUD 맨 아래 줄에 지금 바람)</p>
+    <b>나무 근처</b>는 광합성 때문에 특히 낮게 나옵니다. (수중에서는 측정 불가)</p>
   <p class="note"><b>계측기에는 오차가 있습니다.</b> 좌클릭하면 값이 바로 뜨지 않고 실제 센서처럼
     수렴합니다(막대가 다 차야 확정). 같은 자리를 다시 재도 값이 조금씩 다르니, 여러 번 재서
     평균을 내세요. 평균과 표준편차는 <b>야장(F)</b>이 자동으로 계산합니다.</p>
   <p class="note"><b>살아 있는 것도 재집니다.</b> 동물이나 물고기를 겨눠 보세요.
-    포유류는 <b>정온동물</b>이라 CO₂·계절·시간이 변해도 체온이 일정하고,
-    어류는 <b>변온동물</b>이라 체온이 곧 수온입니다. 나란히 재서 비교해 보세요.
-    (겨울 곰은 동면 중이라 체온이 크게 내려갑니다)</p>
+    포유류는 <b>정온동물</b>이라 CO₂가 변해도 체온이 일정하고,
+    어류는 <b>변온동물</b>이라 체온이 곧 수온입니다. 나란히 재서 비교해 보세요.</p>
   <p class="note"><b>야장 (F)</b> — 측정할 때마다 자동 기록됩니다. 지점별 평균·표준편차,
     횡단 조사 그래프, CSV 내보내기가 있습니다. CSV는 조감 모드 '실시간 실험' 탭과 같은
     형식이라 아두이노 실측값과 같은 표에서 비교할 수 있습니다.</p>
@@ -187,26 +182,6 @@
     <p class="note">바다는 대기 CO₂를 <b>천천히</b> 따라갑니다(약 2게임일 ≈ 실시간 10분에 63 %).
       CO₂를 바꾼 직후 pH를 재면 아직 옛 값에 가깝습니다 — 시간을 두고 반복 측정해 보세요.
       수업 시간이 부족하면 <b>즉시 평형</b>을 누르면 해수가 지금 해양 대기와 바로 평형이 됩니다.</p>
-    <label class="row">
-      <span class="lbl">시각</span>
-      <input type="range" id="timeSlider" min="0" max="23.99" step="0.05" value="12">
-      <span class="val"><span id="timeOut">낮 12:00</span></span>
-    </label>
-    <div class="row">
-      <span class="lbl">계절</span>
-      <div class="btn-row" id="seasonBtns">
-        <button data-season="spring">봄</button><button data-season="summer">여름</button
-        ><button data-season="autumn">가을</button><button data-season="winter">겨울</button>
-      </div>
-    </div>
-    <p class="note">계절은 기온(여름 +8 / 겨울 −10°C)·일출일몰·경관을 함께 바꿉니다.
-      <b>CO₂도 계절을 탑니다</b> — 북반구 식생 때문에 봄에 높고 가을에 낮습니다(킬링 곡선).
-      슬라이더 값은 연평균이고, 센서로 재는 값은 그 위에서 흔들립니다.</p>
-    <label class="row check">
-      <input type="checkbox" id="timeFlowChk"><span class="lbl">시간 흐르게 하기 (5분에 하루) — <span class="hint-key">T</span></span>
-    </label>
-    <p class="note">기본은 정오에 멈춰 있습니다. 조사 중에 시간이 흐르면 같은 지점을 다시 재도 값이 달라져 자료를 못 씁니다.<br>
-      <b>밤에 재 보세요.</b> 도시–녹지 기온차(열섬)는 낮보다 밤에 커지고, 나무 밑 CO₂는 광합성이 멎어 낮과 반대로 높아집니다.</p>
     <div class="settings-actions">
       <button id="settingsCloseBtn" class="settings-btn">돌아가기</button>
       <a class="settings-btn ghost" href="/">전체 조감 모드로</a>

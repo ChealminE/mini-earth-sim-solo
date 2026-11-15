@@ -71,7 +71,7 @@ FPField.record = function (tool, value, reading) {
              : (reading.values ? reading.values.temp
              : (tool.kind === 'temp' && isSea ? value : null)),               // 온도계로 잰 해수
     pco2Sw: FPWorld.pco2Sea,                  // 그 순간 해수 pCO2 (모형 상태)
-    wind: FPAir.windLabel(),                  // 해풍 / 육풍 / 무풍
+    wind: '무풍',                             // 4차 B3: 해륙풍을 뺐다. 열은 G에서 정리 — 그때까지 값만 고정
     gameTime: FPAir.elapsedDays * 24,         // 조사 시작 후 흐른 게임 시간 [h] (시각을 멈춰도 흐름)
     hour: FPWorld.hour,
     iso: new Date().toISOString(),

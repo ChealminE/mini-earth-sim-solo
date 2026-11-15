@@ -42,7 +42,7 @@ applyWorldCO2(FPScenario.ppm());
 FPPlayer.init(camera, glCanvas);
 FPTools.init(camera);   // 단축바 + 손에 든 도구 (camera를 씬에 넣는 것도 여기서 처리)
 FPMinimap.init();
-FPAir.reset();          // 구역 대기 CO2를 지금 시각의 정상 상태에서 시작
+FPAir.reset();          // 구역 대기 CO2를 정상 상태에서 시작
 equilibrateSeaCO2();    // 해수 pCO2도 지금 해양 대기와 평형에서 시작
 FPAir.onTick.push(stepSeaCO2);   // 해수는 대기와 같은 0.2초 틱에서 천천히 따라간다
 FPAir.onTick.push(() => applyOceanHealth(FPWorld.co2));   // 산호·어류·수초도 같은 틱에서
@@ -96,42 +96,6 @@ applyScenarioYear();
 const seaEqState = document.getElementById('seaEqState');
 document.getElementById('seaEqBtn').addEventListener('click', () => equilibrateSeaCO2());
 
-// ── 시각 슬라이더 ───────────────────────────────────────────────────────────
-// 기본은 정오에 멈춰 있다. 조사 도중에 시간이 흐르면 같은 지점을 다시 재도 값이 달라져
-// 자료가 못 쓰게 되기 때문이다. 필요할 때만 흐르게 하고, 평소엔 이 슬라이더로 옮긴다.
-const timeSlider = document.getElementById('timeSlider');
-const timeOut = document.getElementById('timeOut');
-const timeFlowChk = document.getElementById('timeFlowChk');
-function syncTimeUI() {
-  timeSlider.value = FPWorld.hour.toFixed(2);
-  timeOut.textContent = hourLabel(FPWorld.hour);
-  timeFlowChk.checked = FPWorld.timeFlowing;
-}
-timeSlider.addEventListener('input', () => {
-  FPWorld.hour = Number(timeSlider.value);
-  FPWorld.timeFlowing = false;      // 손으로 옮기면 자동 흐름은 멈춘다
-  FPWorld.refresh();                // 광합성량이 바뀌므로 대기 상태도 다시 계산
-  syncTimeUI();
-});
-timeFlowChk.addEventListener('change', () => { FPWorld.timeFlowing = timeFlowChk.checked; });
-
-// ── 계절 ────────────────────────────────────────────────────────────────────
-const seasonBtns = document.getElementById('seasonBtns');
-function syncSeasonUI() {
-  seasonBtns.querySelectorAll('button').forEach(b => {
-    b.classList.toggle('on', b.dataset.season === FPWorld.season);
-  });
-}
-seasonBtns.addEventListener('click', e => {
-  const b = e.target.closest('button');
-  if (!b) return;
-  applySeason(b.dataset.season);
-  syncSeasonUI();
-  syncTimeUI();          // 일출·일몰이 바뀌므로 시각 표기도 갱신
-});
-applySeason(FPWorld.season);
-syncSeasonUI();
-
 // ── 야장 ────────────────────────────────────────────────────────────────────
 FPField.init();
 // 계측기가 값을 '확정'했을 때만 기록한다 (수렴 중인 값은 아직 못 믿는 값이라서)
@@ -142,7 +106,6 @@ const hudZone = document.getElementById('hudZone');
 const hudPos = document.getElementById('hudPos');
 const hudMode = document.getElementById('hudMode');
 const waterOverlay = document.getElementById('waterOverlay');
-const hudTime = document.getElementById('hudTime');
 const hudCo2 = document.getElementById('hudCo2');
 // 서 있는 구역의 대기 키 (fp-player.js currentZone 과 같은 경계)
 const zoneKeyAt = () => (FPPlayer.underwater || FPPlayer.pos.x < -FPWorld.ZONE_W / 2 ? 'ocean' : FPPlayer.pos.x > FPWorld.ZONE_W / 2 ? 'city' : 'green');
@@ -161,7 +124,6 @@ function animate() {
   FPPlayer.update(dt, t);
   FPTools.update(dt);          // 측정 중인 계측기의 값이 안정되어 가는 과정
   FPAir.update(dt);            // 구역 대기 CO2·해수 pCO2 (0.2초 틱, 매 프레임 적분하지 않음)
-  updateTime(dt);              // 시간 흐름이 켜져 있을 때만 동작
   FPMinimap.update(dt);        // 초당 10회만 다시 그린다
   updateSunShadow(FPPlayer.pos.x, FPPlayer.pos.z);
 
@@ -227,9 +189,7 @@ function animate() {
     else if (FPPlayer.crouching) mode.push('앉기');
     else if (FPPlayer.sprinting) mode.push('달리기');
     hudMode.textContent = mode.length ? mode.join(' · ') : '걷기';
-    hudTime.textContent = hourLabel(FPWorld.hour) + (FPWorld.timeFlowing ? '' : ' · 정지 (T)')
-      + ` · ${SEASONS[FPWorld.season].ko} · ${FPAir.windLabel()}`;
-    // 전 지구 = 조감과 같은 모형의 그 해 값 / 이 지점 = 구역 대기(열섬·광합성·해륙풍·계절이 더해진 1인칭 고유의 차이)
+    // 전 지구 = 조감과 같은 모형의 그 해 값 / 이 지점 = 구역 대기(도시 돔·광합성·해양 흡수가 더해진 1인칭 고유의 차이)
     hudCo2.textContent = `CO₂ 전 지구 평균 ${FPWorld.co2.toFixed(0)} ppm (${FPScenario.teacher ? '교사 입력' : '조감과 같은 모형 · ' + FPScenario.label()})`
       + ` · 이 지점 공기 ${FPAir.zoneCO2(zoneKeyAt()).toFixed(0)} ppm`;
     const gas = FPWorld.gasCarCount, ev = FPWorld.cars.length - gas;
