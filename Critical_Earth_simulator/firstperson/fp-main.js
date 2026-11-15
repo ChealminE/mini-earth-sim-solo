@@ -14,6 +14,7 @@ renderer.toneMappingExposure = 1.15;
 const camera = new THREE.PerspectiveCamera(75, 1, 0.002, 60);
 
 buildFirstPersonWorld(renderer);
+FPTechWorld.build();   // 4차 T3: 세계 속 기후테크 소품(처음엔 숨김 — applyWorldState 가 그해 사회 모습대로 켠다)
 
 // ── 배출 경로 + 연도 → 전 지구 CO₂ (3차 E4) ─────────────────────────────────
 // 예전에는 CO₂ 슬라이더로 농도를 직접 넣었다. 조감 모드에서는 CO₂가 배출을 쌓은 '결과'라(3차 마스터 결정 9)
@@ -156,6 +157,7 @@ function animate() {
   }
   sp.needsUpdate = true;
   FPWorld.towerFan.rotation.z = t * FPWorld.tower.speed;
+  FPTechWorld.update(dt);     // 해상풍력 날개 회전(4차 T3)
 
   // 수중 화면 효과
   waterOverlay.classList.toggle('on', FPPlayer.underwater);

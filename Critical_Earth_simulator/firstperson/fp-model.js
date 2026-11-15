@@ -12,6 +12,7 @@
 //              C3 zoneCO2(zone, s, opt) · urbanCO2(s, localCut)                    — 구역 대기 CO₂ (연평균)
 //              C4 seaState(prox, s) · coralState · oceanHealth                     — 바다 = 엔진의 그해 표층 상태
 //              C5 society(s, preset, levers) · cityState(s, soc, n)               — 도시·차·굴뚝 (연출, EarthVisual 규칙)
+//              T3 techState(s, soc)                                             — 해상풍력·지붕 태양광·숲·포집·SMR·충전소 (연출)
 //   상수는 맨 위 K 한 곳에 모으고, 각 줄에 등록부(js/sources.js) 키를 주석으로 단다.
 //
 // 로드 순서: earth-model → earth-data → earth-system → earth-visual → actions-core → fp-model → fp-world …
@@ -217,15 +218,60 @@ const FPModel = (() => {
   }
 
   // ── C5 시각 언어 = 조감 EarthVisual 규칙 ─────────────────────────────────────
-  // 그해 사회 모습 { ev, renew, nuclear, removal } — 조감 tab-future.js applyLevers3D 와 같은 규칙:
+  // 그해 사회 모습 { ev, renew, nuclear, removal, ccus, dac, forest } — 조감 tab-future.js applyLevers3D 와 같은 규칙:
   //   직접 설계(레버 시작 해 이후) = 그해 레버 값, 그 밖 = EarthVisual.presetSociety(그해 화석 배출).
-  function society(s, preset, levers) {
+  // 4차 T3: 세계 속 기후테크(fp-tech-world.js)가 쓰는 세 값을 더 붙인다(앞의 네 값은 C5 그대로).
+  //   ccus·dac [GtC/년] — 엔진 레버는 포집 합(ccs) 하나라 둘로 나누는 비율은 회의실 카드(capture = {ccus, dac}, 2050 목표값)에서만 온다.
+  //     카드가 없으면(주소 levers 만, SSP 경로) 전부 DAC 로 본다: 지금까지의 포집 타워(대기에서 거둠, removal)와 같은 뜻이라
+  //     C5 화면이 그대로다. removal 도 DAC 몫만 따른다(포집 타워 = DAC 장치).
+  //   forest [GtC/년] — 토지이용 배출. 직접 설계 = 산림 레버, SSP = 그해 엔진 표본의 토지이용 배출(역사 구간은 L2023 = 지금 숲).
+  function society(s, preset, levers, capture) {
     const ES = EarthSystem;
     if (preset === 'custom' && levers && s.year >= ES.LEVER_START) {
       const l = ES.leversAt(levers, s.year);
-      return { ev: l.ev, renew: l.renewShare, nuclear: l.nuclearShare, removal: l.ccs / ES.LEVER_RANGE.ccs[1] };
+      const cu = capture && capture.ccus > 0 ? capture.ccus : 0, da = capture && capture.dac > 0 ? capture.dac : 0;
+      const dacFrac = cu + da > 0 ? da / (cu + da) : 1;
+      const dac = l.ccs * dacFrac;
+      return { ev: l.ev, renew: l.renewShare, nuclear: l.nuclearShare, removal: dac / ES.LEVER_RANGE.ccs[1],
+        ccus: l.ccs - dac, dac, forest: l.forest };
     }
-    return EarthVisual.presetSociety(s.fossil || 0, s.year, ES.LEVER_NOW, ES.E2023, ES.LAST_HIST_YEAR);
+    const p = EarthVisual.presetSociety(s.fossil || 0, s.year, ES.LEVER_NOW, ES.E2023, ES.LAST_HIST_YEAR);
+    return { ...p, ccus: 0, dac: p.removal * ES.LEVER_RANGE.ccs[1],
+      forest: s.year > ES.LAST_HIST_YEAR && Number.isFinite(s.luc) ? s.luc : ES.L2023 };
+  }
+
+  // ── T3 세계 속 기후테크 (연출, 등록부 fp_tech_visual — assumption) ──────────────────
+  // 그해 사회 모습 → 구역별 소품 수. 숫자로 재는 값이 아니라 '설계가 세계에 보이게' 하는 대응이다(T §4 표).
+  //   해상풍력 0~6기  = 재생 비중 '증가분' (LEVER_NOW 30 % → 0기, 100 % → 6기)
+  //   지붕 태양광      = 재생 비중 그대로(서 있는 건물 중 그 비율의 지붕) — 2000년 전 0(presetSociety)
+  //   숲 추가 비율     = 토지이용 배출 1.30(벌채 지속) → 0, 0(벌채 중단) → +20 %, −1.0(대규모 조림) → +50 % (사이는 직선)
+  //   CCUS 설비 0~3   = CCUS GtC/년 ÷ (카드 3단계 값 ÷ 3), 올림. 굴뚝(C5 stackLevel)은 '포집 뒤' 순배출을 따르므로 포집이 크면
+//                     굴뚝이 먼저 사라진다 — 그래도 설계한 포집 설비는 굴뚝 자리 옆에 그대로 보인다(설계가 보여야 한다)
+  //   DAC 팬 벽 0~3   = DAC GtC/년 ÷ (카드 3단계 값 ÷ 3), 올림
+  //   SMR 모듈 0~3    = 원자력 비중 증가분 ÷ (카드 3단계 − 현재) × 3, 반올림(조금이라도 늘면 1)
+  //   충전소 0~4      = 전기차 비율 × 4, 반올림
+  // 기준 값(카드 3단계)은 SocietyCore.TECH_CARDS 에서 부를 때 읽는다(정의는 한 곳 — test_fp_model 은 society-core 없이 이 파일을 부른다).
+  const TECH = Object.freeze({ TURBINES: 6, UNITS: 3, CHARGERS: 4, TREE_PLUS_STOP: 0.2, TREE_PLUS_MAX: 0.5 });
+  function techState(s, soc) {
+    const ES = EarthSystem, N0 = ES.LEVER_NOW;
+    const card = id => SocietyCore.TECH_CARDS.find(c => c.id === id).levels[2];
+    const c01 = v => Math.min(1, Math.max(0, Number(v) || 0));
+    const renew = c01(soc.renew), nuclear = c01(soc.nuclear);
+    const units = (v, ref) => (v > 1e-6 ? Math.min(TECH.UNITS, Math.max(1, Math.ceil(v / (ref / TECH.UNITS) - 1e-9))) : 0);
+    const f = Number.isFinite(soc.forest) ? soc.forest : ES.L2023;
+    const treePlus = f >= ES.L2023 ? 0
+      : f >= 0 ? TECH.TREE_PLUS_STOP * (ES.L2023 - f) / ES.L2023
+      : TECH.TREE_PLUS_STOP + (TECH.TREE_PLUS_MAX - TECH.TREE_PLUS_STOP) * Math.min(1, -f / -ES.LEVER_RANGE.forest[0]);
+    const dn = nuclear - N0.nuclearShare;
+    return {
+      turbines: Math.round(TECH.TURBINES * c01((renew - N0.renewShare) / (1 - N0.renewShare))),
+      solarFrac: renew,
+      treePlus,
+      ccusUnits: units(soc.ccus || 0, card('ccus')),
+      dacUnits: units(soc.dac || 0, card('dac')),
+      smrUnits: dn > 0.005 ? Math.min(TECH.UNITS, Math.max(1, Math.round(dn / (card('nuclear') - N0.nuclearShare) * TECH.UNITS))) : 0,
+      chargers: Math.round(TECH.CHARGERS * c01(soc.ev)),
+    };
   }
   // 1인칭 도시 모습(연출, 등록부 city_scale · fp_city). CO₂ 농도는 하나도 쓰지 않는다 — CO₂는 무색이고(2차 D2),
   // 도시·차·굴뚝은 배출의 역사(누적 최댓값·그해 배출)를 따른다(2차 D3). 조감 3D 도시와 같은 함수다.
@@ -249,7 +295,7 @@ const FPModel = (() => {
   }
 
   return { NOW_YEAR, YEAR_MIN, YEAR_MAX, K, runFor, emissionsFor, pathRun, sample,
-    society, cityState,
+    society, cityState, techState, TECH,
     airTemp, urbanHeat, seaTemp, iceSurfaceTemp, tempJitter,
     co2Frac, urbanCO2, zoneCO2,
     seaPCO2, seaState, habitatFromOmega, coralState, oceanHealth };

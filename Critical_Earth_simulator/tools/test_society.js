@@ -389,5 +389,78 @@ check('선택지 5개: 현재 정책 · 파리협약 2 °C · 1.5 °C 탄소중�
   check('T 등록부 새 키 11개 (kind·status)', bad.length === 0, bad.join(', '));
 }
 
+// ── T3 세계 속 기후테크 (T §4) — 값은 FPModel.society·techState, 그리기는 fp-tech-world.js ───────────
+{
+  const L23 = ES.L2023;
+  // 사회 모습: C5 네 값 그대로 + ccus·dac·forest
+  const sh = FM.sample(2100, FM.pathRun('ssp119')), soc119 = FM.society(sh, 'ssp119');
+  const pre = vm.runInContext('EarthVisual', ctx).presetSociety(sh.fossil, 2100, N, ES.E2023, ES.LAST_HIST_YEAR);
+  check('T3 SSP 사회 모습: C5 네 값 그대로, 포집은 전부 DAC(= removal × 3), 숲 = 그해 토지이용 배출',
+    ['ev', 'renew', 'nuclear', 'removal'].every(k => soc119[k] === pre[k]) && soc119.ccus === 0 && soc119.dac === pre.removal * 3 && soc119.forest === sh.luc,
+    `2100 1.5 °C: DAC ${soc119.dac.toFixed(2)} GtC · 토지이용 ${sh.luc.toFixed(2)}`);
+  check('T3 역사 구간(≤ 2023) 숲 = L2023 (지금 숲)', [1850, 2000, 2023].every(y => FM.society(FM.sample(y, FM.pathRun('ssp245')), 'ssp245').forest === L23));
+  const lev = SC.leversFrom({ ...P, ccus: 1.5, dac: 0.5, forest: -0.5 });
+  const sc50 = FM.sample(2050, FM.pathRun('custom', lev));
+  const split = FM.society(sc50, 'custom', lev, { ccus: 1.5, dac: 0.5 }), nosplit = FM.society(sc50, 'custom', lev);
+  check('T3 직접 설계: 포집 합을 카드 비율(CCUS 1.5 : DAC 0.5)로 나눔, 포집 타워(removal)는 DAC 몫만',
+    Math.abs(split.ccus - 1.5) < 1e-12 && Math.abs(split.dac - 0.5) < 1e-12 && Math.abs(split.removal - 0.5 / 3) < 1e-12 && split.forest === -0.5,
+    `ccus ${split.ccus} · dac ${split.dac} · removal ${split.removal.toFixed(3)}`);
+  check('T3 카드 비율이 없으면 전부 DAC — C5 포집 타워 규칙(removal = ccs ÷ 3) 그대로', nosplit.ccus === 0 && nosplit.dac === lev.ccs && nosplit.removal === lev.ccs / 3);
+
+  const T0 = FM.techState(sc50, { ...N, renew: N.renewShare, nuclear: N.nuclearShare, ev: N.ev, ccus: 0, dac: 0, forest: L23 });
+  check('T3 지금 사회(LEVER_NOW) = 기후테크 소품 0 (지붕 태양광만 재생 30 %)', T0.turbines === 0 && T0.treePlus === 0 && T0.ccusUnits === 0
+    && T0.dacUnits === 0 && T0.smrUnits === 0 && T0.chargers === 0 && T0.solarFrac === 0.3, JSON.stringify(T0));
+  const ts = soc => FM.techState(sc50, { ev: 0.03, renew: 0.3, nuclear: 0.09, ccus: 0, dac: 0, forest: L23, ...soc });
+  check('T3 숲: 1.30 → +0 · 0 → +20 % · −1.0 → +50 % (T §4 표), 사이는 직선', ts({ forest: L23 }).treePlus === 0
+    && Math.abs(ts({ forest: 0 }).treePlus - 0.2) < 1e-12 && Math.abs(ts({ forest: -1 }).treePlus - 0.5) < 1e-12
+    && Math.abs(ts({ forest: -0.5 }).treePlus - 0.35) < 1e-12 && Math.abs(ts({ forest: L23 / 2 }).treePlus - 0.1) < 1e-12);
+  check('T3 해상풍력: 재생 30 % → 0기, 55 % → 2기, 80 % → 4기, 100 % → 6기 (증가분)',
+    [0.3, 0.55, 0.8, 1].map(r => ts({ renew: r }).turbines).join() === '0,2,4,6', [0.3, 0.55, 0.8, 1].map(r => ts({ renew: r }).turbines).join());
+  check('T3 포집: 카드 1·2·3단계(CCUS 0/0.5/1.5, DAC 0/0.3/1.5) → 설비 0/1/3기, 3 GtC 도 3기에서 멈춤',
+    [0, 0.5, 1.5, 3].map(v => ts({ ccus: v }).ccusUnits).join() === '0,1,3,3' && [0, 0.3, 1.5].map(v => ts({ dac: v }).dacUnits).join() === '0,1,3');
+  check('T3 SMR: 원자력 9 % → 0동, 15 % → 1동, 25 % → 3동 / 충전소 전기차 3 % → 0, 50 % → 2, 100 % → 4',
+    [0.09, 0.15, 0.25, 0.6].map(v => ts({ nuclear: v }).smrUnits).join() === '0,1,3,3' && [0.03, 0.5, 1].map(v => ts({ ev: v }).chargers).join() === '0,2,4');
+  // 모든 경로 · 모든 해: 범위 안, 역사 구간은 소품 없음(그 시대에 없던 기술을 세우지 않는다)
+  let bad = [], hist = true;
+  const paths = [['ssp245'], ['ssp126'], ['ssp119'], ['custom', SC.leversFrom({ ...P, renew: 1, nuclear: 0.25, ev: 1, ccus: 1.5, dac: 1.5, industry: 1, forest: -1 })]];
+  for (const [p, lv] of paths) for (const o of FM.pathRun(p, lv)) {
+    const t = FM.techState(o, FM.society(o, p, lv, { ccus: 1.5, dac: 1.5 }));
+    const ok = t.turbines >= 0 && t.turbines <= 6 && [t.ccusUnits, t.dacUnits, t.smrUnits].every(u => u >= 0 && u <= 3)
+      && t.chargers >= 0 && t.chargers <= 4 && t.treePlus >= 0 && t.treePlus <= 0.5 && t.solarFrac >= 0 && t.solarFrac <= 1;
+    if (!ok && bad.length < 2) bad.push(`${p} ${o.year} ${JSON.stringify(t)}`);
+    if (o.year <= ES.LAST_HIST_YEAR && (t.turbines || t.treePlus || t.ccusUnits || t.dacUnits || t.smrUnits)) hist = false;
+  }
+  check('T3 네 경로 1750~2200: 소품 수가 범위 안 (풍력 ≤ 6 · 설비 ≤ 3 · 충전소 ≤ 4 · 숲 ≤ +50 %)', bad.length === 0, bad.join(' / '));
+  check('T3 역사 구간(≤ 2023)에는 해상풍력·숲 추가·포집·SMR 없음', hist);
+  {
+    const lv = paths[3][1];
+    const line = y => { const o = FM.sample(y, FM.pathRun('custom', lv)); return JSON.stringify(FM.techState(o, FM.society(o, 'custom', lv, { ccus: 1.5, dac: 1.5 }))); };
+    console.log(`INFO  T3 '모든 카드 최대'(재생 100 · 원자력 25 → 비율 조정) 2050: ${line(2050)}`);
+    for (const p of ['ssp245', 'ssp119']) console.log(`INFO  T3 ${p} 2050 / 2100: ${[2050, 2100].map(y => { const o = FM.sample(y, FM.pathRun(p)); return JSON.stringify(FM.techState(o, FM.society(o, p))); }).join(' / ')}`);
+  }
+
+  // 그리는 쪽(fp-tech-world.js) — 정적 검사: 새 통로 없음 · 인스턴싱 · 렌더러 설정·투명 재질 손대지 않음(함정 14·15)
+  const strip = f => read(f).replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+  const tw = strip('firstperson/fp-tech-world.js'), wcode = strip('firstperson/fp-world.js'), mcode = strip('firstperson/fp-main.js');
+  const body = (wcode.match(/function applyWorldState\(s, soc\) \{([\s\S]*?)\n\}/) || [, ''])[1];
+  check('T3 세계 갱신 통로는 applyWorldState 하나 — 그 안에서 FPTechWorld.apply(s, soc, C), 다른 곳에서 apply 를 부르지 않음',
+    /FPTechWorld\.apply\(s, soc, C\)/.test(body) && (wcode + mcode).split('FPTechWorld.apply(').length === 2 && !/function applyWorld(?!State)/.test(wcode + tw));
+  const nIM = (tw.match(/instanced\(/g) || []).length - 1;   // 정의 한 번 빼고
+  check('T3 InstancedMesh 9개 이하(종류마다 하나) · new THREE.Mesh 없음 → 세계 드로우콜 최대 +9 (+그림자 7)', nIM <= 9 && !/new THREE\.Mesh\(/.test(tw), `${nIM}개`);
+  check('T3 렌더러 노출·그림자·scene.environment·안개를 바꾸지 않는다(함정 14), 투명·transmission 재질 없음(함정 15)',
+    !/toneMapping|shadowMap|\.environment\b|\.fog\b|renderer\./.test(tw) && !/transparent\s*:\s*true|transmission/.test(tw));
+  check('T3 소품 자리 결정적(Math.random 없음) — 같은 해에 다시 와도 같은 나무 밑에서 잰다', !/Math\.random/.test(tw));
+  check('T3 FPTechWorld.build 는 세계를 만든 바로 뒤, update 는 프레임 루프에서', /buildFirstPersonWorld\(renderer\);\s*FPTechWorld\.build\(\);/.test(mcode) && /FPTechWorld\.update\(dt\)/.test(mcode));
+  const html = read('firstperson/index.html');
+  const srcs = [...html.matchAll(/<script[^>]+src="([^"]+)"/g)].map(m => m[1]);
+  const b = read('tools/build_single_html.py').match(/FP_JS = \[([\s\S]*?)\]/);
+  const list = b ? [...b[1].matchAll(/"([^"]+)"/g)].map(m => m[1]) : [];
+  check('T3 로드 순서 fp-world → fp-tech-world → fp-minimap (index.html · 빌더 FP_JS)',
+    srcs.indexOf('fp-tech-world.js') === srcs.indexOf('fp-world.js') + 1 && srcs.indexOf('fp-minimap.js') === srcs.indexOf('fp-tech-world.js') + 1
+    && list.indexOf('firstperson/fp-tech-world.js') === list.indexOf('firstperson/fp-world.js') + 1);
+  check('T3 D19: 잘피밭 확대·ESS 소품 없음', !/seagrass|잘피|\bESS\b/.test(tw));
+  check('T3 등록부 fp_tech_visual (assumption)', SOURCES.fp_tech_visual && SOURCES.fp_tech_visual.kind === 'assumption');
+}
+
 console.log(fails ? `\n실패 ${fails}건` : '\n전부 통과');
 process.exit(fails ? 1 : 0);

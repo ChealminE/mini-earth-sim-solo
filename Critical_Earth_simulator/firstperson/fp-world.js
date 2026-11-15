@@ -545,6 +545,8 @@ function buildFirstPersonWorld(renderer) {
     // 늘어나므로 수관이 덮는 범위가 대략 0.11(실척 5.5m)이다.
     FPWorld.trees.push({ x, z, r: 0.11 });
   }
+  // 4차 T3: 숲 되살리기(fp-tech-world.js)의 추가 나무가 지금 나무와 같은 재질을 쓰게 내보낸다
+  FPWorld.treeMats = { trunk: trunkMat, leaf: leafMat };
 
   // 진흙 패치 + 물웅덩이 (걸어서 지나갈 수 있게 충돌체 없음)
   const mudY = wetlandY(MUD_X, MUD_Z);
@@ -1568,6 +1570,8 @@ function applyWorldState(s, soc) {
 
   applyEnvironment();   // 하늘색·안개·조명 (고정)
   applyOceanHealth();   // 산호·어류·수초·유빙 = 그해 엔진 표층 상태와 기온 (C4)
+  // 4차 T3: 세계 속 기후테크(해상풍력·지붕 태양광·숲·CCUS·DAC·SMR·충전소)도 이 통로로만 바뀐다 — 그해 사회 모습 soc 와 도시 C
+  FPTechWorld.apply(s, soc, C);
 }
 
 // 그림자 카메라를 플레이어 주변 좁은 범위로 계속 옮겨서 눈앞 그림자 해상도를 확보.
