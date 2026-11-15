@@ -14,13 +14,14 @@
 //              C5 society(s, preset, levers) · cityState(s, soc, n)               — 도시·차·굴뚝 (연출, EarthVisual 규칙)
 //   상수는 맨 위 K 한 곳에 모으고, 각 줄에 등록부(js/sources.js) 키를 주석으로 단다.
 //
-// 로드 순서: earth-model → earth-data → earth-system → earth-visual → fp-model → fp-world …
+// 로드 순서: earth-model → earth-data → earth-system → earth-visual → actions-core → fp-model → fp-world …
 //   (firstperson/index.html 과 tools/build_single_html.py FP_JS 를 같이 맞춘다)
 // 엔진 PARAMS·DT·해수 화학은 건드리지 않는다 — 여기서는 EarthSystem.run 결과를 그대로 꺼내 쓴다.
 // ============================================================================
 const FPModel = (() => {
-  // 마스터 D6. E·F가 이 값 하나만 쓴다(F1에서 ActionsCore.START 로 옮기고 여기서는 그것을 읽는다).
-  const NOW_YEAR = 2026;
+  // 마스터 D6 '현재' 연도. 정의는 js/actions-core.js(ActionsCore.START) 한 곳 — 행동이 퍼지기 시작하는 해와
+  // 1인칭의 '현재'가 갈라지면 '2026까지 하나의 역사'가 깨진다. 그래서 여기서는 읽기만 한다(F1).
+  const NOW_YEAR = ActionsCore.START;
   // 시간축은 조감 미래 예측과 같다(마스터 결정 11: 1750~2200).
   const YEAR_MIN = 1750, YEAR_MAX = 2200;
 
@@ -48,7 +49,7 @@ const FPModel = (() => {
     // 도심 '도시 증가분': 서울 20~27 ppm(여름 27·겨울 20)의 가운데 23 ppm을 2020년 값으로 둔다(문헌값 2-3).
     URBAN_CO2: 23,              // fp_urban_co2 (calibrated, unverified — 원 자료 대조 필요, 발췌 9)
     URBAN_REF_YEAR: 2020,       // fp_urban_co2 — 서울 관측(2020 발표) 시기. 다른 해는 그해 화석 배출 ÷ 2020년 화석 배출 비율
-    LOCAL_CUT_MAX: 0.42,        // 도시 증가분을 줄일 수 있는 상한(코로나19 거리두기 −42 %, 문헌값 1-6) · fp_urban_co2. 값은 F4가 채운다
+    LOCAL_CUT_MAX: ActionsCore.LOCAL_CUT_MAX,  // 0.42 — 도시 증가분을 줄일 수 있는 상한(코로나19 거리두기 −42 %, 문헌값 1-6) · fp_local_cut. 정의는 actions-core.js, 값은 F4가 채운다
     // 녹지·나무 밑: 정량 문헌 미확보(문헌값 2-5) → 3차 모형의 낮 정상 상태값을 그대로 두고 assumption + unverified 로 밝힌다.
     // 오프셋 = OFF + RISE × k, k = (배경 − CO2_MIN) ÷ (CO2_MAX − CO2_MIN) — 3차의 co2k 와 같은 식(earth-model.js 상수 불변)
     GREEN_OFF: -30, GREEN_RISE: -40,   // 녹지 대기 [ppm] · fp_green_co2 (assumption, unverified — 발췌 6)

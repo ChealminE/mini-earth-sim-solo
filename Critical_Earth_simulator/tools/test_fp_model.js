@@ -16,7 +16,7 @@ const ROOT = path.resolve(__dirname, '..');
 const read = f => fs.readFileSync(path.join(ROOT, f), 'utf8');
 
 // 1인칭 index.html 과 같은 순서(fp-world 앞까지). module 이 없는 컨텍스트라 브라우저처럼 전역으로만 남는다.
-const LOAD = ['js/earth-model.js', 'js/earth-data.js', 'js/earth-system.js', 'js/earth-visual.js', 'firstperson/fp-model.js'];
+const LOAD = ['js/earth-model.js', 'js/earth-data.js', 'js/earth-system.js', 'js/earth-visual.js', 'js/actions-core.js', 'firstperson/fp-model.js'];
 const ctx = vm.createContext({ console, Math });
 for (const f of LOAD) vm.runInContext(read(f), ctx, { filename: f });
 const ES = vm.runInContext('EarthSystem', ctx);
