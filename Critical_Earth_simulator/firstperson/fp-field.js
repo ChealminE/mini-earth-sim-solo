@@ -19,7 +19,6 @@ const FPField = {
   transect: null,    // 진행 중인 횡단 조사
   panelOpen: false,
   tab: 'tasks',      // 야장을 열면 먼저 보이는 탭 - 처음 온 학생에게는 '무엇을 할지'가 먼저다
-  exports: 0,        // CSV 내보내기 횟수 (탐구 과제 ④)
   _doneTasks: new Set(),
 };
 
@@ -84,7 +83,6 @@ FPField.record = function (tool, value, reading) {
 FPField.clear = function () {
   this.rows.length = 0;
   this.transect = null;
-  this.exports = 0;
   this._doneTasks.clear();
   // 진행 중이던 측정이 나중에 확정돼서 '지운 뒤'에 한 줄 끼어드는 일을 막는다
   if (typeof FPTools !== 'undefined') FPTools.slots.forEach(t => { if (t) t.reading = null; });
@@ -98,8 +96,11 @@ FPField.clear = function () {
 // 판정은 '야장에 쌓인 기록 수'로만 한다. 모형 값이나 측정값이 맞는지는 보지 않는다 -
 // 계측 노이즈 때문에 판정이 흔들리면 안 되고, 결론은 학생이 평균·표준편차로 내야 하기 때문이다.
 // 바다 기록의 '냉수대/개방 해역'·'산호 곁'은 값이 아니라 잰 위치로 나눈 것이다(record 참고).
-const NIGHT_FROM = 18, NIGHT_TO = 6;       // 활동 ②의 '저녁~새벽' (시계 시각 기준)
-function isEveningToDawn(hour) { return hour >= NIGHT_FROM || hour < NIGHT_TO; }
+// 4차 B5: ② 밤바람(낮밤·해륙풍이 없어짐)과 ④ 상자 속 바다(직접 실험 탭이 없음)를 뺐다.
+// 제목 번호(①③, 아래 현장 과제 ⑤~⑦)는 그대로 둔다 — 현장 과제 제목은 조감 [기록] 탭이 저장된 값으로 보여 주므로
+// 번호를 바꾸면 이미 쓴 기록과 어긋난다. 번호 정리는 학습지를 다시 짜는 D에서 한다.
+// ③의 '생각해 볼 것'은 예전에 "CO₂를 600 ppm 이상으로 올려 보세요"였다. B4에서 교사용 직접 입력을 빼
+// 기본 경로로는 600 ppm에 못 닿아(현재 정책 2200년 ≈ 576 ppm) 연도를 옮기라는 말로 바꿨다.
 const INQUIRY = [
   {
     id: 1, title: '① 차가운 바다 vs 따뜻한 바다',
@@ -115,39 +116,14 @@ const INQUIRY = [
     ],
   },
   {
-    id: 2, title: '② 밤바람이 바다를 바꾼다',
-    concept: '대기–해양 상호작용 · 동적 평형 · 측정 오차와 평균',
-    goal: '밤 육풍이 도심 CO₂를 바다로 실어 오면 해수 pH가 어떻게 변하는지 시간을 두고 본다.',
-    how: '저녁~새벽(18~06시)에 바다 위 공기 CO₂(3번)와 해수 pH(2번)를 각각 5회 이상, 비교용으로 낮에도 해수 pH를 5회 재시오. 시각은 설정(E)에서 옮기거나 T로 흐르게 하세요.',
-    think: '바다는 대기를 천천히 따라갑니다(약 2게임일). 밤으로 옮기자마자 재면 아직 낮의 바다입니다 — 설정창의 해수 pCO₂가 해양 대기에 다가갈 때까지 기다리며 반복해서 재고 평균을 비교하세요. 차이(약 0.02~0.03)는 pH미터 오차(±0.02)와 비슷합니다.',
-    subs: [
-      { label: '밤 해양 대기 CO₂', goal: 5, test: r => r.kind === 'co2' && r.zone === 'ocean' && isEveningToDawn(r.hour) },
-      { label: '밤 해수 pH', goal: 5, test: r => r.kind === 'ph' && isEveningToDawn(r.hour) },
-      { label: '낮 해수 pH', goal: 5, test: r => r.kind === 'ph' && !isEveningToDawn(r.hour) },
-    ],
-  },
-  {
     id: 3, title: '③ 백화인가, 석회화 저해인가',
     concept: '열 스트레스와 산성화의 구분 (오개념 교정)',
     goal: '따뜻한 곳 산호와 차가운 곳 산호가 서로 다른 이유로 아프다는 것을 구분한다.',
     how: '산호 바로 곁(3 m 이내) 바다를 4번 해수분석기로 — 개방 해역 산호 3회, 냉수대 산호 3회 재시오.',
-    think: 'CO₂를 600 ppm 이상으로 올려 보세요. 하얗게 바랜 산호(백화)와 회갈색으로 쪼그라든 산호(석회화 저해)는 각각 어디에 있나? 원인은 수온인가 Ω인가?',
+    think: '설정(E)에서 연도를 2100년 이후로 옮겨 CO₂를 높여 보세요. 하얗게 바랜 산호(백화)와 회갈색으로 쪼그라든 산호(석회화 저해)는 각각 어디에 있나? 원인은 수온인가 Ω인가?',
     subs: [
       { label: '개방 해역 산호', goal: 3, test: r => r.kind === 'sea' && r.nearCoral && r.seaClass === 'open' },
       { label: '냉수대 산호', goal: 3, test: r => r.kind === 'sea' && r.nearCoral && r.seaClass !== 'open' },
-    ],
-  },
-  {
-    id: 4, title: '④ 상자 속 바다와 모형',
-    concept: '평형 모형의 예측력과 한계 · 완충 작용 · 실측–가상 융합',
-    goal: '아크릴 상자 실측과 비교할 가상 바다의 기준값을 만든다.',
-    how: '해양 대기 CO₂ · 해수 수온 · 해수 pH를 각각 3회 이상 기록하고 CSV로 내보내시오. 상자 실측은 조감 모드 \'실시간 실험\' 탭에서 같은 형식의 CSV로 받아 한 표에 놓고 비교합니다.',
-    think: '같은 CO₂ · 같은 수온이면 모형은 같은 pH를 냅니다. 상자 속 실측 pH는 모형을 얼마나 따르나? 어긋난다면 왜일까? (인공해수 · 총알칼리도 · 평형까지 걸리는 시간)',
-    subs: [
-      { label: '해양 대기 CO₂', goal: 3, test: r => r.kind === 'co2' && r.zone === 'ocean' },
-      { label: '해수 수온', goal: 3, test: r => r.waterTemp != null && r.zone === 'ocean' },
-      { label: '해수 pH', goal: 3, test: r => r.kind === 'ph' },
-      { label: 'CSV 내보내기', goal: 1, exportCount: true },
     ],
   },
 ];
@@ -156,7 +132,7 @@ const INQUIRY = [
 // 위의 측정 과제는 기록 수로 판정하지만, 이 과제는 관찰 글이 있으면 그 칸을 채운 것으로 본다(맞고 틀림은 보지 않는다).
 // 문구는 데이터로 둔다. link = 조감 탐구 경로 C의 단계 id(조감 학습지 [기록]의 '1인칭 현장 기록'에 함께 적힌다).
 // 1인칭 세계가 실제로 바꾸는 것만 묻는다: 산호 백화(수온)·냉수대 골격 용해(Ω)·빙하 곁 온도. 1인칭에는 조개가 없고
-// 유빙 크기는 계절만 따른다 — 그래서 ⑥은 냉수대 산호 골격으로, ⑦은 빙하 곁 온도로 본다.
+// 유빙 크기는 고정이다(4차 B3) — 그래서 ⑥은 냉수대 산호 골격으로, ⑦은 빙하 곁 온도로 본다.
 // 답은 localStorage['worksheet.v1'].fp.tasks 에 둔다(조감 학습지 공용 저장소와 같은 키 — js/worksheet.js).
 const FIELD_TASKS = [
   { id: 'coral', link: 'C3', title: '⑤ 산호 — 해수온', concept: '해수온 상승 · 산호 백화', years: [2023, 2100],
@@ -169,7 +145,7 @@ const FIELD_TASKS = [
     think: 'Ω가 1보다 작아지면 껍데기·골격에 무슨 일이 생길까? 차가운 바다가 먼저 위험한 까닭은?' },
   { id: 'glacier', link: 'C2', title: '⑦ 빙하 — 기온', concept: '기온 상승 · 빙하', years: [2023, 2100],
     goal: '빙하(유빙) 곁의 온도를 지금과 2100년에 재고 비교한다.',
-    how: '유빙 곁에서 1번 온도계로 빙하 표면과 해양 대기 온도를 재시오. [이 연도로 가기]로 연도를 바꿔 다시 재세요. (이 세계의 유빙 크기는 계절만 따릅니다 — 그래서 온도를 잽니다)',
+    how: '유빙 곁에서 1번 온도계로 빙하 표면과 해양 대기 온도를 재시오. [이 연도로 가기]로 연도를 바꿔 다시 재세요. (이 세계의 유빙 크기는 바뀌지 않습니다 — 그래서 온도를 잽니다)',
     think: '빙하 표면이 0 °C에 가까워지면 무슨 일이 생길까? 조감 모드에서 고른 경로의 2100년 기온과 견주어 보세요.' },
 ];
 // 공용 저장소의 fp 묶음 읽기·쓰기. file:// 등에서 저장소가 막히면 조용히 넘어간다(이번 화면 동안만 메모리)
@@ -239,7 +215,7 @@ FPField.bindFieldTasks = function () {
 FPField.taskProgress = function () {
   return INQUIRY.map(t => {
     const subs = t.subs.map(s => {
-      const n = s.exportCount ? this.exports : this.rows.reduce((a, r) => a + (s.test(r) ? 1 : 0), 0);
+      const n = this.rows.reduce((a, r) => a + (s.test(r) ? 1 : 0), 0);
       return { label: s.label, goal: s.goal, n, ok: n >= s.goal };
     });
     const need = subs.reduce((a, s) => a + s.goal, 0);
@@ -269,7 +245,7 @@ FPField.renderTasks = function () {
       ? '<b>어디서부터?</b> ①부터 시작하세요. 키 <b>4</b>로 해수분석기를 들고, 바다 위 흰 얼음(유빙) <b>바로 옆 바다</b>를 겨눠 좌클릭합니다. ' +
         '표시창 아래 막대가 다 차면 값이 야장에 자동으로 기록되고, 아래 카드의 진행도가 올라갑니다. 그다음 유빙에서 멀리 떨어진 바다에서도 똑같이 재세요.'
       : (doneN === prog.length
-        ? '<b>네 과제를 모두 마쳤습니다.</b> \'기록 · 통계\' 탭의 평균·표준편차로 각 과제의 질문에 답해 보세요.'
+        ? '<b>측정 과제를 모두 마쳤습니다.</b> \'기록 · 통계\' 탭의 평균·표준편차로 각 과제의 질문에 답해 보세요.'
         : `<b>${doneN}/${prog.length} 완료.</b> 회색 칸이 남은 조건입니다. 같은 지점을 여러 번 재야 하는 이유는 계측기 오차 때문입니다 — 한 번 잰 값은 못 믿습니다.`);
   }
   box.innerHTML = prog.map(p => {
@@ -420,9 +396,6 @@ FPField.toCSV = function () {
 };
 FPField.download = function () {
   if (!this.rows.length) return;
-  this.exports++;
-  this.checkTasks();
-  this.refresh();
   const blob = new Blob([this.toCSV()], { type: 'text/csv;charset=utf-8' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
