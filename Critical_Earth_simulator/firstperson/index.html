@@ -163,14 +163,9 @@
     </label>
     <p class="note">전 지구 평균 CO₂ <b><span id="fpGlobalCo2">418</span> ppm</b> — 조감 모드 미래 예측과 <b>같은 모형</b>으로 계산한 값입니다(2023년까지는 실제 배출, 그 뒤는 고른 경로).
       CO₂를 올리면 하늘이 탁해지고, 전기차가 내연기관차로 바뀌며 매연이 늘어납니다.</p>
-    <div class="row">
-      <span class="lbl">바다</span>
-      <span class="sea-eq" id="seaEqState">-</span>
-      <div class="btn-row" style="flex:0 0 auto"><button id="seaEqBtn">즉시 평형</button></div>
-    </div>
-    <p class="note">바다는 대기 CO₂를 <b>천천히</b> 따라갑니다(약 2게임일 ≈ 실시간 10분에 63 %).
-      CO₂를 바꾼 직후 pH를 재면 아직 옛 값에 가깝습니다 — 시간을 두고 반복 측정해 보세요.
-      수업 시간이 부족하면 <b>즉시 평형</b>을 누르면 해수가 지금 해양 대기와 바로 평형이 됩니다.</p>
+    <!-- 4차 C4: '즉시 평형' 버튼·해수 평형 상태를 뺐다 — 바다는 그해 엔진 표층 상태다 -->
+    <p class="note">바다(수온·pH·Ω)도 조감 모드와 <b>같은 모형의 그해 값</b>입니다. 바다는 대기 CO₂를 몇 해에 걸쳐
+      늦게 따라가므로, 해수 pCO₂는 대기와 조금 다릅니다(배출이 늘 때는 대기보다 낮고, 크게 줄면 거꾸로 높아집니다).</p>
     <div class="settings-actions">
       <button id="settingsCloseBtn" class="settings-btn">돌아가기</button>
       <a class="settings-btn ghost" href="/">전체 조감 모드로</a>

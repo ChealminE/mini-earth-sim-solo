@@ -24,8 +24,6 @@ const OCEAN_TERRAIN_AMP = 0.02, OCEAN_TERRAIN_SEED = 1.7;
 const GREEN_HALF_W = TERRAIN_HALF_W * 0.9, GREEN_HALF_D = TERRAIN_HALF_D * 0.9;
 const MUD_X = -0.2, MUD_Z = 0.1, MUD_AVOID_R = 0.14;
 const waveBaseY = TERRAIN_TOP * 0.55;     // 수면 기준선
-// 유빙 크기 배수. 4차 B3에서 계절을 빼면서 그때 기본이던 여름 값(0.75)으로 고정했다.
-const ICE_SIZE_K = 0.75;
 
 // ── 파도 ────────────────────────────────────────────────────────────────────
 // 원본은 "앞쪽에서만 크게 부서지는" 한 방향 파도였다. 1인칭에서는 수면 위에 서서 사방을
@@ -475,10 +473,11 @@ function buildFirstPersonWorld(renderer) {
   // 빙하: 1인칭에선 물 위에 뜬 거대한 유빙이라 올라설 수 있게 충돌체로도 등록
   const iceMat = new THREE.MeshPhysicalMaterial({ map: T.iceCrack, color: 0xf3fbff, roughness: 0.15, clearcoat: 0.8, flatShading: true });
   [[-0.5, -0.4], [0.3, 0.3], [0.55, -0.5], [-0.15, 0.5]].forEach(([x, z]) => {
-    // 4차 B3: 계절을 빼면서 여름 크기(예전 applySeason 의 0.75배)를 만들 때 바로 굽는다.
-    // 난수는 예전과 같은 자리에서 한 번만 뽑는다(크기 분포가 그대로).
-    const s = (0.05 + Math.random() * 0.03) * ICE_SIZE_K;
+    // 난수는 예전과 같은 자리에서 한 번만 뽑는다(크기 분포가 그대로). s = 기온 편차 0 °C(glacierFrac 1)일 때 반지름.
+    // 4차 C4: 실제 크기는 applyIceSize(T)가 glacierFrac(T)배로 정한다(예전 여름 고정 0.75배 대신 — 2023년 T 1.19 °C ≈ 0.76배).
+    const s = 0.05 + Math.random() * 0.03;
     const ice = new THREE.Mesh(new THREE.IcosahedronGeometry(s, 0), iceMat);
+    ice.userData.baseS = s;
     ice.position.set(x, waveBaseY + s * 0.35, z);
     ice.castShadow = true;
     oceanGroup.add(ice);
@@ -1402,11 +1401,8 @@ FPWorld.refresh = function () { applyWorldCO2(FPWorld.co2); };
 //   (25 °C) 280ppm -> 8.18 / 418ppm -> 8.04 / 600ppm -> 7.91 / 1000ppm -> 7.71
 // 변화폭이 0.48로 줄어든 만큼, '눈에 보이는 변화'는 pH 자체가 아니라
 // 아라고나이트 포화도 Ω와 수온으로 만든다. 아래 백화/석회화 참고.
-// 1인칭에서는 바다가 슬라이더 값이 아니라 해수 pCO2(위 동적 평형)를 녹이고 있으므로
-// 개방 해역 수온·해수 pCO2로 푼 값을 돌려준다 (HUD 표시용).
-function oceanPH(ppm) {
-  return openSeaState(ppm).pH;
-}
+// 4차 C4: 1인칭 바다는 그해 엔진의 표층 해양 상태(DIC)를 쓴다 — 개방 해역 pH·Ω = 엔진 o.pH·o.omega.
+// (쓰는 곳이 없던 oceanPH()는 지웠다 — HUD는 openSeaState()를 읽는다.)
 
 // ── 산호에 일어나는 두 가지 서로 다른 일 ────────────────────────────────────
 // 예전엔 pH 하나로 백화와 개체수 감소를 전부 굴렸는데, 기작이 틀렸다.
@@ -1416,16 +1412,9 @@ function oceanPH(ppm) {
 // 둘을 분리하면 새로 만든 수온 모델도 살아나고, 학생이 "산성화 = 백화"라는 흔한
 // 오개념을 갖지 않게 된다.
 
-// 열 스트레스: 표층 수온이 백화 임계를 넘긴 정도 (0=정상, 1=완전 백화)
-// 산호는 '평년 최고수온 + 1°C'가 몇 주 이어지면 백화한다(NOAA의 Degree Heating Week
-// 개념). 여기서는 그 임계를 산업화 이전 해수온 + 1.0°C로 잡고, +3.5°C에서 전면 백화로 본다.
-// 수온은 fp-model.js 한 곳(FPModel.seaTemp)에서만 낸다 — "잰 값"과 "산호가 반응하는 값"이 어긋나지 않게.
-// SEA_BASE_T = 엔진 sst0(18 °C, 산업화 이전 표층 수온). 아래 백화 임계에만 남았다 — C4에서 coralHealthy(T)로 바꾸며 지운다.
-const SEA_BASE_T = EarthSystem.PARAMS.sst0;
-// 백화 임계. 실제로는 '그 지역 월최고수온 + 1°C가 몇 주'가 기준인데 이 모형엔 계절이
-// 없으므로, 산업화 이전 수온 대비 +1.5°C에서 시작해 +4.0°C에서 전면 백화로 잡았다.
-//   418ppm -> 14% (요즘 실제로 관측되는 정도) / 600ppm -> 80% / 667ppm 이상 -> 전면
-const BLEACH_ON = 1.5, BLEACH_FULL = 4.0;
+// 4차 C4: 백화 = 1 − EarthVisual.coralHealthy(T)(등록부 coral_sr15, 조감 3D 산호와 같은 식 — FPModel.coralState).
+// 예전 '산업화 이전 수온 18 °C + 1.5 °C에서 시작'(BLEACH_ON·BLEACH_FULL·SEA_BASE_T) 임계는 1인칭 옛 회귀 수온에 맞춘 값이라
+// 엔진 해수온(2023 약 19.2 °C)과 맞지 않아 지웠다.
 // 지금 연도·경로의 엔진 표본(fp-main.js 가 연도·경로를 바꿀 때 FPWorld.sample 에 넣는다).
 // 첫 화면을 그리기 전(buildFirstPersonWorld 중)에 불리면 아직 비어 있으므로 2023년 역사 값으로 대신한다.
 function fpSample() {
@@ -1454,7 +1443,7 @@ function iceProximity(x, z) {
   let p = 0;
   for (const ice of FPWorld.iceMeshes) {
     const c = ice.userData.collider;
-    if (!c) continue;
+    if (!c || !ice.visible) continue;   // 다 녹은 유빙(glacierFrac 0)은 냉수대도 없다
     const d = Math.max(0, Math.hypot(x - c.x, z - c.z) - c.r) / COLD_POOL_R;
     if (d >= 1) continue;
     const s = 1 - d * d * (3 - 2 * d);   // smoothstep 감쇠: 경계에서 꺾이지 않고 0이 된다
@@ -1466,80 +1455,24 @@ function seaTempAt(x, z) {
   return FPModel.seaTemp(iceProximity(x, z), fpSample());
 }
 
-// ── 해수 pCO2의 동적 평형 ───────────────────────────────────────────────────
-// 바다는 바로 위 해양 대기와 CO2를 주고받지만 즉시 맞춰지지는 않는다:
-//   dpCO2_sw/dt = (C_ocean − pCO2_sw) / τ_sw
-// C_ocean은 해양 구역 대기 CO2 = 배경(4차 C3에서 −15~−30 ppm 오프셋을 뺐다 — FPModel.zoneCO2('ocean')).
-// 대기를 갑자기 바꿔도 해수 pH가 바로 안 따라오고 시간에 걸쳐 수렴한다 =
-// "평형은 즉시가 아니라 시간에 걸쳐 도달한다"를 측정으로 보이는 장치다.
-// τ_sw 2게임일(실시간 10분)은 실제 표층 해양의 평형 시간(수개월)을 압축한 값이다.
-// 바다 전체가 한 값을 쓴다(공간 변이는 수온이 만든다). 0.2초 틱에서 FPAir와 같이 돈다.
-const SEA_TAU_SW = 2;          // 해수 pCO2가 해양 대기를 따라가는 시간 [게임 일]
-FPWorld.pco2Sea = null;        // 해수 pCO2 [µatm ≈ ppm]. null이면 아직 초기화 전
-function oceanAirCO2() {
-  return typeof FPAir !== 'undefined' ? FPAir.zoneCO2('ocean') : FPWorld.co2;
-}
-function stepSeaCO2(dtDay) {
-  if (FPWorld.pco2Sea == null) FPWorld.pco2Sea = oceanAirCO2();
-  FPWorld.pco2Sea += (oceanAirCO2() - FPWorld.pco2Sea) * dtDay / SEA_TAU_SW;
-}
-// 해수를 지금 해양 대기와 바로 평형으로 맞춘다 (처음 열 때 / 설정창 버튼)
-function equilibrateSeaCO2() { FPWorld.pco2Sea = oceanAirCO2(); }
+// 4차 C4: 해수 pCO2 동적 평형(stepSeaCO2·equilibrateSeaCO2·SEA_TAU_SW·FPWorld.pco2Sea·oceanAirCO2)을 지웠다.
+// 해수가 해양 대기를 2게임일로 따라가던 장치인데, 연도를 뛰어넘는 시간 여행과 맞지 않는다 — 엔진이 이미 그해 표층 DIC를 계산한다.
 
 // ── 지점의 해수 상태 ────────────────────────────────────────────────────────
-// 해수가 녹이고 있는 CO2(pCO2)와 그 지점의 수온으로 탄산 평형을 한 번 푼다.
-// pH미터·해수 분석기·산호가 전부 이 함수 하나만 읽는다 - 측정값과 세계 상태가
-// 어긋나지 않게 하려는 것이다. 돌려주는 값은 seawaterState()의 결과(mol/kg)에
-// 수온(temp)과 pCO2를 덧붙인 것이다.
-function seaPCO2(ppm) {
-  return FPWorld.pco2Sea != null ? FPWorld.pco2Sea : ppm;
+// 그해 엔진 해수 pCO2(pco2FromDic(o.dic, o.sst))와 그 지점의 수온으로 탄산 평형을 한 번 푼다(FPModel.seaState).
+// pH미터·해수 분석기·산호가 전부 이 함수 하나만 읽는다 - 측정값과 세계 상태가 어긋나지 않게 하려는 것이다.
+// 돌려주는 값은 seawaterState()의 결과(mol/kg)에 수온(temp)과 pCO2를 덧붙인 것이다.
+function seaStateAt(x, z) {
+  return FPModel.seaState(iceProximity(x, z), fpSample());
 }
-function seaStateAt(x, z, ppm) {
-  const temp = seaTempAt(x, z);
-  const pco2 = seaPCO2(ppm);
-  const s = seawaterState(pco2, temp);
-  s.temp = temp;
-  s.pco2 = pco2;
-  return s;
+// 개방 해역(냉수대 밖)의 해수 상태 - HUD가 쓰는 '바다 대표값' = 엔진 o.pH·o.omega·o.sst
+function openSeaState() {
+  return FPModel.seaState(0, fpSample());
 }
-// 개방 해역(냉수대 밖)의 해수 상태 - HUD가 쓰는 '바다 대표값'
-function openSeaState(ppm) {
-  const temp = seaTemperature(), pco2 = seaPCO2(ppm);
-  const s = seawaterState(pco2, temp);
-  s.temp = temp;
-  s.pco2 = pco2;
-  return s;
-}
-// 백화·석회화 둘 다 '지점'의 함수다. (x, z)를 주면 그 자리의 수온(seaTempAt)·Ω(seaStateAt),
-// 안 주면 개방 해역 값을 쓴다. 온도계·해수 분석기가 읽는 것과 같은 함수라
-// "내가 잰 수온·Ω"와 "산호가 반응하는 수온·Ω"가 반드시 같다.
-// 같은 바다 안에서 따뜻한 곳(개방 해역)은 백화가, 차가운 곳(냉수대)은 석회화 저해가
-// 먼저 온다 - 두 현상의 원인(열 스트레스 vs 산성화)이 다르다는 걸 공간으로 보여준다.
-function bleachFromTemp(t) {
-  const excess = t - (SEA_BASE_T + BLEACH_ON);
-  return Math.min(1, Math.max(0, excess / (BLEACH_FULL - BLEACH_ON)));
-}
-function coralBleaching(ppm, x, z) {
-  return bleachFromTemp(x == null ? seaTemperature() : seaTempAt(x, z));
-}
-// 석회화 가능성: Ω가 3 아래로 내려가면 성장이 느려지고, 1 밑이면 골격이 녹는다.
-// 어류·수초가 기댈 서식지가 남아 있는지를 이 값이 정한다.
-function habitatFromOmega(om) {
-  return Math.min(1, Math.max(0, (om - 1.0) / (3.4 - 1.0)));
-}
-function calcificationHealth(ppm, x, z) {
-  return habitatFromOmega(x == null ? openSeaState(ppm).omega : seaStateAt(x, z, ppm).omega);
-}
-// 생태 종합 건강도(0~1). 서식지(Ω)가 주된 요인이고, 백화는 거기에 얹히는 스트레스다.
-// 백화만으로 물고기가 전멸하지는 않으므로 계수를 0.5로 눌러 놨다. 어류·수초는 바다 전체를
-// 돌아다니므로 개방 해역 값으로 정한다 (해수 pCO2·개방 해역 수온 기준).
-function oceanHealth(ppm) {
-  return calcificationHealth(ppm) * (1 - 0.5 * coralBleaching(ppm));
-}
-// 가장 차가운 물(유빙 바로 옆)의 Ω - Ω<1 경고는 여기가 먼저 켜진다
-function coldPoolOmega(ppm) {
-  const t = FPModel.seaTemp(1, fpSample());   // 유빙 바로 옆(prox 1)
-  return seawaterState(seaPCO2(ppm), t).omega;
+// 가장 차가운 물(유빙 바로 옆)의 Ω - Ω<1 경고는 여기가 먼저 켜진다.
+// 현재 정책 2100년에도 1 위면 경고가 안 뜨는 것이 정직한 결과다(억지로 켜지 않는다).
+function coldPoolOmega() {
+  return FPModel.seaState(1, fpSample()).omega;
 }
 function applyWorldCO2(ppm) {
   FPWorld.co2 = ppm;
@@ -1640,32 +1573,49 @@ function seaZoneClass(x, z) {
 const _coralColor = new THREE.Color();
 const _coralScale = new THREE.Vector3();
 const _coralMat4 = new THREE.Matrix4();
-function applyOceanHealth(ppm) {
+// 유빙 크기 = EarthVisual.glacierFrac(T)(등록부 glacier_scale, 조감 빙하와 같은 식 — 계절 배수 대신).
+// 메시 배율·높이와 충돌체(반지름·윗면)를 같이 바꾼다 — 안 그러면 작아진 유빙 둘레 허공에 걸리고, 냉수대도 옛 크기를 따른다.
+function applyIceSize(T) {
+  const k = EarthVisual.glacierFrac(T);
+  for (const ice of FPWorld.iceMeshes) {
+    const u = ice.userData, s0 = u.baseS;
+    ice.visible = k > 0;
+    ice.scale.setScalar(Math.max(k, 1e-3));
+    ice.position.y = waveBaseY + s0 * k * 0.35;
+    u.collider.r = s0 * k * 0.95;
+    u.collider.top = k > 0 ? ice.position.y + s0 * k * 0.5 : -Infinity;
+  }
+  FPWorld.glacierFrac = k;
+}
+// 연도·경로가 바뀔 때 한 번 부른다(4차 C4: 바다 상태가 그해 엔진 값이라 0.2초 틱이 필요 없어졌다).
+function applyOceanHealth() {
   if (!FPWorld.fish || !FPWorld.seagrass) return;
-  const h = oceanHealth(ppm);
-  const open = openSeaState(ppm);
+  const s = fpSample();
+  applyIceSize(s.T);   // 냉수대(iceProximity)가 유빙 크기를 따르므로 먼저
+  const h = FPModel.oceanHealth(s);
+  const open = openSeaState();
   FPWorld.oceanHealth = h;
   FPWorld.aragonite = open.omega;
   FPWorld.seaTemp = open.temp;
-  FPWorld.coldPoolOmega = coldPoolOmega(ppm);
+  FPWorld.coldPoolOmega = coldPoolOmega();
 
-  // 산호: 개체마다 자기 자리의 수온·Ω로 반응한다.
-  //   백화(수온)  = 고유색 -> 표백된 흰색
-  //   석회화 저해(Ω) = 탁한 회갈색으로 바래고 골격이 녹아 작아진다 (Ω<1이면 최대 45% 줄어듦)
+  // 산호: 개체마다 자기 자리의 상태로 반응한다(FPModel.coralState).
+  //   백화(열 스트레스, coralHealthy(T)) = 고유색 -> 표백된 흰색. 개방 해역에서 그대로, 냉수대로 갈수록 약해진다
+  //   석회화 저해(그 자리 Ω) = 탁한 회갈색으로 바래고 골격이 녹아 작아진다 (Ω<1이면 최대 45% 줄어듦)
   const C = FPWorld.CORAL_COLORS;
   let sumB = 0, sumL = 0, n = 0, nDissolve = 0;
   for (const im of FPWorld.corals) {
     const S = im.userData.sites;
     if (!S) continue;
     for (let i = 0; i < S.lx.length; i++) {
-      const st = seaStateAt(S.lx[i] - ZONE_W, S.lz[i], ppm);   // 로컬 x -> 월드 x
-      const b = bleachFromTemp(st.temp), hab = habitatFromOmega(st.omega);
+      const cs = FPModel.coralState(iceProximity(S.lx[i] - ZONE_W, S.lz[i]), s);   // 로컬 x -> 월드 x
+      const b = cs.bleach, hab = cs.habitat;
       _coralColor.copy(S.healthy).lerp(C.bleached, b).lerp(C.dissolved, (1 - hab) * 0.75);
       im.setColorAt(i, _coralColor);
       _coralScale.copy(S.scale[i]).multiplyScalar(0.55 + 0.45 * hab);
       im.setMatrixAt(i, _coralMat4.compose(S.pos[i], S.quat[i], _coralScale));
       sumB += b; sumL += 1 - hab; n++;
-      if (st.omega < 1) nDissolve++;
+      if (cs.omega < 1) nDissolve++;
     }
     im.instanceColor.needsUpdate = true;
     im.instanceMatrix.needsUpdate = true;

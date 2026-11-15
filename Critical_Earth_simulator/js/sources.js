@@ -852,6 +852,22 @@ const SOURCES = {
     note: '국소 배출원 곁 농도에 근거 있는 공식은 없다(문헌값 2-7: 연출로 밝힘). 4차 C3에서 굴뚝 몫을 CO₂ 농도 비례(co2k)에서 그해 화석 배출(stackLevel)로 바꿨다 — 배출이 0 이하인 해에는 굴뚝 곁도 배경과 같다.',
     related: ['city_scale'],
   },
+  // ── 4차 C4: 1인칭 바다 생태 (firstperson/fp-model.js coralState·oceanHealth) ──
+  fp_habitat: {
+    label: '1인칭 산호 석회화·어류 서식지 (연출)',
+    summary: '산호 골격과 어류·수초가 기대는 서식지를 아라고나이트 포화도(Ω)로 정했습니다. Ω 1 아래는 골격이 녹는 물이고, 그 위 구간의 모양은 연출입니다.',
+    kind: 'assumption',
+    org: '이 프로그램',
+    dataset: '서식지 = (Ω − 1.0) ÷ (3.4 − 1.0), 0~1로 자름. 어류·수초 건강 = 개방 해역 서식지 × (1 − 0.5 × 백화). 백화 = (1 − coralHealthy(T)) × (1 − 냉수대 근접도)',
+    version: '-',
+    cite: '이 프로그램의 연출 값(3차 1인칭 모형). Ω = 1 경계는 shell_omega, 백화는 coral_sr15',
+    url: REPO_URL + 'firstperson/fp-model.js',
+    license: '-',
+    status: 'verified',
+    note: 'Ω 3.4(온전)·백화 비중 0.5·냉수대에서 백화가 약해지는 비율은 근거 있는 공식이 아니라 3차부터 쓴 연출이다(문헌값 2-7). 4차 C4에서 백화를 옛 수온 임계(18 °C + 1.5~4.0 °C) 대신 조감과 같은 coralHealthy(T)로 바꿨다. ' +
+      '엔진 기준 냉수대(유빙 바로 옆) Ω는 1750~2200년 세 경로 모두 1.5 위라 Ω < 1 경고는 뜨지 않는다 — 억지로 켜지 않는다.',
+    related: ['shell_omega', 'coral_sr15', 'glacier_scale'],
+  },
 };
 
 // 종류 이름 (ⓘ 상자 배지·출처 문서 공용)

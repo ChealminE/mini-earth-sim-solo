@@ -43,11 +43,8 @@ applyWorldCO2(FPWorld.sample.ppm);
 FPPlayer.init(camera, glCanvas);
 FPTools.init(camera);   // 단축바 + 손에 든 도구 (camera를 씬에 넣는 것도 여기서 처리)
 FPMinimap.init();
-FPAir.reset();          // 게임 시간(야장 game_time)을 0에서 시작 (구역 CO₂는 4차 C3부터 적분 없이 FPModel 이 바로 낸다)
-equilibrateSeaCO2();    // 해수 pCO2도 지금 해양 대기와 평형에서 시작
-FPAir.onTick.push(stepSeaCO2);   // 해수는 대기와 같은 0.2초 틱에서 천천히 따라간다
-FPAir.onTick.push(() => applyOceanHealth(FPWorld.co2));   // 산호·어류·수초도 같은 틱에서
-applyOceanHealth(FPWorld.co2);
+// 4차 C4: 바다(해수 pCO₂·산호·유빙)는 그해 엔진 표층 상태라 연도·경로가 바뀔 때만 갱신한다(applyScenarioYear).
+// 예전 0.2초 틱(FPAir)·해수 평형 적분(stepSeaCO2)은 지웠다.
 
 function fit() {
   const w = window.innerWidth, h = window.innerHeight;
@@ -79,16 +76,13 @@ function applyScenarioYear() {
   fpYearOut.textContent = FPScenario.year;
   fpGlobalCo2.textContent = ppm.toFixed(0);
   applyWorldCO2(ppm);
+  applyOceanHealth();   // 산호·어류·수초·유빙 크기 = 그해 엔진 표층 상태
 }
 fpScenario.addEventListener('change', () => { FPScenario.preset = fpScenario.value; applyScenarioYear(); });
 fpYear.addEventListener('input', () => { FPScenario.year = Number(fpYear.value); applyScenarioYear(); });
 // 야장 현장 과제(fp-field.js)가 '이 연도로 가기'로 부른다
 FPScenario.goYear = y => { FPScenario.year = y; applyScenarioYear(); };
 applyScenarioYear();
-
-// ── 해수 평형 상태 + 즉시 평형 버튼 (해수 pCO2는 대기를 τ_sw로 천천히 따라간다) ──
-const seaEqState = document.getElementById('seaEqState');
-document.getElementById('seaEqBtn').addEventListener('click', () => equilibrateSeaCO2());
 
 // ── 야장 ────────────────────────────────────────────────────────────────────
 FPField.init();
@@ -117,7 +111,6 @@ function animate() {
 
   FPPlayer.update(dt, t);
   FPTools.update(dt);          // 측정 중인 계측기의 값이 안정되어 가는 과정
-  FPAir.update(dt);            // 구역 대기 CO2·해수 pCO2 (0.2초 틱, 매 프레임 적분하지 않음)
   FPMinimap.update(dt);        // 초당 10회만 다시 그린다
   updateSunShadow(FPPlayer.pos.x, FPPlayer.pos.z);
 
@@ -182,17 +175,14 @@ function animate() {
     hudMode.textContent = mode.length ? mode.join(' · ') : '걷기';
     // 전 지구 = 조감과 같은 모형의 그 해 값 / 이 지점 = 구역 대기(도심 증가분·녹지 흡수 — 해양은 배경 그대로, 4차 C3)
     hudCo2.textContent = `CO₂ 전 지구 평균 ${FPWorld.co2.toFixed(0)} ppm (조감과 같은 모형 · ${FPScenario.label()})`
-      + ` · 이 지점 공기 ${FPAir.zoneCO2(zoneKeyAt()).toFixed(0)} ppm`;
+      + ` · 이 지점 공기 ${FPModel.zoneCO2(zoneKeyAt(), fpSample()).toFixed(0)} ppm`;
     const gas = FPWorld.gasCarCount, ev = FPWorld.cars.length - gas;
     hudCars.textContent = `내연 ${gas} · 전기 ${ev}`;
-    // 개방 해역 대표값. 해수 pCO2가 해양 대기와 아직 다르면 '평형 중'임을 같이 보여준다.
-    const sea = openSeaState(FPWorld.co2), air = oceanAirCO2();
-    const gap = air - sea.pco2;
-    seaEqState.textContent = `해수 pCO₂ ${sea.pco2.toFixed(0)} / 해양 대기 ${air.toFixed(0)} ppm` +
-      (Math.abs(gap) >= 3 ? ' · 평형 중' : ' · 평형');
+    // 개방 해역 대표값 = 그해 엔진 표층 해양(조감 미래 예측과 같은 수온·pH·Ω, 4차 C4).
+    // 해수 pCO₂가 대기와 조금 다른 것은 바다가 대기를 몇 해 늦게 따라가기 때문이다(엔진 표층 DIC) — '평형 중' 문구는 지웠다.
+    const sea = openSeaState();
     hudSea.textContent =
       `${sea.temp.toFixed(1)}°C · 해수 pCO₂ ${sea.pco2.toFixed(0)}` +
-      (Math.abs(gap) >= 3 ? ` (대기 ${air.toFixed(0)} 쪽으로 ${gap > 0 ? '↑' : '↓'})` : '') +
       ` · pH ${sea.pH.toFixed(2)} · Ω ${sea.omega.toFixed(2)}` +
       ` · 어류 ${FPWorld.aliveFish}/${FPWorld.fish.length} · 수초 ${FPWorld.alivePlants}/${FPWorld.plantTotal}`;
     // 산호는 자리마다 다르게 반응한다: 따뜻한 곳은 백화, 차가운 냉수대는 석회화 저해

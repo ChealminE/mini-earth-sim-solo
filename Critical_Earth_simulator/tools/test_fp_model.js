@@ -200,7 +200,50 @@ for (const p of PATHS) {
   const tools = code('firstperson/fp-tools.js');
   check('옛 구역 오프셋·적분 삭제 (CO2_ZONE·zoneCO2Target·AIR_TAU_Z, 도심 +55~+120·해양 −15~−30)',
     !/CO2_ZONE|zoneCO2Target|AIR_TAU_Z|FPAir\.D\b|this\.D\[/.test(tools));
-  check('구역 CO₂ 계산은 FPModel.zoneCO2 하나 (fp-tools 의 측정·HUD 모두)', (tools.match(/FPModel\.zoneCO2\(/g) || []).length === 2 && !/\* 260|\* 110|55 \+ 60/.test(tools));
+  // 측정(fp-tools measureCO2)과 HUD '이 지점 공기'(fp-main, C4에서 FPAir.zoneCO2 대신 직접)가 같은 함수를 부른다
+  check('구역 CO₂ 계산은 FPModel.zoneCO2 하나 (fp-tools 측정·fp-main HUD)', /FPModel\.zoneCO2\(/.test(tools) && /FPModel\.zoneCO2\(/.test(code('firstperson/fp-main.js'))
+    && !/\* 260|\* 110|55 \+ 60/.test(tools));
+}
+
+// ── C4 바다 = 엔진의 그해 표층 상태 (§6-2, 수용 조건 10) ─────────────────────
+{
+  const pco2FromDic = vm.runInContext('pco2FromDic', ctx);
+  let dpH = 0, dOm = 0, dT = 0, dP = 0;
+  for (const p of PATHS) for (const y of YEARS) {
+    const s = FM.sample(y, FM.pathRun(p)), o = FM.seaState(0, s);
+    dpH = Math.max(dpH, Math.abs(o.pH - s.pH)); dOm = Math.max(dOm, Math.abs(o.omega - s.omega));
+    dT = Math.max(dT, Math.abs(o.temp - s.sst)); dP = Math.max(dP, Math.abs(o.pco2 - pco2FromDic(s.dic, s.sst).pco2));
+  }
+  check('개방 해역 pH = 엔진 o.pH ±0.001 (세 경로 × 7개 연도)', dpH <= 0.001, `최대 차 ${dpH.toExponential(1)}`);
+  check('개방 해역 Ω = 엔진 o.omega ±0.01', dOm <= 0.01, `최대 차 ${dOm.toExponential(1)}`);
+  check('개방 해역 수온 = 엔진 o.sst (차이 0)', dT === 0);
+  check('해수 pCO₂ = pco2FromDic(o.dic, o.sst) (엔진과 같은 함수)', dP === 0);
+  const s23 = FM.sample(2023, FM.pathRun('ssp245')), c23 = FM.seaState(1, s23);
+  check('냉수대: 같은 해수 pCO₂, 더 차가운 물 → Ω 더 낮음 (헨리 법칙·석회화)', c23.pco2 === FM.seaState(0, s23).pco2 && c23.omega < s23.omega,
+    `Ω 개방 ${s23.omega.toFixed(2)} · 냉수대 ${c23.omega.toFixed(2)}`);
+  // 냉수대 Ω < 1 경고: 억지로 켜지 않는다 — 실제 최솟값을 남긴다(세이브포인트)
+  let omMin = Infinity, omAt = '';
+  for (const p of PATHS) for (const o of FM.pathRun(p)) { const w = FM.seaState(1, o).omega; if (w < omMin) { omMin = w; omAt = `${p} ${o.year}`; } }
+  console.log(`보고  냉수대(유빙 바로 옆) Ω 최솟값 ${omMin.toFixed(3)} (${omAt}) — ${omMin < 1 ? 'Ω<1 경고 켜짐' : 'Ω<1 경고 안 뜸(정직한 결과)'}`);
+  const V2 = V;
+  let bleachOk = true;
+  for (const p of PATHS) for (const o of FM.pathRun(p)) {
+    if (Math.abs(FM.coralState(0, o).bleach - (1 - V2.coralHealthy(o.T))) > 1e-12) bleachOk = false;
+    if (FM.coralState(1, o).bleach !== 0) bleachOk = false;
+  }
+  check('개방 해역 산호 백화 = 1 − EarthVisual.coralHealthy(T) (조감과 같은 식), 유빙 옆 냉수대 0', bleachOk);
+  check('산호 서식지 = habitatFromOmega(그 자리 Ω): Ω 1 → 0, 3.4 → 1', FM.habitatFromOmega(1) === 0 && FM.habitatFromOmega(3.4) === 1
+    && FM.coralState(1, s23).habitat === FM.habitatFromOmega(c23.omega));
+  check('어류·수초 건강: 1750년 1, 현재 정책 2100 < 2023', FM.oceanHealth(FM.sample(1750, FM.pathRun('ssp245'))) === 1
+    && FM.oceanHealth(FM.sample(2100, FM.pathRun('ssp245'))) < FM.oceanHealth(s23));
+  // 주석(//·<!-- -->·/* */)은 빼고 본다 — 지운 이유를 적은 주석은 남아도 된다
+  const code = f => read(f).replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '').replace(/<!--[\s\S]*?-->/g, '');
+  const fp = ['firstperson/fp-world.js', 'firstperson/fp-tools.js', 'firstperson/fp-field.js', 'firstperson/fp-main.js', 'firstperson/index.html', 'firstperson/style.css'];
+  const bad = fp.filter(f => /stepSeaCO2|equilibrateSeaCO2|SEA_TAU_SW|pco2Sea|oceanAirCO2|seaEqBtn|seaEqState|평형 중|즉시 평형|\bFPAir\b|AIR_DAY_S|AIR_TICK/.test(code(f)));
+  check('해수 평형 적분·즉시 평형 버튼·FPAir 틱 삭제', bad.length === 0, bad.join(', '));
+  const bad2 = fp.filter(f => /SEA_BASE_T|BLEACH_ON|BLEACH_FULL|bleachFromTemp|ICE_SIZE_K/.test(code(f)));
+  check('옛 백화 임계(18 °C 기준)·유빙 고정 배수 삭제', bad2.length === 0, bad2.join(', '));
+  check('유빙 크기 = EarthVisual.glacierFrac(T), 충돌체 같이 갱신', /glacierFrac\(T\)/.test(code('firstperson/fp-world.js')) && /collider\.r\s*=/.test(code('firstperson/fp-world.js')));
 }
 
 // ── 표 (세이브포인트에 붙인다) ───────────────────────────────────────────────
@@ -227,6 +270,15 @@ for (const p of PATHS) {
   for (const y of [1750, 2023, 2026, 2100]) {
     const s = FM.sample(y, FM.pathRun(p)), f = v => `${v.toFixed(1).padStart(6)} (${(v - s.ppm >= 0 ? '+' : '') + (v - s.ppm).toFixed(1)})`.padEnd(15);
     console.log(`      ${p}  ${y}  ${s.ppm.toFixed(1).padStart(6)}  ${f(FM.zoneCO2('ocean', s))} ${f(FM.zoneCO2('green', s))} ${f(FM.zoneCO2('green', s, { treeShade: 1 }))} ${f(FM.zoneCO2('city', s))}`);
+  }
+}
+
+console.log('\n      C4 바다 (개방 해역 = 엔진 · 냉수대 = 유빙 바로 옆) · 산호 백화·서식지 · 어류 건강 · 유빙 크기');
+console.log('      경로     연도   해수pCO₂  pH(개방)  Ω(개방)  pH(냉수)  Ω(냉수)  백화(개방)  서식지(개방/냉수)  어류건강  유빙');
+for (const p of PATHS) {
+  for (const y of [1750, 2023, 2026, 2100]) {
+    const s = FM.sample(y, FM.pathRun(p)), o = FM.seaState(0, s), c = FM.seaState(1, s), co = FM.coralState(0, s), cc = FM.coralState(1, s);
+    console.log(`      ${p}  ${y}  ${o.pco2.toFixed(1).padStart(7)}  ${o.pH.toFixed(4)}   ${o.omega.toFixed(3)}    ${c.pH.toFixed(4)}   ${c.omega.toFixed(3)}    ${(co.bleach * 100).toFixed(0).padStart(3)} %       ${co.habitat.toFixed(2)} / ${cc.habitat.toFixed(2)}        ${FM.oceanHealth(s).toFixed(2)}     ${V.glacierFrac(s.T).toFixed(2)}`);
   }
 }
 

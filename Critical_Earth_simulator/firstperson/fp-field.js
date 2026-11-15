@@ -68,9 +68,9 @@ FPField.record = function (tool, value, reading) {
     waterTemp: reading.waterTemp != null ? reading.waterTemp                 // pH미터 병기 수온
              : (reading.values ? reading.values.temp
              : (tool.kind === 'temp' && isSea ? value : null)),               // 온도계로 잰 해수
-    pco2Sw: FPWorld.pco2Sea,                  // 그 순간 해수 pCO2 (모형 상태)
+    pco2Sw: FPModel.seaPCO2(fpSample()),      // 그해 엔진 해수 pCO2 (바다 전체 한 값, 4차 C4)
     wind: '무풍',                             // 4차 B3: 해륙풍을 뺐다. 열은 G에서 정리 — 그때까지 값만 고정
-    gameTime: FPAir.elapsedDays * 24,         // 조사 시작 후 흐른 게임 시간 [h] (시각을 멈춰도 흐름)
+    gameTime: null,                           // 4차 C4: 게임 시간(FPAir)을 지웠다 — 열은 G에서 정리할 때까지 빈칸
     hour: FPWorld.hour,
     iso: new Date().toISOString(),
   };
@@ -146,7 +146,8 @@ const FIELD_TASKS = [
     think: 'Ω가 1보다 작아지면 껍데기·골격에 무슨 일이 생길까? 차가운 바다가 먼저 위험한 까닭은?' },
   { id: 'glacier', link: 'C2', title: '⑦ 빙하 — 기온', concept: '기온 상승 · 빙하', years: [2023, 2100],
     goal: '빙하(유빙) 곁의 온도를 지금과 2100년에 재고 비교한다.',
-    how: '유빙 곁에서 1번 온도계로 빙하 표면과 해양 대기 온도를 재시오. [이 연도로 가기]로 연도를 바꿔 다시 재세요. (이 세계의 유빙 크기는 바뀌지 않습니다 — 그래서 온도를 잽니다)',
+    // 4차 C4: 유빙 크기가 그해 기온을 따르게 됐다(glacierFrac, 조감 빙하와 같은 연출) — '크기는 안 바뀐다'는 괄호를 바꿨다.
+    how: '유빙 곁에서 1번 온도계로 빙하 표면과 해양 대기 온도를 재시오. [이 연도로 가기]로 연도를 바꿔 다시 재세요. (유빙 크기도 그해 기온을 따라 바뀝니다 — 크기는 연출, 온도는 측정값입니다)',
     think: '빙하 표면이 0 °C에 가까워지면 무슨 일이 생길까? 조감 모드에서 고른 경로의 2100년 기온과 견주어 보세요.' },
 ];
 // 공용 저장소의 fp 묶음 읽기·쓰기. file:// 등에서 저장소가 막히면 조용히 넘어간다(이번 화면 동안만 메모리)

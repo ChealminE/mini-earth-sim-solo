@@ -10,8 +10,7 @@
 // 들어 있는 것: C1 연도·경로 → 엔진 표본(runFor·pathRun·sample)과 '현재' 연도(NOW_YEAR)
 //              C2 airTemp(zone, s) · seaTemp(prox, s) · iceSurfaceTemp(s) · tempJitter — 기온·해수온 (연평균)
 //              C3 zoneCO2(zone, s, opt) · urbanCO2(s, localCut)                    — 구역 대기 CO₂ (연평균)
-// 단계별로 여기에 더한다(TASK_4차_C_모델정렬.md):
-//   C4 seaState(prox, s)                                           — 바다 = 엔진의 그해 표층 상태
+//              C4 seaState(prox, s) · coralState · oceanHealth                     — 바다 = 엔진의 그해 표층 상태
 //   상수는 맨 위 K 한 곳에 모으고, 각 줄에 등록부(js/sources.js) 키를 주석으로 단다.
 //
 // 로드 순서: earth-model → earth-data → earth-system → earth-visual → fp-model → fp-world …
@@ -57,6 +56,11 @@ const FPModel = (() => {
     STACK_PEAK: 260,            // 공장 굴뚝 바로 옆 최대 증가 [ppm] × stackLevel(그해 화석 배출) · fp_local_source (assumption)
     EXHAUST_PEAK: 110,          // 내연기관차 배기구 바로 옆 최대 증가 [ppm] · fp_local_source (assumption)
     CO2_FLOOR: 150,             // 측정값 하한 [ppm] — 국소 흡수 항이 겹쳐도 비현실적으로 내려가지 않게 (3차 값)
+    // ── C4 바다 ──
+    // 석회화 서식지: Ω 1 아래면 골격이 녹고(열역학 경계, 등록부 shell_omega) 3.4 이상이면 온전하다고 둔 3차 연출 구간.
+    HAB_OMEGA_LO: 1.0,          // shell_omega (Ω = 1 경계)
+    HAB_OMEGA_HI: 3.4,          // fp_habitat (assumption — 3차 값, 산업화 이전 표층 Ω 3.66 조금 아래)
+    BLEACH_FISH_W: 0.5,         // 백화가 어류·수초 건강에 얹히는 비중 (3차 값) · fp_habitat (assumption)
   });
 
   // ── 연도·경로 → 엔진 궤적 ────────────────────────────────────────────────
@@ -165,7 +169,49 @@ const FPModel = (() => {
     return Math.max(K.CO2_FLOOR, v);
   }
 
+  // ── C4 바다 = 엔진의 그해 표층 상태 ──────────────────────────────────────────
+  // 예전에는 해수 pCO₂가 해양 대기를 2게임일로 따라갔다(stepSeaCO2). 시간 여행에서는 엔진이 이미 그해 표층 해양(DIC)을
+  // 계산하므로 그 값을 그대로 쓴다: 해수 pCO₂ = pco2FromDic(o.dic, o.sst) — 엔진이 pH·Ω를 낼 때 쓰는 함수 그대로(earth-model.js).
+  // 해수 pCO₂는 바다 전체가 한 값이고(냉수대도 같은 물), 지점 차이는 수온이 만든다: 지점 상태 = seawaterState(pCO₂, 그 지점 수온).
+  // seawaterState 와 pco2FromDic 는 같은 탄산 평형(TA 일정)의 정·역 풀이라, 개방 해역(수온 = o.sst)에서는 엔진 o.pH·o.omega 로 돌아온다.
+  const swCache = new WeakMap();   // 표본마다 한 번만 (산호 수백 개가 같은 표본을 읽는다)
+  function seaPCO2(s) {
+    let v = swCache.get(s);
+    if (v == null) { v = pco2FromDic(s.dic, s.sst).pco2; swCache.set(s, v); }
+    return v;
+  }
+  // 지점 해수 상태: seawaterState 결과(mol/kg, pH, omega …) + temp(°C) + pco2(µatm). prox 는 seaTemp 와 같다.
+  function seaState(prox, s) {
+    const temp = seaTemp(prox, s), pco2 = seaPCO2(s);
+    const st = seawaterState(pco2, temp);
+    st.temp = temp;
+    st.pco2 = pco2;
+    return st;
+  }
+  // 석회화 서식지 0~1 (Ω가 낮을수록 골격을 못 만든다)
+  function habitatFromOmega(om) {
+    return Math.min(1, Math.max(0, (om - K.HAB_OMEGA_LO) / (K.HAB_OMEGA_HI - K.HAB_OMEGA_LO)));
+  }
+  // 산호 한 자리의 상태. 원인이 다른 두 가지를 따로 낸다(오개념 '산성화 = 백화' 교정 — 과제 ③).
+  //   백화(열 스트레스) = 1 − coralHealthy(T) — 조감 3D 산호와 같은 식(등록부 coral_sr15). 개방 해역(prox 0)에서 그대로,
+  //     유빙 옆 냉수대로 갈수록 줄어 prox 1에서 0 — 12 °C 찬 물에는 열 스트레스가 없다(연출, fp_cold_pool).
+  //   석회화 서식지 = habitatFromOmega(그 자리 Ω) — 냉수대가 Ω가 낮아 먼저 위험하다.
+  function coralState(prox, s) {
+    const st = seaState(prox, s);
+    return {
+      bleach: (1 - EarthVisual.coralHealthy(s.T)) * (1 - (prox || 0)),
+      habitat: habitatFromOmega(st.omega),
+      omega: st.omega, temp: st.temp,
+    };
+  }
+  // 어류·수초 건강 0~1 — 바다 전체를 돌아다니므로 개방 해역 값. 서식지(Ω)가 주된 요인, 백화는 얹히는 스트레스.
+  function oceanHealth(s) {
+    const c = coralState(0, s);
+    return c.habitat * (1 - K.BLEACH_FISH_W * c.bleach);
+  }
+
   return { NOW_YEAR, YEAR_MIN, YEAR_MAX, K, runFor, emissionsFor, pathRun, sample,
     airTemp, urbanHeat, seaTemp, iceSurfaceTemp, tempJitter,
-    co2Frac, urbanCO2, zoneCO2 };
+    co2Frac, urbanCO2, zoneCO2,
+    seaPCO2, seaState, habitatFromOmega, coralState, oceanHealth };
 })();

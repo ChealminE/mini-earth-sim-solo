@@ -56,12 +56,12 @@ function measureTemperature(spot, x, z, s) {
 }
 
 // 해양 pH: 예전엔 슬라이더 CO2 하나만 넣어서 바다 어디서 재도 같은 값이었다.
-// 이제 그 지점의 해수 상태(seaStateAt: 수온 + 해수 pCO2)에서 읽는다.
+// 이제 그 지점의 해수 상태(seaStateAt: 수온 + 그해 엔진 해수 pCO2 — 4차 C4)에서 읽는다.
 // 산호·해수 분석기와 같은 함수라 측정값과 세계 상태가 어긋나지 않는다.
 // TA 일정 모형에서는 수온이 pH를 거의 못 움직인다(냉수대와 개방 해역 차이 ≈ 0.02).
 // 온도 효과의 주 신호는 용존 CO2와 Ω이고, 그건 4번 해수 분석기가 맡는다.
-function measurePH(ppm, x, z) {
-  return seaStateAt(x, z, ppm).pH;
+function measurePH(x, z) {
+  return seaStateAt(x, z).pH;
 }
 // 바다를 겨눴는가. pH미터·해수 분석기 공통 - 해양 구역이면서 수면 아래인 지점만 유효.
 function isSeaHit(hit) {
@@ -74,38 +74,9 @@ function isSeaHit(hit) {
 //  - 해양 대기 = 배경(o.ppm) 그대로 — NOAA 지구 평균이 바다 위 관측소 평균이다(문헌값 2-4). 예전 −15~−30 ppm 삭제.
 //  - 도심 = 배경 + 서울 '도시 증가분' 23 ppm × 그해 화석 배출 ÷ 2020년 (문헌값 2-3). 예전 +55~+120 ppm 삭제.
 //  - 녹지·나무 밑 = 3차 낮 정상 상태값 그대로(정량 문헌 미확보 — assumption + unverified).
-// 예전 구역 몫 D_z 를 τ 30초로 따라가던 적분(CO2_ZONE·zoneCO2Target·AIR_TAU_Z)은 지웠다 — 연도를 뛰어넘는 구조와 맞지 않는다.
-// 남은 0.2초 틱은 해수 pCO2 동적 평형(fp-world.js stepSeaCO2)과 산호 갱신만 돌린다 — C4에서 바다를 엔진 표층 상태로
-// 바꾸면 FPAir 를 통째로 지운다. 그때까지 게임일 환산(AIR_DAY_S)을 남긴다.
-const AIR_TICK = 0.2;        // 상태 갱신 주기 [실시간 초] - 렌더 루프가 아니라 이 틱에서 돈다
-// 게임 1일 = 실시간 300초. 예전 시간 흐름(DAY_SECONDS)에서 온 환산이고, τ(SEA_TAU_SW)가
-// 게임일 단위라 남겨 둔다. 시간 흐름 자체는 B3에서 없어졌다.
-const AIR_DAY_S = 300;
-const FPAir = {
-  _acc: 0,
-  elapsedDays: 0,   // 공기·바다가 흘러온 게임 시간 [일] (야장 game_time)
-  onTick: [],    // 같은 틱에 같이 돌아야 하는 다른 상태 (해수 pCO2 등)
-};
-// 한 번 적분. dtDay = 게임 시간 [일].
-FPAir.step = function (dtDay) {
-  this.elapsedDays += dtDay;
-  for (const f of this.onTick) f(dtDay);
-};
-FPAir.reset = function () {
-  this.elapsedDays = 0;
-};
-// 매 프레임 불리지만 실제 적분은 0.2초마다 한 번
-FPAir.update = function (dt) {
-  this._acc += dt;
-  while (this._acc >= AIR_TICK) {
-    this._acc -= AIR_TICK;
-    this.step(AIR_TICK / AIR_DAY_S);
-  }
-};
-// 구역 대기 CO2 [ppm] — HUD '이 지점 공기'와 해수 평형(oceanAirCO2)이 부른다. 나무·굴뚝 같은 국소 항은 없다.
-FPAir.zoneCO2 = function (zone) {
-  return FPModel.zoneCO2(zone, fpSample());
-};
+// 예전 구역 몫 D_z 를 τ 30초로 따라가던 적분(CO2_ZONE·zoneCO2Target·AIR_TAU_Z)은 C3에서 지웠다 — 연도를 뛰어넘는 구조와 맞지 않는다.
+// 4차 C4: 남아 있던 0.2초 틱(FPAir — 해수 pCO2 동적 평형·산호 갱신용)과 게임일 환산(AIR_DAY_S)도 지웠다.
+// 바다가 그해 엔진 표층 상태가 되어 시간에 따라 적분할 상태가 1인칭에 하나도 남지 않았다.
 
 // 어떤 지점이 나무 수관에 얼마나 가까운지 (0=밖, 1=줄기 바로 옆)
 function treeShadeAt(x, z) {
@@ -569,7 +540,7 @@ FPTools.use = function () {
       return;
     }
     // 표시창에 수온을 병기한다 (pH미터의 온도 보상 탐침 - 온도계와 같은 사양)
-    const st = seaStateAt(hit.point.x, hit.point.z, ppm);
+    const st = seaStateAt(hit.point.x, hit.point.z);
     const wt = quantize(st.temp + gaussNoise() * TOOL_SPEC.temp.sigma, TOOL_SPEC.temp.res);
     this.beginReading(tool, st.pH, `pH · 수온 ${wt.toFixed(1)}°C`, '#7fd8ff');
     tool.reading.waterTemp = wt;
@@ -580,7 +551,7 @@ FPTools.use = function () {
       drawAnalyzer(tool, null, 'ERR · 바다에서만 측정', '#e2705f');
       return;
     }
-    const st = seaStateAt(hit.point.x, hit.point.z, ppm);
+    const st = seaStateAt(hit.point.x, hit.point.z);
     this.beginMultiReading(tool, {
       co2aq: st.co2aq * UMOL, dic: st.dic * UMOL, omega: st.omega, temp: st.temp,
     }, '해수 분석 완료', '#7fe0c8');
