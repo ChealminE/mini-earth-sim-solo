@@ -34,6 +34,21 @@ for (const k of ['obs', 'model', 'param', 'assumption', 'calibrated']) pairs.pus
 pairs.push(['--warn', '--warn-bg', 'ⓘ 미확인 경고']);
 pairs.push(['--ctl-time', '--paper', 'ⓘ 링크']);
 pairs.push(['--ir-ink', '--ir-bg', '적외선 보기 덮개 글자(3차 F)']);
+// ── 1인칭 (4차 D1, 수용 조건 8) ──
+// 3D 위 패널 = --paper-2 를 --fp-panel-mix 만큼 칠한 반투명. 뒤 장면이 가장 어두울 때(검정)와 가장 밝을 때(흰 하늘)를 섞어 만든다.
+const panelMix = parseFloat((/--fp-panel-mix\s*:\s*([\d.]+)%/.exec(root) || [])[1]) / 100;
+if (!(panelMix >= 0.94)) { console.log(`FAIL  --fp-panel-mix ${panelMix} < 0.94 (D §1: 패널 불투명도 0.94 이상)`); process.exitCode = 1; }
+tok['fp패널(검은 장면 위)'] = mix(tok['--paper-2'], '#000000', panelMix);
+tok['fp패널(흰 하늘 위)'] = mix(tok['--paper-2'], '#ffffff', panelMix);
+for (const bg of ['fp패널(검은 장면 위)', 'fp패널(흰 하늘 위)']) {
+  for (const fg of ['--ink', '--ink-2', '--ink-3']) pairs.push([fg, bg, '1인칭 패널 글자']);
+  pairs.push(['--ctl-rec', bg, '1인칭 야장 제목 기록 수']);
+  pairs.push(['--warn', bg, '1인칭 HUD 경고(산호)']);
+}
+// 완료한 과제 카드(--ctl-scen-bg) 위 글자, 과제 안내 상자
+for (const fg of ['--ink', '--ink-2', '--ink-3']) pairs.push([fg, '--ctl-scen-bg', '1인칭 완료 과제 카드·안내']);
+// 계측기 표시창(LCD) — 어두운 기기 화면 위 숫자·단위·상태 글자
+for (const k of ['label', 'ok', 'busy', 'idle', 'err', 'co2', 'temp', 'ph', 'sea', 'alarm', 'caution']) pairs.push([`--lcd-${k}`, '--lcd-bg', '1인칭 계측기 표시창']);
 // 자연 지구 회색은 선 색으로만 쓴다(글자에는 쓰지 않음) — 3:1(그래픽 요소 기준)만 본다
 const graphic = [['--data-nature', '--paper', '자연 지구 선(그래픽, 3:1)']];
 
@@ -51,4 +66,4 @@ for (const [fg, bg, use] of graphic) {
                  : `${r >= 3 ? 'OK  ' : 'FAIL'} ${r.toFixed(2).padStart(5)}  ${fg} on ${bg}  (${use})`);
 }
 console.log(fail ? `\n실패 ${fail}건` : '\n전부 통과');
-process.exit(fail ? 1 : 0);
+process.exit(fail || process.exitCode ? 1 : 0);

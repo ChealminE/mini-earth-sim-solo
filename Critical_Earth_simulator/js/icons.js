@@ -44,6 +44,8 @@ const Icons = (() => {
     shell: '<path d="M4 15a8 8 0 0 1 16 0z"/><path d="M12 7v8M8 8.5l2 6.5M16 8.5l-2 6.5"/><path d="M10 15l2 3 2-3"/>',
     // 지시약으로 보기: 물방울 + 색 띠
     drop: '<path d="M12 3c3.5 4.5 6 7.8 6 11a6 6 0 0 1-12 0c0-3.2 2.5-6.5 6-11z"/><path d="M7.5 14h9"/>',
+    // 온도계 (1인칭 단축바, 4차 D1): 가는 관 + 아래 구 + 눈금
+    thermo: '<path d="M10 14.5V5a2 2 0 0 1 4 0v9.5a4 4 0 1 1-4 0z"/><circle cx="12" cy="17.5" r="1.5" fill="currentColor"/><path d="M16.5 7h2M16.5 10h2"/>',
     flask: '<path d="M9 3h6"/><path d="M10 3v6L5 19a1.5 1.5 0 0 0 1.4 2h11.2a1.5 1.5 0 0 0 1.4-2L14 9V3"/>',
   };
   function svg(name, size = 24) {

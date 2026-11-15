@@ -112,9 +112,17 @@ _links = [h.split("?")[0].lstrip("/") for h in re.findall(r'<link[^>]+rel="style
 if _links != AERIAL_CSS:
     sys.exit("[실패] index.html 의 스타일시트 순서가 빌더 목록과 다릅니다.\n  HTML : %s\n  빌더 : %s" % (_links, AERIAL_CSS))
 
+# 4차 D1: 1인칭도 조감과 같은 토큰(css/theme.css)을 먼저 읽는다(마스터 §6-1). 예전에는 firstperson/style.css 만 합쳐서
+# 토큰을 붙이면 단일 HTML 의 1인칭만 var(--…) 가 비어 글자·패널 색이 사라졌을 것이다. 순서가 어긋나면 멈춘다.
+FP_CSS = ["css/theme.css", "firstperson/style.css"]
+_fp_links = [h.split("?")[0].lstrip("/") for h in re.findall(r'<link[^>]+rel="stylesheet"[^>]+href="([^"]+)"', fp_html)]
+_fp_links = [h if "/" in h else "firstperson/" + h for h in _fp_links]
+if _fp_links != FP_CSS:
+    sys.exit("[실패] firstperson/index.html 의 스타일시트 순서가 빌더 목록과 다릅니다.\n  HTML : %s\n  빌더 : %s" % (_fp_links, FP_CSS))
+
 CSS = {
     "aerial": "\n".join(read(f) for f in AERIAL_CSS) + "\n" + inline_styles_of(aerial_html),
-    "fp": read("firstperson/style.css") + "\n" + inline_styles_of(fp_html),
+    "fp": "\n".join(read(f) for f in FP_CSS) + "\n" + inline_styles_of(fp_html),
 }
 BODY = {"aerial": body_of(aerial_html), "fp": body_of(fp_html)}
 
@@ -125,7 +133,9 @@ AERIAL_JS = ["js/earth-model.js", "js/earth-data.js", "js/sources.js", "js/theme
 # xlsx-lite.js 는 남긴다 — downloadBlob 을 tab-future.js·inquiry.js·worksheet.js 가 쓴다(마스터 §6-2).
 # 4차 B2: fp-weather.js·fp-audio.js 를 뺐다(날씨·환경음 삭제, 마스터 D4).
 # 4차 C1: earth-visual(조감과 같은 시각 언어 식)·fp-model(1인칭 값 계산)을 fp-world 앞에 넣었다.
-FP_JS = ["js/earth-model.js", "js/earth-data.js", "js/earth-system.js", "js/earth-visual.js",
+# 4차 D1: 조감과 같은 공용 부품 넷(sources·theme·icons·source-tip)을 earth-data 뒤, earth-system 앞에 넣었다.
+FP_JS = ["js/earth-model.js", "js/earth-data.js", "js/sources.js", "js/theme.js", "js/icons.js",
+         "js/source-tip.js", "js/earth-system.js", "js/earth-visual.js",
          "js/society-core.js", "js/actions-core.js", "firstperson/fp-model.js", "firstperson/fp-world.js", "firstperson/fp-tech-world.js",
          "firstperson/fp-minimap.js", "firstperson/fp-field.js",
          "firstperson/fp-tools.js", "firstperson/fp-player.js", "firstperson/fp-main.js"]

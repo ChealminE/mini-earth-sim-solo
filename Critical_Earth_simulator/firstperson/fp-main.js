@@ -87,6 +87,8 @@ applyScenarioYear();
 
 // ── 야장 ────────────────────────────────────────────────────────────────────
 FPField.init();
+// 4차 D1: 정적 마크업의 <span data-icon=…> 을 조감과 같은 SVG 아이콘으로 채운다(이모지는 기기마다 모양이 달라서 안 씀)
+Icons.fill();
 // 계측기가 값을 '확정'했을 때만 기록한다 (수렴 중인 값은 아직 못 믿는 값이라서)
 FPTools.onMeasured = (tool, value, reading) => FPField.record(tool, value, reading);
 

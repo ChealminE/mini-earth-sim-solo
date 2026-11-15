@@ -3,6 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <title>미니 지구 모델 - 1인칭 탐험 모드</title>
+<!-- 4차 D1: 조감과 같은 디자인 토큰(종이 테마·버튼 5색·ⓘ)을 먼저 읽고 1인칭 배치를 그 위에 얹는다 (순서 = 빌더 FP_CSS) -->
+<link rel="stylesheet" href="/css/theme.css">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -21,7 +23,7 @@
     <p>화면을 클릭하면 전체화면으로 전환되고 마우스로 시점을 조작합니다.</p>
     <p class="sub"><b>ESC</b> 를 누르면 마우스가 풀립니다.</p>
     <p class="sub"><b>F</b> 를 누르면 야장의 <b>탐구 과제</b>에서 무엇을 조사할지 볼 수 있습니다. (<b>H</b> 조작법)</p>
-    <div class="start-btn">클릭해서 시작</div>
+    <span class="btn btn--nav is-on start-btn">클릭해서 시작</span>
   </div>
 </div>
 
@@ -54,20 +56,21 @@
     <tr><td>좌클릭</td><td>든 도구로 바라보는 지점 측정</td></tr>
   </table>
   <!-- 4차 C2(마스터 D2·D9): 지면 3종(해변 모래·녹지 지면·도시 지면)을 뺐고 값은 그해 연평균이다 -->
+  <!-- 4차 D1: ⓘ = 조감과 같은 출처 상자(js/source-tip.js). 키는 C6 등록부(js/sources.js) — check_sources.js 가 누락을 막는다 -->
   <p class="note"><b>1 온도계</b> — 어디든 측정됩니다. 바다는 <b>해수</b>, 유빙은 <b>빙하 표면</b>, 그 밖(땅·하늘)을 겨누면
-    그 구역의 해양/녹지/도심 <b>대기</b>를 잽니다. 값은 모두 <b>그해 연평균</b>(하루 평균)입니다 — 화면이 낮이어도 한낮 기온이 아닙니다.
-    도심 대기가 녹지보다 따뜻하고(도시 열섬), 빙하가 가장 찹니다.
-    <b>유빙 주변 바다는 녹은 물 때문에 차갑습니다(냉수대).</b> 유빙에서 멀어지며 수온을 재 보세요.</p>
+    그 구역의 해양/녹지/도심 <b>대기</b>를 잽니다. 값은 모두 <b>그해 연평균</b>(하루 평균)입니다<button class="src-i" type="button" data-src="fp_land_amp" aria-label="출처 보기: 1인칭 육지 기온 증폭 (녹지·도심 대기)" aria-expanded="false">ⓘ</button><button class="src-i" type="button" data-src="fp_ocean_amp" aria-label="출처 보기: 1인칭 해양 기온 증폭 (해양 대기·빙하 표면)" aria-expanded="false">ⓘ</button> — 화면이 낮이어도 한낮 기온이 아닙니다.
+    도심 대기가 녹지보다 따뜻하고(도시 열섬)<button class="src-i" type="button" data-src="fp_uhi" aria-label="출처 보기: 1인칭 도심 열섬 (도심 − 녹지 기온차)" aria-expanded="false">ⓘ</button>, 빙하가 가장 찹니다.<button class="src-i" type="button" data-src="fp_ice_surface" aria-label="출처 보기: 1인칭 빙하 표면 온도 (연출)" aria-expanded="false">ⓘ</button>
+    <b>유빙 주변 바다는 녹은 물 때문에 차갑습니다(냉수대).</b><button class="src-i" type="button" data-src="fp_cold_pool" aria-label="출처 보기: 1인칭 유빙 곁 냉수대 (연출)" aria-expanded="false">ⓘ</button> 유빙에서 멀어지며 수온을 재 보세요.</p>
   <p class="note"><b>2 pH미터</b> — 바다에서만. 겨눈 지점의 해수 상태로 계산하고 표시창에 <b>수온을 함께</b> 띄웁니다.
-    같은 CO₂·같은 수온이면 조감 모드 '미래 예측' 탭과 정확히 같은 값입니다.
+    같은 CO₂·같은 수온이면 조감 모드 '미래 예측' 탭과 정확히 같은 값입니다.<button class="src-i" type="button" data-src="model_ph" aria-label="출처 보기: 해수 pH (모형 계산)" aria-expanded="false">ⓘ</button>
     수온은 pH를 거의 못 바꿉니다(냉수대와 개방 해역 차이 0.02 정도) — 온도 효과는 4번으로 보세요.</p>
   <p class="note"><b>4 해수분석기</b> — 바다에서만. <b>용존 CO₂ · DIC(용존 무기탄소) · Ω(아라고나이트 포화도) · 수온</b>을
-    한 번에 잽니다. 차가운 물은 CO₂를 더 많이 녹이고(헨리 법칙) Ω가 낮습니다.
-    <b>Ω가 1 밑이면 빨간색</b> — 산호·조개 껍데기가 녹는 물입니다.</p>
+    한 번에 잽니다.<button class="src-i" type="button" data-src="model_omega" aria-label="출처 보기: 아라고나이트 포화도 Ω (모형 계산)" aria-expanded="false">ⓘ</button> 차가운 물은 CO₂를 더 많이 녹이고(헨리 법칙) Ω가 낮습니다.
+    <b>Ω가 1 밑이면 빨간색</b> — 산호·조개 껍데기가 녹는 물입니다.<button class="src-i" type="button" data-src="shell_omega" aria-label="출처 보기: 조개 껍데기 — 아라고나이트 포화도 Ω" aria-expanded="false">ⓘ</button></p>
   <!-- 4차 C3: 구역 CO₂ 문헌값 — 해양 = 배경(문헌값 2-4), 도심 증가분 = 서울 관측 20~27 ppm(2-3) -->
-  <p class="note"><b>3 CO₂센서</b> — 해양 · 녹지 · 도심에서 값이 다릅니다. 바다 위 공기는 <b>전 지구 평균과 같고</b>,
-    도심은 자동차·난방 배출 때문에 더 높습니다(서울 관측: 도시 증가분 약 20~27 ppm).
-    <b>나무 근처</b>는 광합성 때문에 낮게 나옵니다(이 값은 연출 — 정량 문헌을 찾는 중). (수중에서는 측정 불가)</p>
+  <p class="note"><b>3 CO₂센서</b> — 해양 · 녹지 · 도심에서 값이 다릅니다. 바다 위 공기는 <b>전 지구 평균과 같고</b><button class="src-i" type="button" data-src="co2_noaa_gl" aria-label="출처 보기: 대기 CO₂ 지구 평균 (관측)" aria-expanded="false">ⓘ</button>,
+    도심은 자동차·난방 배출 때문에 더 높습니다(서울 관측: 도시 증가분 약 20~27 ppm)<button class="src-i" type="button" data-src="fp_urban_co2" aria-label="출처 보기: 1인칭 도심 대기 CO₂ (도시 증가분)" aria-expanded="false">ⓘ</button>.
+    <b>나무 근처</b>는 광합성 때문에 낮게 나옵니다(이 값은 연출 — 정량 문헌을 찾는 중)<button class="src-i" type="button" data-src="fp_tree_co2" aria-label="출처 보기: 1인칭 나무 밑 CO₂ (연출)" aria-expanded="false">ⓘ</button>. (수중에서는 측정 불가)</p>
   <p class="note"><b>계측기에는 오차가 있습니다.</b> 좌클릭하면 값이 바로 뜨지 않고 실제 센서처럼
     수렴합니다(막대가 다 차야 확정). 같은 자리를 다시 재도 값이 조금씩 다르니, 여러 번 재서
     평균을 내세요. 평균과 표준편차는 <b>야장(F)</b>이 자동으로 계산합니다.</p>
@@ -97,8 +100,8 @@
 
     <!-- 탭: 탐구 과제(무엇을 조사할지) / 기록·통계(잰 값) -->
     <div class="field-tabs">
-      <button data-tab="tasks" class="on">탐구 과제 <span id="fieldTaskTally">0/2</span></button>
-      <button data-tab="records">기록 · 통계</button>
+      <button type="button" data-tab="tasks" class="on">탐구 과제 <span id="fieldTaskTally">0/2</span></button>
+      <button type="button" data-tab="records">기록 · 통계</button>
     </div>
 
     <div id="fieldTasksView">
@@ -132,11 +135,11 @@
     </div>
 
     <div class="field-actions">
-      <button id="fieldTransectBtn" class="settings-btn">횡단 조사 시작</button>
-      <button id="fieldCoastBtn" class="settings-btn">해안선 평행 조사</button>
-      <button id="fieldCsvBtn" class="settings-btn">CSV 내보내기</button>
-      <button id="fieldClearBtn" class="settings-btn ghost">기록 지우기</button>
-      <button id="fieldCloseBtn" class="settings-btn ghost">돌아가기</button>
+      <button id="fieldTransectBtn" class="btn btn--rec" type="button">횡단 조사 시작</button>
+      <button id="fieldCoastBtn" class="btn btn--rec" type="button">해안선 평행 조사</button>
+      <button id="fieldCsvBtn" class="btn btn--rec" type="button"><span data-icon="download"></span>CSV 내보내기</button>
+      <button id="fieldClearBtn" class="btn btn--rec" type="button"><span data-icon="trash"></span>기록 지우기</button>
+      <button id="fieldCloseBtn" class="btn btn--nav" type="button"><span data-icon="back"></span>돌아가기</button>
     </div>
     <p class="field-note">CSV는 조감 모드 '실시간 실험' 탭과 같은 형식입니다. 아두이노 실측값과 같은 표에 놓고 비교해 보세요.</p>
   </div>
@@ -149,7 +152,7 @@
     <!-- 3차 E4: CO₂는 직접 정하지 않는다(배출의 결과 — 3차 마스터 결정 9). 배출 경로와 연도를 고르면 조감 미래 예측과 같은 모형이 계산한다 -->
     <div class="row">
       <span class="lbl">배출 경로</span>
-      <select id="fpScenario">
+      <select id="fpScenario" class="select select--scen">
         <option value="ssp245">현재 정책 (SSP2-4.5)</option>
         <option value="ssp126">파리협약 2 °C (SSP1-2.6)</option>
         <option value="ssp119">1.5 °C 탄소중립 (SSP1-1.9)</option>
@@ -158,19 +161,19 @@
     </div>
     <label class="row">
       <span class="lbl">연도</span>
-      <input type="range" id="fpYear" min="1750" max="2200" step="1" value="2023">
+      <input type="range" class="range range--time" id="fpYear" min="1750" max="2200" step="1" value="2023">
       <span class="val"><span id="fpYearOut">2023</span>년</span>
     </label>
-    <p class="note">전 지구 평균 CO₂ <b><span id="fpGlobalCo2">418</span> ppm</b> — 조감 모드 미래 예측과 <b>같은 모형</b>으로 계산한 값입니다(2023년까지는 실제 배출, 그 뒤는 고른 경로).
+    <p class="note">전 지구 평균 CO₂ <b><span id="fpGlobalCo2">418</span> ppm</b> — 조감 모드 미래 예측과 <b>같은 모형</b>으로 계산한 값입니다(2023년까지는 실제 배출, 그 뒤는 고른 경로).<button class="src-i" type="button" data-src="model_co2" aria-label="출처 보기: 대기 CO₂ (모형 계산)" aria-expanded="false">ⓘ</button>
       <!-- 4차 C5: CO₂는 무색 — 하늘·안개·파도는 연도와 무관(조감 EarthVisual 규칙). 도시는 배출 역사를 따른다(연출) -->
       CO₂는 눈에 보이지 않으므로 하늘·바다의 모습은 연도와 상관없이 같습니다.
-      도시의 건물·자동차·굴뚝 연기는 그때까지의 화석연료 배출을 따라 달라집니다(연출 — 조감 모드와 같은 규칙).</p>
+      도시의 건물·자동차·굴뚝 연기는 그때까지의 화석연료 배출을 따라 달라집니다(연출 — 조감 모드와 같은 규칙).<button class="src-i" type="button" data-src="fp_city" aria-label="출처 보기: 1인칭 도시 건물·자동차·굴뚝 (연출)" aria-expanded="false">ⓘ</button></p>
     <!-- 4차 C4: '즉시 평형' 버튼·해수 평형 상태를 뺐다 — 바다는 그해 엔진 표층 상태다 -->
-    <p class="note">바다(수온·pH·Ω)도 조감 모드와 <b>같은 모형의 그해 값</b>입니다. 바다는 대기 CO₂를 몇 해에 걸쳐
+    <p class="note">바다(수온·pH·Ω)도 조감 모드와 <b>같은 모형의 그해 값</b>입니다.<button class="src-i" type="button" data-src="model_sst" aria-label="출처 보기: 표층 해수온 (모형 계산)" aria-expanded="false">ⓘ</button><button class="src-i" type="button" data-src="model_ph" aria-label="출처 보기: 해수 pH (모형 계산)" aria-expanded="false">ⓘ</button> 바다는 대기 CO₂를 몇 해에 걸쳐
       늦게 따라가므로, 해수 pCO₂는 대기와 조금 다릅니다(배출이 늘 때는 대기보다 낮고, 크게 줄면 거꾸로 높아집니다).</p>
     <div class="settings-actions">
-      <button id="settingsCloseBtn" class="settings-btn">돌아가기</button>
-      <a class="settings-btn ghost" href="/">전체 조감 모드로</a>
+      <button id="settingsCloseBtn" class="btn btn--nav" type="button"><span data-icon="back"></span>돌아가기</button>
+      <a class="btn btn--nav" href="/"><span data-icon="globe"></span>전체 조감 모드로</a>
     </div>
   </div>
 </div>
@@ -182,6 +185,11 @@
 <script src="/js/earth-model.js"></script>
 <!-- 3차 E4: 조감 미래 예측과 같은 엔진(배출 → CO₂)으로 그 해의 전 지구 CO₂를 계산한다. 순서: earth-model → earth-data → earth-system -->
 <script src="/js/earth-data.js"></script>
+<!-- 4차 D1: 조감과 같은 공용 부품 — 출처 등록부(ⓘ)·토큰 읽기·아이콘·ⓘ 상자. 조감 index.html 과 같은 자리(earth-data 뒤, earth-system 앞) -->
+<script src="/js/sources.js"></script>
+<script src="/js/theme.js"></script>
+<script src="/js/icons.js"></script>
+<script src="/js/source-tip.js"></script>
 <script src="/js/earth-system.js"></script>
 <!-- 4차 C1: 1인칭 값 계산은 fp-model.js 한 곳. 도시 규모(cumFossilMax)·산호·유빙을 조감과 같은 식으로 쓰려고 earth-visual 을 같이 부른다 -->
 <script src="/js/earth-visual.js"></script>

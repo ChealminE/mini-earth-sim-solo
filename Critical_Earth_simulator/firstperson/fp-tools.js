@@ -196,30 +196,46 @@ function fmtValue(v, res) {
 }
 
 // ── 도구 정의 ───────────────────────────────────────────────────────────────
+// 4차 D1: 표시창 색은 css/theme.css 의 --lcd-* 토큰에서 읽는다(대비는 tools/check_contrast.js 가 확인).
+// 기기 화면이라 1인칭 UI 의 종이 테마와 달리 어두운 LCD 그대로 둔다(D §1).
+const LCD = k => Theme.color('--lcd-' + k);
+// 글자 크기는 표시창 높이에 대한 비율로 정한다 — 해상도를 바꿔도 배치가 그대로 따라오게.
+// 숫자 '-12.3'·'1000' 처럼 길어지면 폭에 맞춰 줄인다(잘리면 값을 잘못 읽는다).
+function fitText(c, text, weight, size, family, maxW) {
+  let px = size;
+  c.font = `${weight} ${px}px ${family}`;
+  while (px > 8 && c.measureText(text).width > maxW) { px -= 2; c.font = `${weight} ${px}px ${family}`; }
+}
+const LCD_MONO = '"Courier New", monospace';
 function makeDisplayCanvas() {
   const cv = document.createElement('canvas');
-  cv.width = 160; cv.height = 96;
+  // 화면 판(PlaneGeometry)의 크기는 그대로, 텍스처 해상도만 두 배(예전 160×96) — 큰 숫자를 키워도 흐려지지 않게
+  cv.width = 320; cv.height = 192;
   return cv;
 }
 function drawDisplay(tool, big, small, color, progress) {
   const cv = tool.canvas, c = cv.getContext('2d');
-  c.fillStyle = '#0a1512';
-  c.fillRect(0, 0, cv.width, cv.height);
-  c.strokeStyle = '#1d3a32'; c.lineWidth = 4;
-  c.strokeRect(2, 2, cv.width - 4, cv.height - 4);
+  const W = cv.width, H = cv.height;
+  c.fillStyle = LCD('bg');
+  c.fillRect(0, 0, W, H);
+  c.strokeStyle = LCD('edge'); c.lineWidth = H * 0.042;
+  c.strokeRect(H * 0.021, H * 0.021, W - H * 0.042, H - H * 0.042);
   c.textAlign = 'center';
+  c.textBaseline = 'alphabetic';
+  // 큰 숫자: 표시창 높이의 55 % 안팎(D1 — 예전 44/96 = 46 %). 단위·상태 글자도 18/96 → 22 %
   c.fillStyle = color;
-  c.font = 'bold 44px "Courier New", monospace';
-  c.fillText(big, cv.width / 2, 56);
-  c.fillStyle = '#7fa89a';
-  c.font = '18px sans-serif';
-  c.fillText(small, cv.width / 2, 82);
+  fitText(c, big, 'bold', Math.round(H * 0.55), LCD_MONO, W * 0.9);
+  c.fillText(big, W / 2, H * 0.6);
+  c.fillStyle = LCD('label');
+  fitText(c, small, '600', Math.round(H * 0.22), 'sans-serif', W * 0.92);
+  c.fillText(small, W / 2, H * 0.84);
   // 값이 안정되는 동안 아래쪽에 진행 막대. 다 차기 전 숫자는 아직 못 믿는다는 표시.
   if (progress != null && progress < 1) {
-    c.fillStyle = '#16302a';
-    c.fillRect(8, cv.height - 12, cv.width - 16, 5);
-    c.fillStyle = '#5dcaa5';
-    c.fillRect(8, cv.height - 12, (cv.width - 16) * progress, 5);
+    const bx = W * 0.05, bw = W * 0.9, by = H * 0.9, bh = H * 0.05;
+    c.fillStyle = LCD('track');
+    c.fillRect(bx, by, bw, bh);
+    c.fillStyle = LCD('ok');
+    c.fillRect(bx, by, bw * progress, bh);
   }
   tool.tex.needsUpdate = true;
   tool.lastResult = { big, small };   // 캔버스 픽셀을 읽지 않고도 결과를 확인할 수 있게 보관
@@ -230,36 +246,45 @@ function drawDisplay(tool, big, small, color, progress) {
 function drawAnalyzer(tool, vals, status, color, progress) {
   const cv = tool.canvas, c = cv.getContext('2d');
   const W = cv.width, H = cv.height;
-  c.fillStyle = '#0a1512';
+  c.fillStyle = LCD('bg');
   c.fillRect(0, 0, W, H);
-  c.strokeStyle = '#1d3a32'; c.lineWidth = 4;
-  c.strokeRect(2, 2, W - 4, H - 4);
-  c.strokeStyle = '#16302a'; c.lineWidth = 1;
-  c.beginPath(); c.moveTo(W / 2, 8); c.lineTo(W / 2, 118); c.moveTo(8, 63); c.lineTo(W - 8, 63); c.stroke();
+  c.strokeStyle = LCD('edge'); c.lineWidth = H * 0.028;
+  c.strokeRect(H * 0.014, H * 0.014, W - H * 0.028, H - H * 0.028);
+  // 칸 나눔: 위 2줄(값 칸, 각 0.4H) + 맨 아래 상태 줄(0.2H)
+  const CELL = H * 0.4, STATUS_Y = CELL * 2;
+  c.strokeStyle = LCD('track'); c.lineWidth = Math.max(1, H * 0.007);
+  c.beginPath();
+  c.moveTo(W / 2, H * 0.05); c.lineTo(W / 2, STATUS_Y);
+  c.moveTo(W * 0.03, CELL); c.lineTo(W * 0.97, CELL);
+  c.moveTo(W * 0.03, STATUS_Y); c.lineTo(W * 0.97, STATUS_Y);
+  c.stroke();
   const LABEL = { co2aq: '용존CO₂ µmol/kg', dic: 'DIC µmol/kg', omega: 'Ω 포화도', temp: '수온 °C' };
+  c.textAlign = 'center';
+  c.textBaseline = 'alphabetic';
   TOOL_SPEC.sea.ch.forEach((ch, i) => {
-    const cx = (i % 2) * (W / 2) + W / 4, top = Math.floor(i / 2) * 55 + 6;
+    const cx = (i % 2) * (W / 2) + W / 4, top = Math.floor(i / 2) * CELL;
     const v = vals ? vals[ch.key] : null;
-    c.textAlign = 'center';
-    c.fillStyle = '#7fa89a';
-    c.font = '13px sans-serif';
-    c.fillText(LABEL[ch.key], cx, top + 14);
+    c.fillStyle = LCD('label');
+    fitText(c, LABEL[ch.key], '600', Math.round(H * 0.1), 'sans-serif', W / 2 * 0.9);
+    c.fillText(LABEL[ch.key], cx, top + CELL * 0.3);
     let col = color;
     const settled = progress == null && v != null;
-    if (ch.key === 'omega' && settled) col = v < 1 ? '#ff6a5c' : (v < 2 ? '#f0b45c' : color);
+    if (ch.key === 'omega' && settled) col = v < 1 ? LCD('alarm') : (v < 2 ? LCD('caution') : color);
     c.fillStyle = col;
-    c.font = 'bold 30px "Courier New", monospace';
-    c.fillText(v == null ? '--' : fmtValue(v, ch.res) + (ch.key === 'omega' && settled && v < 1 ? '!' : ''), cx, top + 46);
+    // 숫자: 칸 높이의 60 % 안팎(예전 30/144 = 표시창의 21 % → 24 %)
+    const txt = v == null ? '--' : fmtValue(v, ch.res) + (ch.key === 'omega' && settled && v < 1 ? '!' : '');
+    fitText(c, txt, 'bold', Math.round(H * 0.24), LCD_MONO, W / 2 * 0.88);
+    c.fillText(txt, cx, top + CELL * 0.86);
   });
-  c.textAlign = 'center';
-  c.fillStyle = '#7fa89a';
-  c.font = '12px sans-serif';
-  c.fillText(status, W / 2, H - 13);
+  c.fillStyle = LCD('label');
+  fitText(c, status, '600', Math.round(H * 0.12), 'sans-serif', W * 0.92);
+  c.fillText(status, W / 2, STATUS_Y + (H - STATUS_Y) * 0.62);
   if (progress != null && progress < 1) {
-    c.fillStyle = '#16302a';
-    c.fillRect(8, H - 8, W - 16, 4);
-    c.fillStyle = '#5dcaa5';
-    c.fillRect(8, H - 8, (W - 16) * progress, 4);
+    const bx = W * 0.05, bw = W * 0.9, by = H * 0.91, bh = H * 0.035;
+    c.fillStyle = LCD('track');
+    c.fillRect(bx, by, bw, bh);
+    c.fillStyle = LCD('ok');
+    c.fillRect(bx, by, bw * progress, bh);
   }
   tool.tex.needsUpdate = true;
   tool.lastResult = {
@@ -273,7 +298,7 @@ function buildTool(kind) {
   const g = new THREE.Group();
   const canvas = makeDisplayCanvas();
   // 해수 분석기는 네 줄을 띄워야 해서 표시창 해상도와 크기를 키운다 (가로세로 비는 그대로)
-  if (kind === 'sea') { canvas.width = 240; canvas.height = 144; }
+  if (kind === 'sea') { canvas.width = 480; canvas.height = 288; }
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
 
@@ -341,8 +366,8 @@ function buildTool(kind) {
   }
 
   const tool = { kind, group: g, canvas, tex };
-  if (kind === 'sea') drawAnalyzer(tool, null, '해수 분석기', '#5dcaa5');
-  else drawDisplay(tool, '--', kind === 'temp' ? '°C' : (kind === 'ph' ? 'pH' : 'ppm'), '#5dcaa5');
+  if (kind === 'sea') drawAnalyzer(tool, null, '해수 분석기', LCD('ok'));
+  else drawDisplay(tool, '--', kind === 'temp' ? '°C' : (kind === 'ph' ? 'pH' : 'ppm'), LCD('ok'));
   return tool;
 }
 
@@ -431,7 +456,8 @@ FPTools.select = function (i) {
   this.slots.forEach((t, idx) => { if (t) t.group.visible = idx === i; });
   this.handGroup.visible = i >= 0 && !!this.slots[i];
   document.querySelectorAll('#hotbar .slot').forEach((el, idx) => {
-    el.classList.toggle('on', idx === i);
+    el.classList.toggle('is-on', idx === i);   // .btn.is-on = 눌린 버튼(채움) — theme.css 버튼 체계
+    el.setAttribute('aria-pressed', String(idx === i));
   });
 };
 
@@ -449,7 +475,7 @@ FPTools.beginReading = function (tool, trueValue, label, color) {
   };
   // 클릭한 그 순간 표시창을 '측정 중'으로 바꾼다. 다음 프레임의 update()를 기다리면
   // 직전 측정값이 한 프레임 더 남아 있어서, 새로 누른 건지 아닌지 헷갈린다.
-  drawDisplay(tool, fmtValue(quantize(tool.reading.from, spec.res), spec.res), '측정 중…', '#8fb7c9', 0);
+  drawDisplay(tool, fmtValue(quantize(tool.reading.from, spec.res), spec.res), '측정 중…', LCD('busy'), 0);
 };
 // 다채널 계측기(해수 분석기). 채널마다 따로 오차를 뽑고, 응답 곡선은 같이 탄다.
 FPTools.beginMultiReading = function (tool, trueVals, label, color) {
@@ -461,7 +487,7 @@ FPTools.beginMultiReading = function (tool, trueVals, label, color) {
     from[ch.key] = last[ch.key] != null ? last[ch.key] : ch.cold;
   }
   tool.reading = { multi: true, target, from, t: 0, dur: spec.settle, spec, label, color };
-  drawAnalyzer(tool, this._quantizeAll(spec, from), '측정 중…', '#8fb7c9', 0);
+  drawAnalyzer(tool, this._quantizeAll(spec, from), '측정 중…', LCD('busy'), 0);
 };
 FPTools._quantizeAll = function (spec, vals) {
   const out = {};
@@ -480,7 +506,7 @@ FPTools._updateMulti = function (tool, dt) {
     shown[ch.key] = done ? b : a + (b - a) * (1 - Math.exp(-3.5 * p));
   }
   const q = this._quantizeAll(r.spec, shown);
-  drawAnalyzer(tool, q, done ? r.label : '측정 중…', done ? r.color : '#8fb7c9', done ? null : p);
+  drawAnalyzer(tool, q, done ? r.label : '측정 중…', done ? r.color : LCD('busy'), done ? null : p);
   if (done) {
     tool.lastValue = r.target;
     tool.reading = null;
@@ -502,7 +528,7 @@ FPTools.update = function (dt) {
     const q = quantize(shown, r.spec.res);
     const done = r.t >= r.dur;
     drawDisplay(tool, fmtValue(q, r.spec.res),
-      done ? r.label : '측정 중…', done ? r.color : '#8fb7c9', done ? 1 : p);
+      done ? r.label : '측정 중…', done ? r.color : LCD('busy'), done ? 1 : p);
     if (done) {
       tool.lastValue = r.target;
       tool.reading = null;
@@ -515,7 +541,7 @@ FPTools.update = function (dt) {
 FPTools.use = function () {
   const tool = this.slots[this.selected];
   if (!tool || !TOOL_SPEC[tool.kind]) return;
-  const ppm = FPWorld.co2;
+  // 4차 D1: 예전 'const ppm = FPWorld.co2' 는 C3 뒤로 쓰는 곳이 없어 뺐다(구역 CO₂ 는 measureCO2 → FPModel.zoneCO2)
 
   const hit = pickTarget();   // 하늘을 겨눠도 null이 아니라 '대기'가 돌아온다
 
@@ -523,38 +549,38 @@ FPTools.use = function () {
     // 대기 중에서만 - 물속에서는 공기를 못 빨아들임
     if (FPPlayer.underwater) {
       tool.reading = null;
-      drawDisplay(tool, 'ERR', '수중 · 측정 불가', '#e2705f');
+      drawDisplay(tool, 'ERR', '수중 · 측정 불가', LCD('err'));
       return;
     }
     const v = measureCO2(fpSample(), hit.point.x, hit.point.z, hit.zone, FPPlayer.pos.x, FPPlayer.pos.z);
     const label = hit.zone === 'city' ? '도심' : (hit.zone === 'green' ? '녹지' : '해양');
-    this.beginReading(tool, v, `ppm · ${label}`, '#f0b45c');
+    this.beginReading(tool, v, `ppm · ${label}`, LCD('co2'));
   } else if (tool.kind === 'temp') {
     const v = measureTemperature(hit.spot, hit.point.x, hit.point.z, fpSample());
-    this.beginReading(tool, v, `°C · ${SPOT[hit.spot].label}`, '#ff8f6b');
+    this.beginReading(tool, v, `°C · ${SPOT[hit.spot].label}`, LCD('temp'));
   } else if (tool.kind === 'ph') {
     // pH는 바다에서만. 해양 구역이면서 수면 아래인 지점만 유효.
     if (!isSeaHit(hit)) {
       tool.reading = null;
-      drawDisplay(tool, '--', '바다에서만 측정', '#8a949c');
+      drawDisplay(tool, '--', '바다에서만 측정', LCD('idle'));
       return;
     }
     // 표시창에 수온을 병기한다 (pH미터의 온도 보상 탐침 - 온도계와 같은 사양)
     const st = seaStateAt(hit.point.x, hit.point.z);
     const wt = quantize(st.temp + gaussNoise() * TOOL_SPEC.temp.sigma, TOOL_SPEC.temp.res);
-    this.beginReading(tool, st.pH, `pH · 수온 ${wt.toFixed(1)}°C`, '#7fd8ff');
+    this.beginReading(tool, st.pH, `pH · 수온 ${wt.toFixed(1)}°C`, LCD('ph'));
     tool.reading.waterTemp = wt;
   } else if (tool.kind === 'sea') {
     // 해수 분석기: 바다를 겨눴을 때만. 육지·하늘이면 ERR.
     if (!isSeaHit(hit)) {
       tool.reading = null;
-      drawAnalyzer(tool, null, 'ERR · 바다에서만 측정', '#e2705f');
+      drawAnalyzer(tool, null, 'ERR · 바다에서만 측정', LCD('err'));
       return;
     }
     const st = seaStateAt(hit.point.x, hit.point.z);
     this.beginMultiReading(tool, {
       co2aq: st.co2aq * UMOL, dic: st.dic * UMOL, omega: st.omega, temp: st.temp,
-    }, '해수 분석 완료', '#7fe0c8');
+    }, '해수 분석 완료', LCD('sea'));
   }
   // 야장이 기록할 수 있게 이번 측정의 지점 정보를 붙여 둔다
   if (tool.reading) {
@@ -566,15 +592,22 @@ FPTools.use = function () {
 
 // ── 단축바 UI ───────────────────────────────────────────────────────────────
 const HOTBAR_LABELS = ['온도계', 'pH미터', 'CO₂센서', '해수분석기'];
-const HOTBAR_ICONS = ['🌡️', '🧪', '🌫️', '🌊'];
+// 4차 D1: 이모지(🌡️🧪🌫️🌊) 대신 조감과 같은 SVG 아이콘(js/icons.js) — 이모지는 Windows·macOS 마다 모양이 다르다
+const HOTBAR_ICONS = ['thermo', 'drop', 'dots', 'flask'];
 function buildHotbarUI() {
   const bar = document.getElementById('hotbar');
   bar.innerHTML = '';
   for (let i = 0; i < HOTBAR_N; i++) {
-    const el = document.createElement('div');
-    el.className = 'slot';
+    // 누를 수 있으니 버튼(.btn 체계). 다만 초점은 받지 않는다 — 클릭으로 초점이 남으면 Space(점프)가 버튼을 또 누른다.
+    // 키보드로는 1~4 키가 같은 일을 하므로 Tab 순서에서도 뺀다(tabIndex −1 + 누를 때 초점 이동 막기).
+    const el = document.createElement('button');
+    el.type = 'button';
+    el.tabIndex = -1;
+    el.addEventListener('mousedown', e => e.preventDefault());
+    el.className = 'slot btn btn--nav btn--stack';
+    el.setAttribute('aria-pressed', 'false');
     el.innerHTML = `<span class="num">${i + 1}</span>` +
-      (HOTBAR_ICONS[i] ? `<span class="ico">${HOTBAR_ICONS[i]}</span><span class="nm">${HOTBAR_LABELS[i]}</span>` : '');
+      (HOTBAR_ICONS[i] ? `<span class="ico">${Icons.svg(HOTBAR_ICONS[i], 26)}</span><span class="nm">${HOTBAR_LABELS[i]}</span>` : '');
     el.addEventListener('click', () => FPTools.select(i));
     bar.appendChild(el);
   }

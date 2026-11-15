@@ -187,7 +187,7 @@ FPField.renderFieldTasks = function () {
       `<div class="t-concept">${t.concept} · 조감 ${t.link}</div>` +
       `<p class="t-line"><b>목표</b> ${t.goal}</p>` +
       `<p class="t-line"><b>방법</b> ${t.how}</p>` +
-      t.years.map(y => `<div class="ft-year"><button class="settings-btn ft-go" type="button" data-year="${y}">${y}년으로 가기</button>` +
+      t.years.map(y => `<div class="ft-year"><button class="btn btn--time btn--sm ft-go" type="button" data-year="${y}">${y}년으로 가기</button>` +
         `<label><span>${y}년에 본 것</span><textarea rows="2" data-obs="${y}" placeholder="본 것·잰 값을 쓰세요">${esc(p.a.obs && p.a.obs[y])}</textarea></label></div>`).join('') +
       `<label class="ft-diff"><span>달라진 점</span><textarea rows="2" data-diff placeholder="두 연도에서 무엇이 왜 달라졌나요?">${esc(p.a.diff)}</textarea></label>` +
       `<div class="t-subs">${p.subs.map(s => `<span class="t-sub${s.ok ? ' ok' : ''}">${s.label}</span>`).join('')}</div>` +
@@ -518,13 +518,16 @@ FPField.drawTransect = function () {
   const T = this.transect;
   const series = this.transectSeries();
   const pts = series ? series.points : [];
-  const PAD_L = 46, PAD_R = 12, PAD_T = 12, PAD_B = 26;
+  const PAD_L = 50, PAD_R = 12, PAD_T = 16, PAD_B = 28;
+  // 4차 D1: 야장이 종이 패널로 바뀌어 그래프도 종이 토큰으로 그린다(조감 그래프 작업대와 같은 색 규칙).
+  // 글자는 --fs-1(13.2 px) 이상 — 캔버스는 표시 폭과 거의 1:1 이라 올림한 px 를 그대로 쓴다.
+  const FS = Math.ceil(Theme.px('--fs-1')), FONT = `${FS}px ${Theme.color('--font-body') || 'sans-serif'}`;
 
-  c.fillStyle = '#0d1418';
+  c.fillStyle = Theme.color('--paper');
   c.fillRect(0, 0, W, H);
   if (pts.length < 2) {
-    c.fillStyle = '#5b6a72';
-    c.font = '13px sans-serif';
+    c.fillStyle = Theme.color('--ink-3');
+    c.font = FONT;
     c.textAlign = 'center';
     c.fillText(T ? '두 지점 이상 측정하면 그래프가 그려집니다' : '횡단 조사를 시작하세요', W / 2, H / 2);
     return;
@@ -538,30 +541,30 @@ FPField.drawTransect = function () {
   const Y = v => H - PAD_B - ((v - vMin) / (vMax - vMin)) * (H - PAD_T - PAD_B);
 
   // 축 + 눈금
-  c.strokeStyle = '#2a3a42'; c.lineWidth = 1;
+  c.strokeStyle = Theme.color('--rule'); c.lineWidth = 1;
   c.beginPath(); c.moveTo(PAD_L, PAD_T); c.lineTo(PAD_L, H - PAD_B); c.lineTo(W - PAD_R, H - PAD_B); c.stroke();
-  c.fillStyle = '#7e8f99'; c.font = '11px sans-serif'; c.textAlign = 'right';
+  c.fillStyle = Theme.color('--ink-3'); c.font = FONT; c.textAlign = 'right';
   for (let i = 0; i <= 3; i++) {
     const v = vMin + (vMax - vMin) * i / 3;
     c.fillText(v.toFixed(1), PAD_L - 5, Y(v) + 4);
-    c.strokeStyle = '#1c2a31';
+    c.strokeStyle = Theme.alpha('--rule', 0.55);
     c.beginPath(); c.moveTo(PAD_L, Y(v)); c.lineTo(W - PAD_R, Y(v)); c.stroke();
   }
   c.textAlign = 'center';
   c.fillText('0', PAD_L, H - 8);
   c.fillText(dMax.toFixed(0) + ' m', W - PAD_R, H - 8);
 
-  // 구역별 점 색: 해양 파랑 / 녹지 초록 / 도심 주황
-  const ZC = { ocean: '#5aa9d6', green: '#6fbf5a', city: '#e2934b' };
-  c.strokeStyle = '#9fb3bd'; c.lineWidth = 2;
+  // 구역별 점 색: 해양 파랑 / 녹지 초록 / 도심 주황 (theme.css --zone-*)
+  const ZC = { ocean: Theme.color('--zone-ocean'), green: Theme.color('--zone-green'), city: Theme.color('--zone-city') };
+  c.strokeStyle = Theme.color('--ink-3'); c.lineWidth = 2;
   c.beginPath();
   pts.forEach((p, i) => { const x = X(p.d), y = Y(p.v); i ? c.lineTo(x, y) : c.moveTo(x, y); });
   c.stroke();
   for (const p of pts) {
-    c.fillStyle = ZC[p.zone] || '#9fb3bd';
+    c.fillStyle = ZC[p.zone] || Theme.color('--ink-3');
     c.beginPath(); c.arc(X(p.d), Y(p.v), 4, 0, Math.PI * 2); c.fill();
   }
-  c.fillStyle = '#7e8f99'; c.font = '11px sans-serif'; c.textAlign = 'left';
+  c.fillStyle = Theme.color('--ink-2'); c.font = FONT; c.textAlign = 'left';
   c.fillText(series.kind === 'sea' ? 'Ω (해수 분석기)' : (KIND_KO[series.kind] || ''), PAD_L + 4, PAD_T + 10);
 
   // 해수 분석기: 같은 점들의 수온을 오른쪽 축으로 겹쳐 그린다 (냉수대에서 멀어질수록 수온↑ Ω↑)
@@ -572,13 +575,14 @@ FPField.drawTransect = function () {
     const tPad = (tMax - tMin) * 0.15;
     tMin -= tPad; tMax += tPad;
     const YT = v => H - PAD_B - ((v - tMin) / (tMax - tMin)) * (H - PAD_T - PAD_B);
-    c.strokeStyle = '#e2934b'; c.lineWidth = 1.5; c.setLineDash([4, 3]);
+    const SST = Theme.color('--data-sst');   // 수온 = 조감 해수온 그래프와 같은 색
+    c.strokeStyle = SST; c.lineWidth = 1.5; c.setLineDash([4, 3]);
     c.beginPath();
     tp.forEach((p, i) => { const x = X(p.d), y = YT(p.t); i ? c.lineTo(x, y) : c.moveTo(x, y); });
     c.stroke(); c.setLineDash([]);
-    c.fillStyle = '#e2934b';
+    c.fillStyle = SST;
     for (const p of tp) { c.beginPath(); c.arc(X(p.d), YT(p.t), 3, 0, Math.PI * 2); c.fill(); }
-    c.textAlign = 'right'; c.font = '11px sans-serif';
+    c.textAlign = 'right'; c.font = FONT;
     c.fillText(`수온 ${tMax.toFixed(1)}°C`, W - PAD_R, PAD_T + 10);
     c.fillText(`${tMin.toFixed(1)}°C`, W - PAD_R, H - PAD_B - 4);
   }

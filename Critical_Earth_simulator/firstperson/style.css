@@ -1,230 +1,252 @@
+/* ============================================================================
+   1인칭 탐험 배치 (4차 D1 — 조감과 같은 디자인 체계)
+   ----------------------------------------------------------------------------
+   css/theme.css(토큰·.btn·ⓘ) 를 먼저 읽고 이 파일은 1인칭 배치만 얹는다. 색·글자 크기는 var(--…) 만 쓴다
+   (하드코딩 색 0개 — D §5-2 검사). 1인칭에만 있는 색(LCD·수중 틴트·패널 섞음 비율)도 theme.css 에 둔다.
+   라이트(종이) 테마는 UI 에만 — 3D 세계의 빛·하늘·물 색은 건드리지 않는다(마스터 결정 6).
+   3D 위에 뜨는 패널은 --paper-2 를 --fp-panel-mix(95 %)만큼 칠한다: 반투명 바탕 위 글자가 밝은 하늘·어두운 물에
+   그대로 비치면 대비가 장면마다 무너진다. 가장 나쁜 경우(검은 장면 위)는 check_contrast.js 가 잰다.
+   ============================================================================ */
 html, body {
   margin: 0; height: 100%; overflow: hidden;
-  font-family: system-ui, -apple-system, sans-serif; background: #0d1014;
+  font-family: var(--font-body); font-size: var(--fs-3); line-height: 1.5;
+  color: var(--ink);
+  background: var(--ink);   /* 3D 가 뜨기 전 잠깐 보이는 바탕 — 흰 번쩍임이 없게 어둡게 */
 }
 canvas#gl { position: fixed; inset: 0; width: 100%; height: 100%; display: block; cursor: pointer; }
 
-/* 포인터락이 풀려 있을 때만 보이는 시작 안내 */
+/* ── 3D 위 종이 패널 (공통 바탕) ─────────────────────────────────────────── */
+#hud, #helpPanel, #hotbar, #fieldBadge, #toast, .start-box, .settings-box, .field-box {
+  background: color-mix(in srgb, var(--paper-2) var(--fp-panel-mix), transparent);
+  border: 1px solid var(--rule);
+  color: var(--ink);
+  box-shadow: 0 4px 18px var(--fp-shadow);
+}
+/* 키 모양 글자 (조작법·패널 제목) */
+.key, .hint-key {
+  display: inline-block; min-width: 1.1em; text-align: center;
+  background: var(--paper); color: var(--ink);
+  border: 1px solid var(--ink-3); border-bottom-width: 2px; border-radius: 4px;
+  padding: 0 6px; margin: 0 2px; font-size: var(--fs-1); font-weight: 700; line-height: 1.5;
+}
+
+/* ── 포인터 잠금이 풀려 있을 때만 보이는 시작 안내 ───────────────────────── */
 #startOverlay {
   position: fixed; inset: 0; z-index: 50; cursor: pointer;
   display: flex; align-items: center; justify-content: center;
-  background: rgba(8, 12, 18, 0.55); backdrop-filter: blur(2px);
+  background: var(--fp-scrim);
 }
 #startOverlay.hidden { display: none; }
 .start-box {
-  text-align: center; color: #eef3f8;
-  background: rgba(16,21,28,0.86); border: 1px solid #333c48;
-  padding: 28px 40px; border-radius: 14px;
+  text-align: center; max-width: min(90vw, 560px);
+  padding: var(--sp-5) 40px; border-radius: 14px;
 }
-.start-box h2 { margin: 0 0 12px; font-size: 19px; font-weight: 600; }
-.start-box p { margin: 0 0 6px; font-size: 13px; color: #b8c3cf; }
-.start-box p.sub { color: #8c96a2; font-size: 12px; }
-.start-btn {
-  margin-top: 16px; display: inline-block; padding: 10px 26px; border-radius: 8px;
-  background: #5DCAA5; color: #10231c; font-weight: 700; font-size: 14px;
-}
+.start-box h2 { margin: 0 0 var(--sp-3); font-family: var(--font-title); font-size: var(--fs-5); font-weight: 700; color: var(--ink); }
+.start-box p { margin: 0 0 var(--sp-2); font-size: var(--fs-2); color: var(--ink-2); }
+.start-box p.sub { font-size: var(--fs-1); color: var(--ink-3); }
+.start-box p b { color: var(--ink); }
+/* 시작 단추는 상자 전체가 눌리는 곳이라 실제 <button> 은 아니고 모양만 버튼(.btn.is-on) */
+.start-btn { margin-top: var(--sp-4); padding: 0 var(--sp-5); font-size: var(--fs-3); min-height: 44px; pointer-events: none; }
 
-/* 수중 틴트 - 화면 전체를 덮되 마우스 이벤트는 통과시킴 */
+/* ── 수중 틴트: 화면 전체를 덮되 마우스 이벤트는 통과 (3D 연출 — 종이 색 아님) ── */
 #waterOverlay {
   position: fixed; inset: 0; pointer-events: none; opacity: 0;
   transition: opacity .25s;
-  background: radial-gradient(ellipse at 50% 50%, rgba(30,110,150,0.28) 0%, rgba(8,45,70,0.72) 100%);
+  background: radial-gradient(ellipse at 50% 50%, var(--fp-water-in) 0%, var(--fp-water-out) 100%);
 }
 #waterOverlay.on { opacity: 1; }
 
-/* 크로스헤어: 두 개의 얇은 선을 십자로 겹침 */
+/* ── 십자선: 두 개의 얇은 선을 십자로 겹침 (두 겹 테두리는 D2) ── */
 #crosshair {
   position: fixed; left: 50%; top: 50%; width: 18px; height: 18px;
   transform: translate(-50%, -50%); pointer-events: none;
   mix-blend-mode: difference;
 }
-#crosshair span { position: absolute; background: #fff; }
+#crosshair span { position: absolute; background: var(--on-fill); }
 #crosshair span:nth-child(1) { left: 50%; top: 0; width: 2px; height: 100%; margin-left: -1px; }
 #crosshair span:nth-child(2) { top: 50%; left: 0; height: 2px; width: 100%; margin-top: -1px; }
 
+/* ── HUD (왼쪽 위). 줄 구성 정리는 D2 — 여기서는 종이 패널·토큰 글자만 ── */
 #hud {
-  position: fixed; top: 14px; left: 14px; color: #eaf0f6; font-size: 12.5px;
-  background: rgba(0,0,0,0.38); padding: 10px 14px; border-radius: 10px;
-  line-height: 1.7; pointer-events: none; backdrop-filter: blur(3px);
+  position: fixed; top: 14px; left: 14px;
+  font-size: var(--fs-2); line-height: 1.55;
+  padding: var(--sp-2) var(--sp-3); border-radius: var(--radius);
+  pointer-events: none;
 }
-#hud b { font-size: 14px; }
-#hud .dim { color: #a9b4c0; font-size: 11.5px; }
-#hud .key-hint { color: #7e8b98; font-size: 10.5px; margin-top: 3px; }
-#hud .key-hint b { color: #b6c2ce; font-weight: 700; }
+#hud b { font-size: var(--fs-3); font-weight: 700; }
+#hud .dim { color: var(--ink-2); font-size: var(--fs-1); }
+#hud .key-hint { color: var(--ink-3); font-size: var(--fs-1); margin-top: var(--sp-1); }
+#hud .key-hint b { color: var(--ink); font-size: var(--fs-1); }
+#hudCoral.warn { color: var(--warn); font-weight: 700; }
 
+/* ── 조작법 (H) ── */
 #helpPanel {
-  position: fixed; top: 14px; right: 14px; color: #e7ecf2; font-size: 12px;
-  background: rgba(14,18,24,0.86); padding: 14px 16px; border-radius: 10px;
-  max-width: 330px; line-height: 1.6; border: 1px solid #2a323c;
+  position: fixed; top: 14px; right: 14px; z-index: 8;
+  font-size: var(--fs-2); line-height: 1.55;
+  padding: var(--sp-3) var(--sp-4); border-radius: var(--radius);
+  width: min(380px, calc(100vw - 28px)); max-height: calc(100vh - 28px); overflow-y: auto; box-sizing: border-box;
 }
 #helpPanel.hidden { display: none; }
-#helpPanel h3 { margin: 0 0 10px; font-size: 13px; font-weight: 600; }
+#helpPanel h3 { margin: 0 0 var(--sp-2); font-size: var(--fs-3); font-weight: 700; }
 #helpPanel table { border-collapse: collapse; width: 100%; }
 #helpPanel td { padding: 3px 0; vertical-align: top; }
-#helpPanel td:first-child { white-space: nowrap; padding-right: 12px; color: #9fb0c2; }
-#helpPanel .key {
-  display: inline-block; background: #262d36; border: 1px solid #3a434f; border-bottom-width: 2px;
-  border-radius: 4px; padding: 1px 6px; margin-right: 3px; font-size: 11px; color: #dfe6ee;
-}
-#hudCoral.warn { color: #ff8a7a; font-weight: 600; }
-#helpPanel .note { color: #8b96a3; font-size: 11px; margin: 10px 0 0; }
+#helpPanel td:first-child { white-space: nowrap; padding-right: var(--sp-3); color: var(--ink-2); }
+#helpPanel .note { color: var(--ink-2); font-size: var(--fs-1); margin: var(--sp-2) 0 0; }
+#helpPanel .note b { color: var(--ink); }
 
-/* ── 단축바 (화면 중앙 하단) ───────────────────────────────────────── */
+/* ── 단축바 (화면 아래 가운데). 칸 = .btn.btn--nav.btn--stack, 든 도구 = .is-on ── */
 #hotbar {
   position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
-  display: flex; gap: 4px; padding: 4px;
-  background: rgba(0,0,0,0.42); border-radius: 8px; backdrop-filter: blur(3px);
+  display: flex; gap: var(--sp-1); padding: var(--sp-1);
+  border-radius: var(--radius);
   pointer-events: auto;
 }
 #hotbar .slot {
-  position: relative; width: 54px; height: 54px; border-radius: 5px;
-  background: rgba(255,255,255,0.06); border: 2px solid rgba(255,255,255,0.16);
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  cursor: pointer; user-select: none;
+  position: relative; width: 84px; min-height: 70px; padding: 14px var(--sp-1) var(--sp-1);
 }
-#hotbar .slot.on { border-color: #ffffff; background: rgba(255,255,255,0.20); }
 #hotbar .slot .num {
-  position: absolute; top: 1px; left: 4px; font-size: 10px; color: #b9c3cd;
+  position: absolute; top: 1px; left: 6px; font-size: var(--fs-1); font-weight: 700; line-height: 1.2;
 }
-#hotbar .slot .ico { font-size: 21px; line-height: 1; }
-#hotbar .slot .nm { font-size: 8.5px; color: #dbe3ea; margin-top: 2px; white-space: nowrap; }
+#hotbar .slot .ico { display: inline-flex; line-height: 1; }
+#hotbar .slot .ico svg { width: 26px; height: 26px; }
+/* 예전 8.5 px → --fs-1(13.2 px). '해수분석기' 다섯 글자가 한 줄에 들어가게 칸을 84 px 로 넓혔다 */
+#hotbar .slot .nm { font-size: var(--fs-1); font-weight: 600; white-space: nowrap; }
 
-/* ── E키 설정창 ─────────────────────────────────────────────────────── */
+/* ── E키 설정창 ─────────────────────────────────────────────────────────── */
 #settingsPanel {
   position: fixed; inset: 0; z-index: 60;
   display: flex; align-items: center; justify-content: center;
-  background: rgba(8, 12, 18, 0.55); backdrop-filter: blur(2px);
+  background: var(--fp-scrim);
 }
 #settingsPanel.hidden { display: none; }
 .settings-box {
-  background: rgba(16,21,28,0.94); border: 1px solid #333c48;
-  padding: 24px 28px; border-radius: 13px; min-width: 380px; color: #e7ecf2;
+  padding: var(--sp-5) 28px; border-radius: 13px; width: min(92vw, 520px); box-sizing: border-box;
 }
-.settings-box h3 { margin: 0 0 18px; font-size: 15px; font-weight: 600; }
-.settings-box .hint-key {
-  display: inline-block; background: #262d36; border: 1px solid #3a434f; border-bottom-width: 2px;
-  border-radius: 4px; padding: 1px 6px; font-size: 11px; color: #dfe6ee; margin: 0 2px;
-}
-.settings-box .row { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; font-size: 13px; }
-.settings-box .row .lbl { width: 68px; color: #b8c3cf; }
-.settings-box .row input[type="range"] { flex: 1; accent-color: #5DCAA5; cursor: pointer; }
-.settings-box .row .val { width: 74px; text-align: right; color: #dfe6ee; font-size: 12px; }
-.settings-box .note { font-size: 11.5px; color: #8b96a3; line-height: 1.6; margin: 4px 0 18px; }
-.settings-actions { display: flex; gap: 8px; }
-.settings-btn {
-  flex: 1; text-align: center; padding: 10px 0; border: none; border-radius: 8px; cursor: pointer;
-  background: #5DCAA5; color: #10231c; font-weight: 700; font-size: 13px;
-  text-decoration: none; box-sizing: border-box;
-}
-.settings-btn.ghost { background: #2a323c; color: #cfd8e2; font-weight: 600; }
+.settings-box h3 { margin: 0 0 var(--sp-4); font-size: var(--fs-4); font-weight: 700; }
+.settings-box .row { display: flex; align-items: center; gap: var(--sp-3); margin-bottom: var(--sp-3); font-size: var(--fs-2); }
+.settings-box .row .lbl { width: 76px; color: var(--ink-2); font-weight: 600; }
+.settings-box .row select { flex: 1; }
+.settings-box .row input[type="range"] { flex: 1; }
+.settings-box .row .val { width: 80px; text-align: right; color: var(--ink); font-size: var(--fs-2); font-variant-numeric: tabular-nums; }
+.settings-box .note { font-size: var(--fs-1); color: var(--ink-2); line-height: 1.6; margin: var(--sp-1) 0 var(--sp-4); }
+.settings-box .note b { color: var(--ink); }
+.settings-actions { display: flex; gap: var(--sp-2); }
+.settings-actions .btn { flex: 1; }
+/* 배출 경로 고르기 = 시나리오 영역(초록). theme.css 에는 select--time 만 있어 여기서 같은 규칙으로 더한다 */
+select.select--scen { --c: var(--ctl-scen); --c-bg: var(--ctl-scen-bg); }
 
-/* ── 야장(野帳) ─────────────────────────────────────────────────────────────
-   설정창과 같은 어두운 계열이되, 표를 읽어야 하므로 훨씬 넓게 잡는다. */
+/* ── 야장(野帳) ─────────────────────────────────────────────────────────── */
 #fieldBadge {
   position: fixed; right: 14px; top: 14px; z-index: 6;
-  padding: 6px 12px; border-radius: 8px;
-  background: rgba(14, 20, 24, .72); border: 1px solid rgba(120, 150, 165, .28);
-  color: #9db3bf; font-size: 13px; letter-spacing: .3px;
-  transition: background .25s, color .25s, border-color .25s;
+  padding: var(--sp-1) var(--sp-3); border-radius: var(--radius);
+  color: var(--ink-2); font-size: var(--fs-2); font-weight: 600; letter-spacing: .3px;
+  transition: background-color .25s, color .25s, border-color .25s;
   pointer-events: none;
 }
-#fieldBadge.on { background: rgba(24, 74, 60, .92); color: #7fe6bc; border-color: #3f9e7d; }
+/* 기록된 순간 잠깐 '기록' 영역색으로 번쩍 */
+#fieldBadge.on { background: var(--ctl-rec-bg); color: var(--ctl-rec); border-color: var(--rec-flash); }
 
 #fieldPanel {
   position: fixed; inset: 0; z-index: 20;
   display: flex; align-items: center; justify-content: center;
-  background: rgba(6, 10, 13, .62);
+  background: var(--fp-scrim);
 }
 #fieldPanel.hidden { display: none; }
 .field-box {
-  width: min(94vw, 780px); max-height: 92vh; overflow-y: auto;
-  padding: 20px 22px 18px;
-  background: #131a1f; border: 1px solid #2b3a43; border-radius: 12px;
-  color: #d6e2e8; box-shadow: 0 18px 50px rgba(0, 0, 0, .5);
+  width: min(94vw, 820px); max-height: 92vh; overflow-y: auto; box-sizing: border-box;
+  padding: var(--sp-4) 22px var(--sp-4);
+  border-radius: 12px;
 }
-.field-box h3 { margin: 0 0 14px; font-size: 17px; font-weight: 600; }
-.field-box h3 b { color: #7fe6bc; }
-.field-box h4 {
-  margin: 16px 0 7px; font-size: 13px; font-weight: 600; color: #a8bcc6;
-}
-.field-box h4 .sub { font-weight: 400; font-size: 11.5px; color: #6d828d; margin-left: 6px; }
-.field-cols { display: flex; gap: 16px; flex-wrap: wrap; }
-.field-col { flex: 1 1 320px; min-width: 0; }
+.field-box h3 { margin: 0 0 var(--sp-3); font-size: var(--fs-4); font-weight: 700; }
+.field-box h3 b { color: var(--ctl-rec); }
+.field-box h4 { margin: var(--sp-4) 0 6px; font-size: var(--fs-2); font-weight: 700; color: var(--ink); }
+.field-box h4 .sub { font-weight: 400; font-size: var(--fs-1); color: var(--ink-3); margin-left: 6px; }
+.field-cols { display: flex; gap: var(--sp-4); flex-wrap: wrap; }
+.field-col { flex: 1 1 340px; min-width: 0; }
 .field-col h4 { margin-top: 0; }
-.field-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.field-table { width: 100%; border-collapse: collapse; font-size: var(--fs-1); }
 .field-table th {
-  text-align: left; font-weight: 500; color: #6d828d;
-  border-bottom: 1px solid #2b3a43; padding: 4px 6px;
+  text-align: left; font-weight: 600; color: var(--ink-3);
+  border-bottom: 1px solid var(--rule); padding: 4px 6px;
 }
-.field-table td { padding: 3px 6px; border-bottom: 1px solid #1c262c; }
+.field-table td { padding: 3px 6px; border-bottom: 1px solid var(--paper-3); color: var(--ink); }
 .field-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
-.field-table td.dim { color: #6d828d; }
-.field-table td.empty { color: #5b6a72; text-align: center; padding: 14px 6px; }
+.field-table td.dim { color: var(--ink-3); }
+.field-table td.empty { color: var(--ink-3); text-align: center; padding: 14px 6px; }
 #fieldChart {
   width: 100%; height: auto; display: block;
-  border: 1px solid #2b3a43; border-radius: 8px; margin-top: 4px;
+  border: 1px solid var(--rule); border-radius: var(--radius); margin-top: var(--sp-1);
 }
-.field-note { margin: 6px 0 0; font-size: 11.5px; color: #6d828d; line-height: 1.5; }
-.field-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+.field-note { margin: 6px 0 0; font-size: var(--fs-1); color: var(--ink-2); line-height: 1.5; }
+.field-note b { color: var(--ink); }
+.field-actions { display: flex; gap: var(--sp-2); flex-wrap: wrap; margin-top: var(--sp-3); }
 #fieldTasksView.hidden, #fieldRecordsView.hidden { display: none; }
 
-/* ── 야장: 탐구 과제 ── */
-.field-tabs { display: flex; gap: 6px; margin: -4px 0 12px; border-bottom: 1px solid #2b3a43; }
+/* ── 야장: 탭 (WAI-ARIA 탭 패턴은 D3 학습지 패널에서) ── */
+.field-tabs { display: flex; gap: 6px; margin: -4px 0 var(--sp-3); border-bottom: 1px solid var(--rule); }
 .field-tabs button {
-  background: none; border: none; border-bottom: 2px solid transparent; color: #8aa0ab;
-  font-size: 13px; font-weight: 600; padding: 6px 10px 8px; cursor: pointer; margin-bottom: -1px;
+  background: none; border: none; border-bottom: 3px solid transparent; color: var(--ink-3);
+  font: inherit; font-size: var(--fs-2); font-weight: 700; padding: 6px 10px 8px; cursor: pointer; margin-bottom: -1px;
 }
-.field-tabs button.on { color: #7fe6bc; border-bottom-color: #3f9e7d; }
-.field-tabs button span { font-weight: 500; color: #6d828d; margin-left: 4px; }
+.field-tabs button:hover { color: var(--ink); }
+.field-tabs button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.field-tabs button.on { color: var(--ink); border-bottom-color: var(--ctl-nav); }
+.field-tabs button span { font-weight: 500; color: var(--ink-3); margin-left: 4px; }
+
+/* ── 야장: 탐구 과제 ── */
 .task-intro {
-  margin: 0 0 12px; font-size: 12.5px; line-height: 1.6; color: #c9d8df;
-  background: rgba(63, 158, 125, .12); border: 1px solid rgba(63, 158, 125, .35); border-radius: 8px; padding: 9px 12px;
+  margin: 0 0 var(--sp-3); font-size: var(--fs-2); line-height: 1.6; color: var(--ink);
+  background: var(--ctl-scen-bg); border: 1px solid var(--ctl-scen); border-radius: var(--radius); padding: 9px 12px;
 }
-.task-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 10px; }
-.task-card { background: #18222a; border: 1px solid #2b3a43; border-radius: 10px; padding: 11px 13px 12px; }
-.task-card.done { border-color: #3f9e7d; background: #15261f; }
-.task-card .t-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
-.task-card .t-title { font-size: 14px; font-weight: 600; color: #e3edf2; }
-.task-card .t-badge { font-size: 11.5px; color: #6d828d; white-space: nowrap; }
-.task-card.done .t-badge { color: #7fe6bc; font-weight: 600; }
-.task-card .t-concept { font-size: 11px; color: #6d828d; margin: 2px 0 6px; }
-.task-card .t-line { font-size: 12px; line-height: 1.55; margin: 3px 0; color: #b8c8d0; }
-.task-card .t-line b { color: #d6e2e8; font-weight: 600; }
-.task-card .t-bar { height: 5px; background: #23313a; border-radius: 3px; margin: 8px 0 6px; overflow: hidden; }
-.task-card .t-bar i { display: block; height: 100%; background: #5dcaa5; border-radius: 3px; }
+.task-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 10px; }
+.task-card { background: var(--paper); border: 1px solid var(--rule); border-radius: 10px; padding: 11px 13px 12px; }
+.task-card.done { border-color: var(--ctl-scen); background: var(--ctl-scen-bg); }
+.task-card .t-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-2); }
+.task-card .t-title { font-size: var(--fs-3); font-weight: 700; color: var(--ink); }
+.task-card .t-badge { font-size: var(--fs-1); color: var(--ink-3); white-space: nowrap; }
+.task-card.done .t-badge { color: var(--ctl-scen); font-weight: 700; }
+.task-card .t-concept { font-size: var(--fs-1); color: var(--ink-3); margin: 2px 0 6px; }
+.task-card .t-line { font-size: var(--fs-2); line-height: 1.55; margin: 3px 0; color: var(--ink-2); }
+.task-card .t-line b { color: var(--ink); font-weight: 700; }
+.task-card .t-bar { height: 6px; background: var(--paper-3); border-radius: 3px; margin: var(--sp-2) 0 6px; overflow: hidden; }
+.task-card .t-bar i { display: block; height: 100%; background: var(--ctl-scen); border-radius: 3px; }
 .task-card .t-subs { display: flex; flex-wrap: wrap; gap: 5px; }
 .task-card .t-sub {
-  font-size: 11px; padding: 2px 8px; border-radius: 10px; background: #23313a; color: #9db3bf;
+  font-size: var(--fs-1); padding: 1px var(--sp-2); border-radius: 999px; background: var(--paper-3); color: var(--ink-2);
   font-variant-numeric: tabular-nums;
 }
-.task-card .t-sub.ok { background: #24483c; color: #7fe6bc; }
-.task-card .t-think { font-size: 11.5px; color: #8a9ea8; margin: 8px 0 0; line-height: 1.5; font-style: italic; }
+.task-card .t-sub.ok { background: var(--ctl-scen-on); color: var(--on-fill); }
+.task-card .t-think { font-size: var(--fs-1); color: var(--ink-2); margin: var(--sp-2) 0 0; line-height: 1.5; font-style: italic; }
 
 /* 4차 C4: 설정창 바다 평형 표시(.sea-eq)·'즉시 평형' 버튼 묶음(.btn-row)을 뺐다 — 쓰는 곳이 없다 */
 
-/* 미니맵: 왼쪽 아래 고정. 단축바(화면 중앙 하단)와 겹치지 않는 자리다. */
+/* 미니맵: 왼쪽 아래 고정. 단축바(화면 중앙 하단)와 겹치지 않는 자리다. 범례 토큰화는 D2 */
 #minimap {
   position: fixed; left: 14px; bottom: 14px; z-index: 6;
-  border-radius: 8px; pointer-events: none;
+  border-radius: var(--radius); pointer-events: none;
 }
 
-/* 짧은 안내 토스트 (이스터에그 등) */
+/* ── 짧은 안내 토스트 ── */
 #toast {
   position: fixed; left: 50%; top: 18%; transform: translateX(-50%) translateY(-8px);
-  z-index: 12; max-width: min(80vw, 520px);
+  z-index: 12; max-width: min(80vw, 560px);
   padding: 10px 18px; border-radius: 10px;
-  background: rgba(18, 30, 26, .92); border: 1px solid #3f9e7d;
-  color: #d6ecdf; font-size: 14px; line-height: 1.5; text-align: center;
+  border-color: var(--ctl-scen);
+  font-size: var(--fs-3); line-height: 1.5; text-align: center;
   opacity: 0; pointer-events: none;
   transition: opacity .3s, transform .3s;
 }
 #toast.on { opacity: 1; transform: translateX(-50%) translateY(0); }
 
 /* 3차 E4 현장 과제: 두 연도 관찰 글 */
-.t-section { grid-column: 1 / -1; margin: 10px 0 0; font-size: 13px; color: #9fb4bf; font-weight: 600; }
+.t-section { grid-column: 1 / -1; margin: 10px 0 0; font-size: var(--fs-2); color: var(--ink); font-weight: 700; }
 .field-task .ft-year { display: grid; grid-template-columns: auto 1fr; gap: 6px; align-items: start; margin: 6px 0; }
-.field-task label { display: flex; flex-direction: column; gap: 2px; font-size: 12px; color: #9fb4bf; }
-.field-task textarea { font: inherit; font-size: 13px; color: #e3edf2; background: #0f171d; border: 1px solid #2b3a43; border-radius: 6px; padding: 5px 7px; resize: vertical; }
-.field-task textarea:focus { outline: 2px solid #3f9e7d; outline-offset: 0; }
-.field-task .ft-go { white-space: nowrap; padding: 5px 9px; font-size: 12px; }
+.field-task label { display: flex; flex-direction: column; gap: 2px; font-size: var(--fs-1); color: var(--ink-2); }
+.field-task textarea {
+  font: inherit; font-size: var(--fs-2); color: var(--ink); background: var(--paper);
+  border: 1px solid var(--ink-3); border-radius: 6px; padding: 5px 7px; resize: vertical;
+}
+.field-task textarea::placeholder { color: var(--ink-3); }
+.field-task textarea:focus { outline: 2px solid var(--focus); outline-offset: 0; }
+.field-task .ft-go { white-space: nowrap; }
 .field-task .ft-diff { margin: 4px 0 6px; }
