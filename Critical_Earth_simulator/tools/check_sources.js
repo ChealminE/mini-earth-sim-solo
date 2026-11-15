@@ -21,7 +21,7 @@ const errors = [];
 const err = m => errors.push(m);
 
 // ── 1) 화면에서 쓰는 키 ─────────────────────────────────────────────────────
-// 직접 실험 탭·1인칭은 이번 범위 밖이지만 같은 규칙을 따르도록 함께 훑는다.
+// 조감(루트 html·js/)과 1인칭(firstperson/)을 함께 훑는다.
 const SCAN_DIRS = ['.', 'js', 'firstperson'];
 const files = [];
 for (const d of SCAN_DIRS) {

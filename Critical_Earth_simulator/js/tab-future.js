@@ -490,7 +490,7 @@ $('futCharts').addEventListener('click', e => {
 
 // ── 기록 서랍 ─────────────────────────────────────────────────────────
 // 프로그램 전체의 공통 측정 요소 4개. 열 이름(co2_ppm, air_temp, water_temp, ph)은
-// 직접 실험 탭과 1인칭 야장도 나중에 이 이름으로 맞출 예정이라 그대로 쓴다. 값은 모두 연평균.
+// 1인칭 야장도 나중에 이 이름으로 맞출 예정이라 그대로 쓴다. 값은 모두 연평균.
 // 기온은 엔진이 편차(T)만 내므로 산업화 이전 전 지구 평균 지표 기온 AIR_T0에 더한다.
 // AIR_T0 = 14 °C는 대략치다 (NOAA가 밝힌 20세기 전 지구 평균 13.9 °C를 반올림한 값 - 원문 미확인, 등록부 model_air_temp).
 const AIR_T0 = 14.0;
@@ -551,7 +551,7 @@ $('recCsv').addEventListener('click', () => {
   const cols = ['year', 'scenario', 'earth', ...MEAS.map(m => m.key)];
   const esc = v => (/[",\n]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : String(v));
   const csv = [cols.join(','), ...measRecords.map(r => cols.map(c => esc(r[c])).join(','))].join('\r\n');
-  // BOM: 엑셀에서 한글이 깨지지 않게 (직접 실험 탭 CSV와 같은 방식, downloadBlob은 js/xlsx-lite.js)
+  // BOM: 엑셀에서 한글이 깨지지 않게 (downloadBlob은 js/xlsx-lite.js)
   downloadBlob(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' }), `미래예측_측정기록_${fileStamp()}.csv`);
 });
 

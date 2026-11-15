@@ -1,8 +1,8 @@
 /* ============================================================================
    라이트(종이) 테마 화면 배치 — 현재 실태 · 미래 예측 (2차 개편 B4·C1)
    ----------------------------------------------------------------------------
-   style.css 뒤에 읽는다. 모든 규칙을 body.paper 아래에 두므로 직접 실험 탭(body.paper 없음)의
-   배치·색은 그대로다. 토큰은 css/theme.css.
+   style.css 뒤에 읽는다. 모든 규칙을 body.paper 아래에 둔다(지금은 모든 화면이 body.paper —
+   종이가 아니던 직접 실험 탭은 4차 A3에서 지웠다). 토큰은 css/theme.css.
    스크롤 없음이 최우선: 화면 전체를 100dvh 그리드로 잡고, 칸 안에서도 넘치지 않게 그래프 높이를 칸에 맞춘다.
    ============================================================================ */
 
@@ -497,7 +497,7 @@ body.paper .rec-inq td:nth-child(3), body.paper .rec-inq td:nth-child(4) { white
    └ 좌 60 % ────────────────────────────┴ 우 40 % ───────┘
    위의 탭별 격자(현재 실태 40:60, 미래 예측 조작 | 3D | 그래프)는 지우지 않고 여기서 덮는다(되돌리기 쉽게).
    display: contents 를 풀고 #graph-panel 을 한 칸으로 되돌린다 — 요약 숫자·시간 막대가 더 이상 3D 열에 붙지 않으므로.
-   학습지 칸은 #worksheet(3차 B2, 아래 절). #tab-header-panel 은 직접 실험 탭에서만 쓴다. */
+   학습지 칸은 #worksheet(3차 B2, 아래 절). #tab-header-panel 은 종이 탭에서 숨긴다(아래). */
 #ctlStrip { display: none; }
 body.paper.tab-current #app, body.paper.tab-future #app {
   display: grid;
@@ -510,7 +510,7 @@ body.paper.tab-current #gl-container, body.paper.tab-future #gl-container { grid
 body.paper.tab-current #graph-panel, body.paper.tab-future #graph-panel { grid-area: graph; display: block; min-width: 0; min-height: 0; overflow: hidden; }
 body.paper.tab-current #tab-current, body.paper.tab-future #tab-future { display: flex; flex-direction: column; height: 100%; min-height: 0; }
 
-/* 예전 미래 예측 왼쪽 패널(#tab-header-panel)은 내용이 학습지로 옮겨 가 종이 탭에서는 다시 숨긴다(직접 실험 탭은 그대로) */
+/* 예전 미래 예측 왼쪽 패널(#tab-header-panel)은 내용이 학습지로 옮겨 가 종이 탭에서는 다시 숨긴다 */
 body.paper.tab-current #tab-header-panel, body.paper.tab-future #tab-header-panel { display: none; }
 
 /* 조작 띠: 3D 바로 아래 한두 줄. 현재 실태 = 관측 기간 안내, 미래 예측 = 위 시나리오 / 아래 시간 막대 */
@@ -624,8 +624,7 @@ body.paper.ws-collapsed .ws-fold { writing-mode: vertical-rl; min-height: 0; pad
 body.paper [data-ws-moved] { display: none !important; }
 
 /* ── 3차 C2 — 그래프 작업대 (js/graph-workspace.js) ─────────────────────
-   왼쪽 약 75 % = 칸 칩·보기·기간 줄 / 분석창 / 안내 줄, 오른쪽 약 25 % = 자료 카드 덱(덱 안에서만 스크롤).
-   직접 실험 탭(다크)으로 옮길 때는 이 절을 그 탭 테마에 맞춰 옮긴다(docs/작업대_이관_가이드.md, 3차 G). */
+   왼쪽 약 75 % = 칸 칩·보기·기간 줄 / 분석창 / 안내 줄, 오른쪽 약 25 % = 자료 카드 덱(덱 안에서만 스크롤). */
 body.paper .gw { display: grid; grid-template-columns: minmax(0, 3fr) minmax(170px, 1fr); gap: var(--sp-3); min-height: 0; height: 100%; box-sizing: border-box; }
 body.paper .gw-main { display: flex; flex-direction: column; gap: var(--sp-1); min-width: 0; min-height: 0; }
 body.paper .gw-bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-1) var(--sp-2); flex: none; }
