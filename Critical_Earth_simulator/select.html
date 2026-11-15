@@ -20,7 +20,8 @@
   .header, .grid, .footer-hint { position: relative; z-index: 2; }
   .header, .card, .footer-hint, #gl-container { pointer-events: auto; }
   /* 배경 = 진짜 3D 아크릴 모형 (다른 화면과 같은 js/common.js). 평소엔 천천히 저절로 돌고,
-     끌면 그쪽으로 돌다가 놓으면 다시 천천히 돈다. 3D가 뜨기 전·WebGL이 안 되는 PC에서는 사진이 보인다. */
+     끌면 그쪽으로 돌다가 놓으면 다시 천천히 돈다. 3D가 뜨기 전·WebGL이 안 되는 PC에서는 사진이 보인다.
+     카드에 마우스를 올리거나 Tab 으로 가면 그 모드의 지구로 0.6초 동안 바뀐다(4차 A5, 아래 스크립트). */
   #gl-container { position: fixed; inset: 0; z-index: 0;
     background: var(--paper) url('/texture_image/start_bg.jpg') center 60% / cover no-repeat; }
   #gl { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: grab; }
@@ -32,11 +33,12 @@
   .header h1 { font-family: var(--font-title); font-size: var(--fs-6); font-weight: 700; margin: 0 0 var(--sp-2); color: var(--ink); }
   .header p { font-size: var(--fs-3); color: var(--ink-2); margin: 0; line-height: 1.6; }
 
+  /* 4차 A5: 카드 3장(현재 실태·미래 예측·1인칭 탐험)을 한 줄로. 세 칸이 220px 아래로 줄어들 창에서는 한 열로 */
   .grid {
-    display: grid; grid-template-columns: repeat(2, minmax(240px, 340px)); gap: var(--sp-4);
-    width: 100%; max-width: 720px;
+    display: grid; grid-template-columns: repeat(3, minmax(220px, 300px)); gap: var(--sp-4);
+    width: 100%; max-width: 932px; justify-content: center;
   }
-  @media (max-width: 560px) { .grid { grid-template-columns: 1fr; } }
+  @media (max-width: 760px) { .grid { grid-template-columns: minmax(0, 340px); } }
 
   /* 모드 카드 = 이동(nav) 영역 버튼. .btn 의 색·눌림·포커스 규칙을 그대로 쓰고 모양만 카드로 */
   .card.btn {
@@ -49,10 +51,6 @@
   .card .icon svg { width: 30px; height: 30px; }
   .card .title { font-size: var(--fs-4); font-weight: 700; color: var(--ink); }
   .card .desc { font-size: var(--fs-2); color: var(--ink-2); line-height: 1.55; }
-  .card .badge {
-    align-self: flex-start; font-size: var(--fs-1); font-weight: 600; margin-top: 2px; padding: 0 var(--sp-2);
-    border-radius: 999px; background: var(--paper); color: var(--ink-2); border: 1px solid var(--rule);
-  }
   .footer-hint { margin-top: var(--sp-5); font-size: var(--fs-1); color: var(--ink-2); text-align: center; line-height: 1.7;
     background: color-mix(in srgb, var(--paper) 85%, transparent); padding: var(--sp-1) var(--sp-3); border-radius: var(--radius); }
 </style>
@@ -67,51 +65,116 @@
   </div>
 
   <div class="grid">
-    <a class="card btn btn--nav" href="/dashboard?tab=current">
+    <!-- data-mode: 마우스를 올리거나 키보드로 가면 배경 3D가 그 모드의 지구로 바뀐다(아래 스크립트 MODES) -->
+    <a class="card btn btn--nav" data-mode="current" href="/dashboard?tab=current">
       <span class="icon" data-icon="lines" data-icon-size="30"></span>
       <span class="title">현재 실태</span>
       <span class="desc">관측 자료로 본 지구의 지금 — 대기 CO₂·기온·바다 pH·화석연료 배출 (NOAA·HadCRUT5·HOT·GCP)</span>
     </a>
-    <a class="card btn btn--nav" href="/dashboard?tab=future">
+    <a class="card btn btn--nav" data-mode="future" href="/dashboard?tab=future">
       <span class="icon" data-icon="globe" data-icon-size="30"></span>
       <span class="title">미래 예측</span>
       <span class="desc">1750~2200년 · 사람이 내보낸 탄소가 지구를 어떻게 바꾸는지 재생하고, IPCC 시나리오와 직접 설계로 미래를 예측</span>
     </a>
-    <a class="card btn btn--nav" href="/dashboard?tab=live">
-      <span class="icon" data-icon="beaker" data-icon-size="30"></span>
-      <span class="title">직접 실험</span>
-      <span class="desc">보드·센서를 골라 코드를 받고, 아크릴 모형에 센서를 배치해 실시간으로 측정·기록·분석</span>
-    </a>
-    <a class="card btn btn--nav" href="/firstperson/">
+    <a class="card btn btn--nav" data-mode="fp" href="/firstperson/">
       <span class="icon" data-icon="compass" data-icon-size="30"></span>
-      <span class="title">탐험</span>
+      <span class="title">1인칭 탐험</span>
       <span class="desc">1인칭 시점으로 걸어다니며 환경을 조사하는 탐험 모드</span>
-      <span class="badge">별도 모드</span>
     </a>
   </div>
 
-  <div class="footer-hint">server.py가 실행 중이어야 정상적으로 열립니다 · 빈 곳을 끌면 모형을 돌려 볼 수 있어요</div>
+  <div class="footer-hint">빈 곳을 끌면 모형을 돌려 볼 수 있어요</div>
 
 <script src="vendor/three.min.js"></script>
 <script src="js/earth-model.js?v=4"></script>
+<script src="js/earth-data.js?v=2"></script>
 <script src="js/theme.js"></script>
 <script src="js/icons.js"></script>
+<script src="js/earth-system.js?v=2"></script>
+<script src="js/earth-visual.js?v=1"></script>
 <script src="js/common.js?v=4"></script>
 <script>
-  // 대시보드와 같은 아크릴 씬을 배경으로 하나만 띄운다 (common.js의 animate()는 bundles[activeTab]을 그린다)
+  // 대시보드와 같은 아크릴 씬을 배경으로 하나만 띄운다 (common.js의 animate()는 bundles[activeTab]을 그린다).
+  // 4차 A5: 모드별 배경을 보이려고 종이 테마 씬(paper: true)으로 만든다 — 도시·굴뚝·산호·빙하·조개를
+  // 엔진 값으로 그리는 setEarthVisual 이 종이 씬에서만 돈다. 숫자는 모두 대시보드와 같은 함수에서 나온다(새 계산 없음).
   Icons.fill();
   setSceneBackdrop(Theme.hex('--paper'));   // 종이색 바탕 (예전: 렌더러 기본 검정)
-  const homeScene = buildAcrylicScene();
+  const homeScene = buildAcrylicScene({ paper: true });
   const bundles = { home: homeScene };
   let activeTab = 'home';
-  applyState(homeScene);
+
+  const ES = EarthSystem, lastOf = a => a[a.length - 1];
+  const socOf = s => EarthVisual.presetSociety(s.fossil, s.year, ES.LEVER_NOW, ES.E2023, ES.LAST_HIST_YEAR);
+  // 현재 실태: js/tab-current.js 와 같은 계산 — 엔진이 실제 배출만으로 돈 역사 실행의 마지막 해 + 대기 CO₂는 NOAA 관측 마지막 해
+  const LAST_EMIS_YEAR = EARTH_DATA.emissions.startYear + EARTH_DATA.emissions.fossil.length - 1;
+  const histNow = lastOf(EarthVisual.annotateCumFossil(ES.run({ fromYear: 1750, toYear: LAST_EMIS_YEAR })));
+  // 미래 예측: 현재 정책(SSP2-4.5) 경로의 2100년 — js/tab-future.js 의 시나리오 궤적과 같은 호출
+  const fut2100 = lastOf(EarthVisual.annotateCumFossil(ES.run({ fromYear: 1750, toYear: 2100, emissionsFn: ES.presetEmissions('ssp245') })));
+  const MODES = {
+    current: { s: histNow, soc: socOf(histNow), co2: lastOf(EARTH_DATA.co2Noaa.ppm) },
+    future: { s: fut2100, soc: socOf(fut2100), co2: fut2100.ppm },
+  };
+  MODES.fp = MODES.current;   // 1인칭 탐험: 지구는 현재 실태 그대로 두고 카메라만 받침대 가까이·낮게
+  // 카메라: 기본 시점(common.js 처음 값)과 1인칭 느낌 시점. 1인칭 값은 사용자가 끌기·휠로 갈 수 있는 한계(고도 0.12, 거리 5)라 모형 안으로 들어가지 않는다
+  const HOME_CAM = { angleX: camAngleX, dist: camDist, target: camTarget.toArray() };
+  const FP_CAM = { angleX: 0.12, dist: 5, target: [0, 0.15, 0] };
+  const SWITCH_MS = 600, SPIN = 0.0018;   // 전환 0.6초, 저절로 도는 빠르기(프레임당 라디안)
+  const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
+
+  // 엔진 표본·사회 모습에서 setEarthVisual 이 읽는 칸만 섞는다(전환 중 연출용 보간 — 과학 계산이 아니다)
+  const S_KEYS = ['T', 'ppm', 'omega', 'pH', 'fossil', 'cumFossilMax'], SOC_KEYS = ['ev', 'renew', 'nuclear', 'removal'];
+  const mixKeys = (a, b, k, keys) => Object.fromEntries(keys.map(key => [key, (a[key] || 0) + ((b[key] || 0) - (a[key] || 0)) * k]));
+  const mix = (a, b, k) => ({ s: mixKeys(a.s, b.s, k, S_KEYS), soc: mixKeys(a.soc, b.soc, k, SOC_KEYS), co2: a.co2 + (b.co2 - a.co2) * k });
+  function paint(v) {
+    homeScene.state.co2 = v.co2;
+    setEarthVisual(homeScene, v.s, v.soc);
+    applyState(homeScene);
+  }
+  let shown = MODES.current, mode = 'current', stateTween = 0;
+  function goMode(name) {
+    if (name === mode) return;
+    const wasFp = mode === 'fp';
+    mode = name;
+    const from = shown, to = MODES[name], instant = reduceMotion.matches;
+    cancelAnimationFrame(stateTween);
+    if (instant) { shown = to; paint(to); }
+    else {
+      const t0 = performance.now();
+      const step = now => {
+        const k = Math.min(1, Math.max(0, (now - t0) / SWITCH_MS)), e = 1 - (1 - k) ** 3;
+        shown = k < 1 ? mix(from, to, e) : to;
+        paint(shown);
+        if (k < 1) stateTween = requestAnimationFrame(step);
+      };
+      stateTween = requestAnimationFrame(step);
+    }
+    // 카메라는 1인칭 카드에 들어가거나 나올 때만. 도는 각도는 전환 동안 돌았을 만큼 앞으로 두어 회전이 끊기지 않게
+    if (name === 'fp' || wasFp) {
+      const cam = name === 'fp' ? FP_CAM : HOME_CAM;
+      setCameraView({ angleY: camAngleY + (instant ? 0 : SPIN * SWITCH_MS / 16.7), ...cam }, !instant, SWITCH_MS);
+    }
+  }
+  // 마우스·키보드 어느 쪽으로든: 들어가면 그 모드, 나오면 아직 올려 둔/포커스된 카드가 있는지 보고 없으면 현재 실태로
+  const cards = [...document.querySelectorAll('.card[data-mode]')];
+  const settle = () => setTimeout(() => {
+    const c = cards.find(el => el.matches(':hover')) || cards.find(el => el === document.activeElement);
+    goMode(c ? c.dataset.mode : 'current');
+  }, 0);
+  for (const c of cards) {
+    c.addEventListener('pointerenter', () => goMode(c.dataset.mode));
+    c.addEventListener('focus', () => goMode(c.dataset.mode));
+    c.addEventListener('pointerleave', settle);
+    c.addEventListener('blur', settle);
+  }
+
+  paint(shown);
   fitRenderer();
   window.addEventListener('resize', fitRenderer);
   animate();
   // 끌고 있지 않을 때만 천천히 저절로 회전 (끌어서 돌린 각도에서 이어서 돈다)
   (function autoSpin() {
     requestAnimationFrame(autoSpin);
-    if (!isDragging) { camAngleY += 0.0018; updateCamera(); }
+    if (!isDragging) { camAngleY += SPIN; updateCamera(); }
   })();
 </script>
 </body>

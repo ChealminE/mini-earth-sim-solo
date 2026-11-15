@@ -55,7 +55,8 @@ function getCameraView() {
   return { angleY: camAngleY, angleX: camAngleX, dist: camDist, target: camTarget.toArray() };
 }
 let camTween = 0;
-function setCameraView(v, animate = true) {
+// ms: 옮기는 시간. 탐구 모드는 기본 0.9초, 시작 화면의 1인칭 카드 전환은 0.6초(4차 A5)
+function setCameraView(v, animate = true, ms = 900) {
   cancelAnimationFrame(camTween);
   const from = getCameraView();
   const apply = k => {
@@ -66,10 +67,10 @@ function setCameraView(v, animate = true) {
     updateCamera();
   };
   if (!animate || matchMedia('(prefers-reduced-motion: reduce)').matches) { apply(1); return; }
-  const t0 = performance.now(), MS = 900;
+  const t0 = performance.now(), MS = ms;
   const step = now => {
     if (isDragging) return;
-    const k = Math.min(1, (now - t0) / MS);
+    const k = Math.min(1, Math.max(0, (now - t0) / MS));   // rAF 시각은 t0보다 앞설 수 있다 — 음수면 시작점 밖으로 튄다(느린 PC에서 보임)
     apply(1 - (1 - k) ** 3);
     if (k < 1) camTween = requestAnimationFrame(step);
   };

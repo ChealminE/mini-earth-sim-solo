@@ -94,7 +94,11 @@ LIB = {
 
 # ── 2. 텍스처 → data URI ─────────────────────────────────────────────
 TEX = {}
+# 시작 화면 카드 그림(아래 4절 CARD_BG)은 껍데기만 쓰므로 앱 텍스처 묶음에 다시 넣지 않는다(같은 그림이 두 벌 들어가지 않게)
+CARD_BG_FILES = {"current": "start_current.jpg", "future": "start_future.jpg", "fp": "start_fp.jpg"}
 for p in sorted((ROOT / "texture_image").iterdir()):
+    if p.name in CARD_BG_FILES.values():
+        continue
     if p.is_file() and p.suffix.lower() in MIME:
         TEX["texture_image/" + p.name] = data_uri(p)
 
@@ -159,9 +163,10 @@ body { background: var(--paper); color: var(--ink); }
 .header { text-align:center; margin-bottom: var(--sp-5); }
 .header h1 { font-family: var(--font-title); font-size: var(--fs-6); font-weight:700; margin:0 0 var(--sp-2); }
 .header p { font-size: var(--fs-3); color: var(--ink-2); margin:0; line-height:1.6; }
-.grid { display:grid; grid-template-columns:repeat(2, minmax(240px,340px)); gap: var(--sp-4);
-  width:100%; max-width:720px; }
-@media (max-width:560px){ .grid { grid-template-columns:1fr; } }
+/* 4차 A5: 카드 3장 한 줄 (select.html 과 같은 격자) */
+.grid { display:grid; grid-template-columns:repeat(3, minmax(220px,300px)); gap: var(--sp-4);
+  width:100%; max-width:932px; justify-content:center; }
+@media (max-width:760px){ .grid { grid-template-columns:minmax(0,340px); } }
 /* 모드 카드 = 이동(nav) 영역 버튼 (.btn 규칙은 css/theme.css) */
 .card.btn { flex-direction:column; align-items:flex-start; justify-content:flex-start; gap: var(--sp-1);
   padding: var(--sp-4); white-space:normal; text-align:left; background: var(--paper-2); font-weight:400; }
@@ -170,8 +175,14 @@ body { background: var(--paper); color: var(--ink); }
 .card .icon svg { width:30px; height:30px; }
 .card .title { font-size: var(--fs-4); font-weight:700; color: var(--ink); }
 .card .desc { font-size: var(--fs-2); color: var(--ink-2); line-height:1.55; }
-.card .badge { align-self:flex-start; font-size: var(--fs-1); font-weight:600; margin-top:2px; padding:0 var(--sp-2);
-  border-radius:999px; background: var(--paper); color: var(--ink-2); border:1px solid var(--rule); }
+/* 껍데기에는 3D가 없어 카드마다 그 모드의 정지 그림을 배경으로 깐다(그림이 있을 때만 .has-bg).
+   글자가 그림 위에서도 읽히게 위쪽은 종이색을 짙게, 아래로 갈수록 그림이 보이게 덮는다 */
+.card.btn.has-bg { background: linear-gradient(to bottom, color-mix(in srgb, var(--paper-2) 94%, transparent) 0%,
+  color-mix(in srgb, var(--paper-2) 86%, transparent) 60%, color-mix(in srgb, var(--paper-2) 55%, transparent) 100%),
+  var(--card-bg) center / cover no-repeat; min-height: 200px; }
+.card.btn.has-bg:hover { background: linear-gradient(to bottom, color-mix(in srgb, var(--paper-2) 90%, transparent) 0%,
+  color-mix(in srgb, var(--paper-2) 80%, transparent) 60%, color-mix(in srgb, var(--paper-2) 45%, transparent) 100%),
+  var(--card-bg) center / cover no-repeat; }
 .footer-hint { margin-top: var(--sp-5); font-size: var(--fs-1); color: var(--ink-2); text-align:center; line-height:1.7; }
 #viewer { display:none; position:fixed; inset:0; background: var(--paper); }
 #viewer.on { display:block; }
@@ -189,17 +200,32 @@ CARDS = [
      "관측 자료로 본 지구의 지금 — 대기 CO₂·기온·바다 pH·화석연료 배출 (NOAA·HadCRUT5·HOT·GCP)", ""),
     ("future", "globe", "미래 예측",
      "1750~2200년 · 사람이 내보낸 탄소가 지구를 어떻게 바꾸는지 재생하고, IPCC 시나리오와 직접 설계로 미래를 예측", ""),
-    ("fp", "compass", "탐험",
+    ("fp", "compass", "1인칭 탐험",
      "1인칭 시점으로 걸어다니며 환경을 조사하는 탐험 모드", ""),
 ]
+# 문구는 select.html 카드와 같게 둔다(서버판과 파일판 시작 화면이 같은 말을 하게).
+
+# 카드 배경 그림: 사람이 1440×900에서 찍어 texture_image/ 에 넣는다(각 200 KB 이하).
+# 없으면 지금처럼 단색 카드로 두고 빌드는 멈추지 않는다 — 경고만.
+CARD_BG_MAX = 200 * 1024
+CARD_BG = {}
+for _k, _name in CARD_BG_FILES.items():
+    _p = ROOT / "texture_image" / _name
+    if not _p.exists():
+        print("[주의] 시작 화면 카드 그림이 없어 단색으로 둡니다: texture_image/%s" % _name)
+        continue
+    if _p.stat().st_size > CARD_BG_MAX:
+        print("[주의] 시작 화면 카드 그림이 200 KB를 넘습니다(%d KB): texture_image/%s" % (_p.stat().st_size // 1024, _name))
+    CARD_BG[_k] = data_uri(_p)
 
 # 아이콘은 js/icons.js 를 껍데기에도 넣고 Icons.fill()로 채운다(이모지는 OS마다 모양이 달라 쓰지 않는다)
 cards_html = "\n".join(
-    '    <button class="card btn btn--nav" data-go="{key}"{dis}>'
+    '    <button class="card btn btn--nav{cls}" data-go="{key}"{dis}{bg}>'
     '<span class="icon" data-icon="{icon}" data-icon-size="30"></span><span class="title">{title}</span>'
-    '<span class="desc">{desc}</span>{badge}</button>'.format(
+    '<span class="desc">{desc}</span></button>'.format(
         key=k, icon=i, title=t, desc=d, dis=" disabled" if off else "",
-        badge='<span class="badge">별도 모드</span>' if k == "fp" else "")
+        cls=" has-bg" if k in CARD_BG else "",
+        bg=' style="--card-bg: url(%s)"' % CARD_BG[k] if k in CARD_BG else "")
     for k, i, t, d, off in CARDS)
 ICONS_JS = read("js/icons.js")
 
