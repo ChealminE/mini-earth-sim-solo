@@ -1,7 +1,7 @@
 // ============================================================================
 // 1인칭 모드 - 단축바(핫바) / 손에 든 도구 / 실측 도구
 // ----------------------------------------------------------------------------
-// 마인크래프트식 9칸 단축바(숫자키 1~9)로 도구를 고르면 화면 우하단에 오른손이 나타나고
+// 단축바 4칸(숫자키 1~4)으로 도구를 고르면 화면 우하단에 오른손이 나타나고
 // 그 손이 도구를 들고 있다. 좌클릭하면 화면 중앙(크로스헤어)이 가리키는 지점을 측정해서
 // 도구의 표시창(캔버스 텍스처)에 수치를 띄운다.
 //
@@ -9,8 +9,11 @@
 // 씬 그래프를 따라 렌더링하므로 카메라 자체를 씬에 넣어줘야 카메라의 자식이 그려진다.
 // ============================================================================
 
+// 4차 B4: 9칸 → 4칸(온도계·pH미터·CO₂센서·해수분석기). 빈 칸 5개는 쓰는 도구가 없었다.
+// F(행동)에서 칸이 더 필요하면 이 수와 아래 HOTBAR_LABELS·HOTBAR_ICONS 를 같이 늘린다.
+const HOTBAR_N = 4;
 const FPTools = {
-  slots: new Array(9).fill(null),
+  slots: new Array(HOTBAR_N).fill(null),
   selected: -1,     // -1 = 맨손
   handGroup: null,
   camera: null,
@@ -60,22 +63,8 @@ const SPOT = {
 // 빙하의 cap: 얼음 표면은 녹는점 위로 못 올라간다. 들어온 열을 녹는 데 다 쓰기 때문
 // (융해 잠열). CO2가 아무리 높아도 0°C에서 멈추게 상한을 걸었다.
 
-// ── 살아 있는 것의 체온 ─────────────────────────────────────────────────────
-// 동물을 겨누면 체온이 나온다. 그냥 재미 요소로 둘 수도 있었지만, 한 걸음 더 나가면
-// 여기가 이 도구 전체에서 가장 좋은 교육 소재가 된다:
-//   포유류는 정온동물이라 CO2·계절·시간이 아무리 변해도 체온이 일정하다 (amp=0, day=0).
-//   어류는 변온동물이라 체온이 곧 수온이다 - 바다가 더워지면 물고기 체온도 오른다.
-// 둘을 나란히 재면 그 차이가 그대로 드러난다. "환경이 변해도 안 변하는 값"과
-// "환경을 그대로 따라가는 값"을 같은 도구로 비교하게 하는 것이 요점이다.
-const BODY_TEMPS = {
-  bodyRabbit: { base: 39.0, amp: 0, day: 0, label: '토끼 체온' },
-  bodyDeer:   { base: 38.5, amp: 0, day: 0, label: '사슴 체온' },
-  bodyWolf:   { base: 38.5, amp: 0, day: 0, label: '늑대 체온' },
-  bodyBear:   { base: 37.5, amp: 0, day: 0, label: '곰 체온' },
-  bodyFish:   { base: 0,    amp: 0, day: 0, label: '어류 체온 (변온)' },
-};
-Object.assign(SPOT, BODY_TEMPS);
-const ANIMAL_SPOT = { '토끼': 'bodyRabbit', '사슴': 'bodyDeer', '늑대': 'bodyWolf', '곰': 'bodyBear' };
+// 4차 B4(마스터 D8): 동물·어류 체온 측정을 뺐다. 동물·어류는 풍경으로 남고, 광선은 그들을 지나쳐
+// 뒤의 땅·물·대기를 잰다(측정 대상 목록에서 뺐다).
 const AIR_MIX_H = 0.06;        // 지면에서 이 높이(실척 3m) 안쪽은 지면 열의 영향을 받는다
 const AIR_SAMPLE_DIST = 0.3;   // 허공을 겨눴을 때 대기를 뜨는 거리 (실척 15m)
 // 대기 -> 그 아래 지면의 대응 관계 (지면 열 섞임 계산용)
@@ -104,12 +93,10 @@ function measureTemperature(spot, x, z, ppm, aboveGround) {
   // 해수는 fp-world.js의 seaTempAt() 하나만 쓴다. 해수 분석기·pH미터·산호가 읽는 수온과
   // 반드시 같아야 하므로 여기서는 지점 흔들림·일교차 보정을 얹지 않는다.
   // (바다는 열용량이 커서 원래 일교차가 0.6°C뿐이었고, 지점 간 차이는 이제 냉수대가 만든다.)
-  // 어류는 변온동물이라 체온이 곧 그 자리의 수온이다.
-  if (spot === 'sea' || spot === 'bodyFish') return seaTempAt(x, z, ppm);
+  if (spot === 'sea') return seaTempAt(x, z, ppm);
   // 같은 구역 안에서도 지점마다 조금씩 다르게 (측정하는 맛)
   const jitter = Math.sin(x * 37.1 + z * 21.7) * 0.5 + Math.sin(x * 11.3 - z * 53.9) * 0.35;
-  // 정온동물은 개체차만 있고 환경에는 반응하지 않는다 (흔들림도 훨씬 작다)
-  let v = spotBaseTemp(spot, ppm) + (S.amp === 0 && S.day === 0 ? jitter * 0.4 : jitter);
+  let v = spotBaseTemp(spot, ppm) + jitter;
   // 대기를 잴 때 지면 바로 위면 지면 온도 쪽으로 끌어당긴다.
   // 뜨거운 아스팔트 바로 위 공기가 뜨거운 건 실제로 그렇고, 위로 갈수록 옅어진다.
   if (aboveGround != null && SPOT_GROUND[spot]) {
@@ -245,11 +232,9 @@ function pickTarget() {
   const rc = FPTools._rc;
   rc.setFromCamera({ x: 0, y: 0 }, cam);
   rc.far = 1.4;   // 실척 약 70m까지 닿음
-  // 동물·어류는 한 마리가 메시 여러 개라 그룹째 넣고 재귀 탐색(true)을 켠다.
-  // 지형 쪽은 전부 단일 메시라 재귀가 필요 없지만, 한 번에 쏘려면 옵션을 맞춰야 한다.
-  const targets = FPWorld.walkables.concat(
-    [FPWorld.waterMesh], FPWorld.iceMeshes, FPWorld.animalGroups, FPWorld.fishGroups);
-  const hits = rc.intersectObjects(targets, true);
+  // 대상은 지형·수면·유빙뿐이다(전부 단일 메시). 동물·어류는 B4에서 측정 대상이 아니게 됐다.
+  const targets = FPWorld.walkables.concat([FPWorld.waterMesh], FPWorld.iceMeshes);
+  const hits = rc.intersectObjects(targets, false);
   const half = FPWorld.ZONE_W / 2;
 
   if (!hits.length) {
@@ -278,19 +263,6 @@ function pickTarget() {
   const h = hits[0], p = h.point;
   const isWater = h.object === FPWorld.waterMesh;
   const zone = p.x < -half ? 'ocean' : (p.x > half ? 'city' : 'green');
-
-  // 살아 있는 것을 맞췄는지 먼저 본다. 맞은 메시에서 부모를 거슬러 올라가며 표시를 찾는다.
-  for (let o = h.object; o; o = o.parent) {
-    if (o.userData && o.userData.animal) {
-      const spotKey = ANIMAL_SPOT[o.userData.animal.kind.name];
-      if (spotKey) return { point: p, zone, isWater: false, isAir: false, spot: spotKey,
-                            dist: h.distance, aboveGround: 0, creature: o.userData.animal };
-    }
-    if (o.userData && o.userData.fish) {
-      return { point: p, zone: 'ocean', isWater: false, isAir: false, spot: 'bodyFish',
-               dist: h.distance, aboveGround: 0, creature: true };
-    }
-  }
 
   let spot;
   if (FPWorld.iceMeshes.includes(h.object)) spot = 'ice';
@@ -710,17 +682,16 @@ FPTools.use = function () {
     tool.reading.spot = hit.spot;
     tool.reading.zone = hit.zone;
     tool.reading.at = hit.point.clone();
-    tool.reading.creature = !!hit.creature;
   }
 };
 
 // ── 단축바 UI ───────────────────────────────────────────────────────────────
-const HOTBAR_LABELS = ['온도계', 'pH미터', 'CO₂센서', '해수분석기', '', '', '', '', ''];
-const HOTBAR_ICONS = ['🌡️', '🧪', '🌫️', '🌊', '', '', '', '', ''];
+const HOTBAR_LABELS = ['온도계', 'pH미터', 'CO₂센서', '해수분석기'];
+const HOTBAR_ICONS = ['🌡️', '🧪', '🌫️', '🌊'];
 function buildHotbarUI() {
   const bar = document.getElementById('hotbar');
   bar.innerHTML = '';
-  for (let i = 0; i < 9; i++) {
+  for (let i = 0; i < HOTBAR_N; i++) {
     const el = document.createElement('div');
     el.className = 'slot';
     el.innerHTML = `<span class="num">${i + 1}</span>` +

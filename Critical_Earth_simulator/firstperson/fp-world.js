@@ -110,8 +110,6 @@ const FPWorld = {
   trees: [],          // {x, z, r} - 나무 근처는 광합성으로 CO2가 낮게 나온다
   iceMeshes: [],      // 빙하(유빙) 메시
   beachRamp: null,    // 해변 모래 경사로
-  animalGroups: [],   // 온도계로 체온을 잴 수 있는 동물 (그룹 단위)
-  fishGroups: [],     // 어류 - 변온동물이라 체온이 수온을 따라간다
   co2: 418,
   BOX_W, BOX_D, BOX_H, ZONE_W, GROUND_BASE, OCEAN_BASE, waveBaseY, TERRAIN_TOP,
   waveHeightAt, waveNormalAt, wetlandY,
@@ -789,11 +787,6 @@ function buildFirstPersonWorld(renderer) {
         x, z, heading: Math.random() * Math.PI * 2,
         state: 'walk', timer: Math.random() * 2.5, phase: Math.random() * 10,
       };
-      // 온도계가 동물을 집어낼 수 있게 그룹에 자기 자신을 심어 둔다.
-      // 동물 한 마리는 메시가 여러 개라, 레이캐스트로 맞은 메시에서 부모를 거슬러
-      // 올라가며 이 표시를 찾는 방식이 가장 단순하다.
-      group.userData.animal = a;
-      FPWorld.animalGroups.push(group);
       FPWorld.animals.push(a);
     }
   });
@@ -863,8 +856,6 @@ function buildFirstPersonWorld(renderer) {
       const ly = floor + 0.012 + Math.random() * Math.max(0.004, SEA_CEIL - floor - 0.02);
       group.position.set(lx, ly, lz);
       oceanGroup.add(group);
-      group.userData.fish = true;
-      FPWorld.fishGroups.push(group);
       FPWorld.fish.push({
         group, tail, lx, ly, lz,
         heading: Math.random() * Math.PI * 2, pitch: 0,
@@ -1902,7 +1893,7 @@ const CAR_PLAYER_SLOW = CAR_PLAYER_STOP + 0.10;   // 여기서부터 감속
 // '가장 가까운 면'으로 밀어내느라 사람이 한 프레임에 차 옆이나 반대편으로 순간이동했다
 // (시점·위치가 갑자기 튀는 버그의 주원인. 헤드리스로 걸어 다니게 해서 재현함).
 function playerAheadGap(c, player) {
-  if (!player || player.flying) return Infinity;
+  if (!player) return Infinity;
   const b = c.box, m = 0.009 + 0.004;   // 사람 반지름 + 여유
   if (player.pos.y >= b.top - 0.005) return Infinity;   // 지붕 위에 올라탄 사람은 막는 게 아님
   let along;

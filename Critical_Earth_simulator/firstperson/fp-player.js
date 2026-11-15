@@ -9,12 +9,10 @@
 const FPPlayer = {
   // ── 신체/이동 상수 ──────────────────────────────────────────────────────
   EYE_H: 0.032,          // 눈높이 (≈1.6m)
-  CROUCH_EYE_H: 0.019,   // 앉았을 때
   RADIUS: 0.009,         // 충돌 반지름 (≈0.45m 폭)
   STEP_H: 0.013,         // 이 높이 이하 턱은 걸어서 그냥 올라감 (마인크래프트의 반블록 계단 느낌)
   WALK: 0.09,            // ≈4.5m/s
   SPRINT: 0.19,
-  CROUCH_SPEED: 0.04,
   SWIM: 0.055,
   GRAVITY: 0.62,
   JUMP_V: 0.195,         // 도달 높이 ≈0.031유닛 = 딱 자기 키만큼
@@ -29,13 +27,12 @@ const FPPlayer = {
   vel: new THREE.Vector3(),
   yaw: Math.PI, pitch: -0.05,
   onGround: false, inWater: false, underwater: false,
-  crouching: false, sprinting: false, flying: false,
+  sprinting: false,
   bobPhase: 0, bobY: 0, bobX: 0,
-  thirdPerson: false,
   curFov: 75,
   keys: Object.create(null),
 
-  camera: null, avatar: null,
+  camera: null,
   _ray: new THREE.Raycaster(),
   _down: new THREE.Vector3(0, -1, 0),
   _origin: new THREE.Vector3(),
@@ -49,10 +46,6 @@ FPPlayer.init = function (camera, canvas) {
   camera.far = 60;
   camera.updateProjectionMatrix();
 
-  this.avatar = buildAvatar();
-  this.avatar.visible = false;
-  FPWorld.scene.add(this.avatar);
-
   this.respawn();
   bindInput(this, canvas);
 };
@@ -61,7 +54,6 @@ FPPlayer.respawn = function () {
   this.pos.set(0, FPWorld.GROUND_BASE + 0.05, 1.2);
   this.vel.set(0, 0, 0);
   this.yaw = Math.PI; this.pitch = -0.05;
-  this.flying = false;
 };
 
 // ── 지형 높이: 레이캐스터로 바닥 표면을 실제로 맞춰서 잰다 ──────────────────
@@ -148,8 +140,8 @@ FPPlayer.update = function (dt, t) {
   dt = Math.min(dt, 0.05);   // 탭 전환 후 큰 dt로 지형을 뚫고 나가는 걸 방지
   const k = this.keys;
 
-  this.crouching = !!(k['ControlLeft'] || k['KeyC']);
-  this.sprinting = !!(k['ShiftLeft'] || k['ShiftRight']) && !this.crouching;
+  // 4차 B4: 비행(G)·3인칭(V·F5)·앉기(Ctrl·C)를 뺐다. 측정·시간 이동·행동에 쓰이지 않는 조작이라서.
+  this.sprinting = !!(k['ShiftLeft'] || k['ShiftRight']);
 
   // 입력 -> 원하는 이동 방향 (시선 기준)
   // 시선 앞쪽 forward=(sin yaw, 0, cos yaw), 오른쪽 right=(-cos yaw, 0, sin yaw)
@@ -167,23 +159,17 @@ FPPlayer.update = function (dt, t) {
   const waterY = this.waterHeightAt(this.pos.x, this.pos.z, t);
   this.inWater = this.pos.y < waterY;
 
-  let speed = this.crouching ? this.CROUCH_SPEED : (this.sprinting ? this.SPRINT : this.WALK);
-  if (this.inWater && !this.flying) speed = this.SWIM;
-  if (this.flying) speed = this.sprinting ? this.SPRINT * 2.5 : this.SPRINT;
+  let speed = this.sprinting ? this.SPRINT : this.WALK;
+  if (this.inWater) speed = this.SWIM;
 
   // 수평 속도: 목표 속도로 부드럽게 수렴 (지상은 빠르게, 공중은 느리게 = 관성)
-  const rate = this.flying ? 10 : (this.onGround ? 14 : (this.inWater ? 6 : 2.2));
+  const rate = this.onGround ? 14 : (this.inWater ? 6 : 2.2);
   const f = 1 - Math.exp(-rate * dt);
   this.vel.x += (wishX * speed - this.vel.x) * f;
   this.vel.z += (wishZ * speed - this.vel.z) * f;
 
   // 수직
-  if (this.flying) {
-    let vy = 0;
-    if (k['Space']) vy += speed;
-    if (k['ControlLeft'] || k['KeyC']) vy -= speed;
-    this.vel.y += (vy - this.vel.y) * (1 - Math.exp(-10 * dt));
-  } else if (this.inWater) {
+  if (this.inWater) {
     // 물속: 중력을 부력이 상당 부분 상쇄 -> 천천히 가라앉고, Space로 헤엄쳐 오름
     this.vel.y -= (this.GRAVITY - this.BUOYANCY) * dt;
     if (k['Space']) this.vel.y += this.BUOYANCY * 2.2 * dt;
@@ -207,25 +193,23 @@ FPPlayer.update = function (dt, t) {
   this.pos.x = Math.max(-limX, Math.min(limX, this.pos.x));
   this.pos.z = Math.max(-limZ, Math.min(limZ, this.pos.z));
 
-  if (!this.flying) {
-    this.resolveCollisions(this.pos.y);
-    // 충돌 밀어내기가 세계 끝 밖으로 내보내면 다음 프레임 위의 경계 처리가 한 번에 끌어당겨서
-    // 위치가 '툭' 되돌아갔다(도로 끝에서 차에 밀릴 때 실제로 생김). 밀어낸 직후에도 경계를 지킨다.
-    this.pos.x = Math.max(-limX, Math.min(limX, this.pos.x));
-    this.pos.z = Math.max(-limZ, Math.min(limZ, this.pos.z));
-  }
+  this.resolveCollisions(this.pos.y);
+  // 충돌 밀어내기가 세계 끝 밖으로 내보내면 다음 프레임 위의 경계 처리가 한 번에 끌어당겨서
+  // 위치가 '툭' 되돌아갔다(도로 끝에서 차에 밀릴 때 실제로 생김). 밀어낸 직후에도 경계를 지킨다.
+  this.pos.x = Math.max(-limX, Math.min(limX, this.pos.x));
+  this.pos.z = Math.max(-limZ, Math.min(limZ, this.pos.z));
 
   // 지형 추종: 새 위치의 바닥 높이를 재서, 오를 수 있는 턱이면 따라 올라가고
   // 못 오르는 절벽이면 이동 자체를 되돌린다
   const ground = this.groundHeightAt(this.pos.x, this.pos.z, this.pos.y);
-  if (!this.flying && this.onGround && ground > this.pos.y + this.STEP_H) {
+  if (this.onGround && ground > this.pos.y + this.STEP_H) {
     this.pos.x = prevX; this.pos.z = prevZ;     // 너무 높은 벽 - 못 올라감
     this.vel.x = 0; this.vel.z = 0;
   }
 
   this.pos.y += this.vel.y * dt;
   const g2 = this.groundHeightAt(this.pos.x, this.pos.z, this.pos.y);
-  if (!this.flying && this.pos.y <= g2) {
+  if (this.pos.y <= g2) {
     this.pos.y = g2;
     if (this.vel.y < 0) this.vel.y = 0;
     this.onGround = true;
@@ -237,7 +221,7 @@ FPPlayer.update = function (dt, t) {
   if (this.pos.y < -0.6) this.respawn();
 
   // ── 카메라 ───────────────────────────────────────────────────────────────
-  const eyeH = this.crouching ? this.CROUCH_EYE_H : this.EYE_H;
+  const eyeH = this.EYE_H;
 
   // 헤드밥: 실제 이동 속도에 비례해서 위아래+좌우로 흔들림 (걷는 느낌의 핵심)
   const hSpeed = Math.hypot(this.vel.x, this.vel.z);
@@ -273,23 +257,8 @@ FPPlayer.update = function (dt, t) {
   const right = new THREE.Vector3(-Math.cos(this.yaw), 0, Math.sin(this.yaw));
   const eye = new THREE.Vector3(this.pos.x, eyeY, this.pos.z).addScaledVector(right, this.bobX);
 
-  if (this.thirdPerson) {
-    // 3인칭: 시선 반대쪽으로 물러선다. 지형을 뚫지 않도록 바닥 위로 살짝 띄움
-    const back = 0.11;
-    const camPos = eye.clone().addScaledVector(dir, -back);
-    const camGround = this.terrainHeightAt(camPos.x, camPos.z);
-    camPos.y = Math.max(camPos.y, camGround + 0.012);
-    this.camera.position.copy(camPos);
-    this.camera.lookAt(eye.clone().addScaledVector(dir, 0.3));
-    this.avatar.visible = true;
-    this.avatar.position.set(this.pos.x, this.pos.y, this.pos.z);
-    this.avatar.rotation.y = this.yaw + Math.PI;
-    this.avatar.scale.setScalar(this.crouching ? 0.62 : 1);
-  } else {
-    this.camera.position.copy(eye);
-    this.camera.lookAt(eye.clone().add(dir));
-    this.avatar.visible = false;
-  }
+  this.camera.position.copy(eye);
+  this.camera.lookAt(eye.clone().add(dir));
 };
 
 // 현재 서 있는 구역 이름 (HUD용)
@@ -300,23 +269,6 @@ FPPlayer.currentZone = function () {
   if (x > half) return '도시';
   return '습지·숲';
 };
-
-// ── 간단한 저폴리 아바타 (3인칭에서만 보임) ──────────────────────────────────
-function buildAvatar() {
-  const g = new THREE.Group();
-  const skin = new THREE.MeshStandardMaterial({ color: 0xe8b58c, roughness: 0.8 });
-  const cloth = new THREE.MeshStandardMaterial({ color: 0x3f6fa8, roughness: 0.85 });
-  const E = FPPlayer.EYE_H;
-  const body = new THREE.Mesh(new THREE.BoxGeometry(E * 0.34, E * 0.46, E * 0.2), cloth);
-  body.position.y = E * 0.52;
-  const head = new THREE.Mesh(new THREE.BoxGeometry(E * 0.26, E * 0.26, E * 0.26), skin);
-  head.position.y = E * 0.9;
-  const legL = new THREE.Mesh(new THREE.BoxGeometry(E * 0.14, E * 0.3, E * 0.16), cloth);
-  legL.position.set(-E * 0.09, E * 0.15, 0);
-  const legR = legL.clone(); legR.position.x = E * 0.09;
-  [body, head, legL, legR].forEach(m => { m.castShadow = true; g.add(m); });
-  return g;
-}
 
 // ── 입력 바인딩 ─────────────────────────────────────────────────────────────
 function bindInput(P, canvas) {
@@ -379,16 +331,14 @@ function bindInput(P, canvas) {
     if (e.code === 'KeyF') { if (!e.repeat) P.toggleField(); e.preventDefault(); return; }
     if (P.settingsOpen) return;                // 설정창·야장이 열려 있으면 게임 조작 차단
     P.keys[e.code] = true;
-    if (e.code === 'F5' || e.code === 'KeyV') { P.thirdPerson = !P.thirdPerson; e.preventDefault(); }
-    if (e.code === 'KeyG') P.flying = !P.flying;    // F는 야장이 가져갔다
     if (e.code === 'KeyM' && !e.repeat) FPMinimap.toggle();
     if (e.code === 'KeyR') P.respawn();
     if (e.code === 'KeyH') document.getElementById('helpPanel').classList.toggle('hidden');
     if (e.code === 'Space') e.preventDefault();   // 스페이스로 페이지가 스크롤되는 것 방지
-    // 숫자키 1~9로 단축바 선택
+    // 숫자키 1~4로 단축바 선택 (칸 수는 fp-tools.js HOTBAR_N)
     if (e.code.startsWith('Digit')) {
       const n = Number(e.code.slice(5));
-      if (n >= 1 && n <= 9) FPTools.select(n - 1);
+      if (n >= 1 && n <= HOTBAR_N) FPTools.select(n - 1);
     }
   });
   window.addEventListener('keyup', e => { P.keys[e.code] = false; });

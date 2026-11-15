@@ -28,7 +28,6 @@ const FPScenario = (() => {
   const S = {
     preset: PRESETS[q.get('scenario')] && (q.get('scenario') !== 'custom' || levers) ? q.get('scenario') : 'ssp245',
     year: Math.max(1750, Math.min(2200, Math.round(Number(q.get('year')) || EarthSystem.LAST_HIST_YEAR))),
-    teacher: false,   // 교사용 농도 직접 넣기를 쓰는 중
     PRESETS,
   };
   const runs = {};
@@ -59,17 +58,11 @@ function fit() {
 window.addEventListener('resize', fit);
 fit();
 
-// ── CO2 슬라이더: 걸어다니면서 하늘이 흐려지는 걸 실시간으로 보게 하는 게 목적 ──
-const co2Slider = document.getElementById('co2Slider');
-const co2Out = document.getElementById('co2Out');
+// ── HUD 요소 ──
+// 4차 B4(마스터 D5): 교사용 CO₂ 직접 입력(#co2Slider)을 뺐다. CO₂는 늘 배출 경로·연도의 결과다.
 const hudCars = document.getElementById('hudCars');
 const hudSea = document.getElementById('hudSea');
 const hudCoral = document.getElementById('hudCoral');
-co2Slider.addEventListener('input', () => {
-  co2Out.textContent = co2Slider.value;
-  FPScenario.teacher = true;   // 직접 넣으면 배출 경로·연도와 연결이 끊긴다 (HUD '교사 입력')
-  applyWorldCO2(Number(co2Slider.value));
-});
 // 배출 경로·연도 → 전 지구 CO₂ (3차 E4)
 const fpScenario = document.getElementById('fpScenario');
 const fpYear = document.getElementById('fpYear');
@@ -77,13 +70,11 @@ const fpYearOut = document.getElementById('fpYearOut');
 const fpGlobalCo2 = document.getElementById('fpGlobalCo2');
 if (FPScenario.preset === 'custom') fpScenario.querySelector('[value="custom"]').hidden = false;
 function applyScenarioYear() {
-  FPScenario.teacher = false;
   const ppm = FPScenario.ppm();
   fpScenario.value = FPScenario.preset;
   fpYear.value = FPScenario.year;
   fpYearOut.textContent = FPScenario.year;
   fpGlobalCo2.textContent = ppm.toFixed(0);
-  co2Slider.value = Math.round(ppm); co2Out.textContent = Math.round(ppm);
   applyWorldCO2(ppm);
 }
 fpScenario.addEventListener('change', () => { FPScenario.preset = fpScenario.value; applyScenarioYear(); });
@@ -183,14 +174,11 @@ function animate() {
     hudPos.textContent =
       `X ${(FPPlayer.pos.x * 50).toFixed(0)}m · Z ${(FPPlayer.pos.z * 50).toFixed(0)}m · 고도 ${((FPPlayer.pos.y - FPWorld.OCEAN_BASE) * 50).toFixed(1)}m`;
     const mode = [];
-    if (FPPlayer.flying) mode.push('비행');
-    if (FPPlayer.thirdPerson) mode.push('3인칭');
     if (FPPlayer.inWater) mode.push('수영');
-    else if (FPPlayer.crouching) mode.push('앉기');
     else if (FPPlayer.sprinting) mode.push('달리기');
     hudMode.textContent = mode.length ? mode.join(' · ') : '걷기';
     // 전 지구 = 조감과 같은 모형의 그 해 값 / 이 지점 = 구역 대기(도시 돔·광합성·해양 흡수가 더해진 1인칭 고유의 차이)
-    hudCo2.textContent = `CO₂ 전 지구 평균 ${FPWorld.co2.toFixed(0)} ppm (${FPScenario.teacher ? '교사 입력' : '조감과 같은 모형 · ' + FPScenario.label()})`
+    hudCo2.textContent = `CO₂ 전 지구 평균 ${FPWorld.co2.toFixed(0)} ppm (조감과 같은 모형 · ${FPScenario.label()})`
       + ` · 이 지점 공기 ${FPAir.zoneCO2(zoneKeyAt()).toFixed(0)} ppm`;
     const gas = FPWorld.gasCarCount, ev = FPWorld.cars.length - gas;
     hudCars.textContent = `내연 ${gas} · 전기 ${ev}`;
