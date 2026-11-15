@@ -27,13 +27,13 @@ const FPScenario = (() => {
   try { levers = q.get('levers') ? JSON.parse(q.get('levers')) : null; } catch (e) { levers = null; }
   const S = {
     preset: PRESETS[q.get('scenario')] && (q.get('scenario') !== 'custom' || levers) ? q.get('scenario') : 'ssp245',
-    year: Math.max(1750, Math.min(2200, Math.round(Number(q.get('year')) || EarthSystem.LAST_HIST_YEAR))),
+    year: Math.max(FPModel.YEAR_MIN, Math.min(FPModel.YEAR_MAX, Math.round(Number(q.get('year')) || EarthSystem.LAST_HIST_YEAR))),
     PRESETS,
   };
-  const runs = {};
-  const run = p => runs[p] || (runs[p] = EarthSystem.run({ fromYear: 1750, toYear: 2200,
-    emissionsFn: p === 'custom' ? EarthSystem.leverEmissions(levers) : EarthSystem.presetEmissions(p) }));
-  S.ppm = () => run(S.preset)[S.year - 1750].ppm;
+  // 4차 C1: 엔진 궤적·그해 표본은 FPModel(fp-model.js)에서만 낸다 — 조감과 같은 해 같은 값을 node(test_fp_model)로 검사하려고.
+  // 경로별 캐시도 FPModel 이 갖는다.
+  S.sample = () => FPModel.sample(S.year, FPModel.pathRun(S.preset, levers));
+  S.ppm = () => S.sample().ppm;
   S.label = () => (S.year <= EarthSystem.LAST_HIST_YEAR ? `${S.year}년 (실제 배출)` : `${PRESETS[S.preset]} ${S.year}년`);
   return S;
 })();

@@ -124,7 +124,9 @@ AERIAL_JS = ["js/earth-model.js", "js/earth-data.js", "js/sources.js", "js/theme
 # 4차 A3: 직접 실험 스크립트 5개(live-fit·tab-live·live-analysis·live-setup·live-file)를 뺐다.
 # xlsx-lite.js 는 남긴다 — downloadBlob 을 tab-future.js·inquiry.js·worksheet.js 가 쓴다(마스터 §6-2).
 # 4차 B2: fp-weather.js·fp-audio.js 를 뺐다(날씨·환경음 삭제, 마스터 D4).
-FP_JS = ["js/earth-model.js", "js/earth-data.js", "js/earth-system.js", "firstperson/fp-world.js",
+# 4차 C1: earth-visual(조감과 같은 시각 언어 식)·fp-model(1인칭 값 계산)을 fp-world 앞에 넣었다.
+FP_JS = ["js/earth-model.js", "js/earth-data.js", "js/earth-system.js", "js/earth-visual.js",
+         "firstperson/fp-model.js", "firstperson/fp-world.js",
          "firstperson/fp-minimap.js", "firstperson/fp-field.js",
          "firstperson/fp-tools.js", "firstperson/fp-player.js", "firstperson/fp-main.js"]
 
