@@ -492,8 +492,7 @@ $('futCharts').addEventListener('click', e => {
 // 프로그램 전체의 공통 측정 요소 4개. 열 이름(co2_ppm, air_temp, water_temp, ph)은
 // 1인칭 야장도 나중에 이 이름으로 맞출 예정이라 그대로 쓴다. 값은 모두 연평균.
 // 기온은 엔진이 편차(T)만 내므로 산업화 이전 전 지구 평균 지표 기온 AIR_T0에 더한다.
-// AIR_T0 = 14 °C는 대략치다 (NOAA가 밝힌 20세기 전 지구 평균 13.9 °C를 반올림한 값 - 원문 미확인, 등록부 model_air_temp).
-const AIR_T0 = 14.0;
+// AIR_T0(14 °C, 등록부 model_air_temp)는 4차 C2에서 js/earth-model.js 로 옮겼다 — 1인칭 대기 온도계와 같은 기준을 쓰려고.
 const MEAS = [
   { key: 'co2_ppm', digits: 1 }, { key: 'air_temp', digits: 2 }, { key: 'water_temp', digits: 2 }, { key: 'ph', digits: 3 },
 ];

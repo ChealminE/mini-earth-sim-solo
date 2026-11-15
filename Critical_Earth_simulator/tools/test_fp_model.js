@@ -117,12 +117,76 @@ for (const p of PATHS) {
     `pH ${s.pH.toFixed(4)} Ω ${s.omega.toFixed(3)}`);
 }
 
+// ── C2 기온 · 해수온 (§6-5 · §6-6) ─────────────────────────────────────────
+{
+  const AIR_T0 = vm.runInContext('AIR_T0', ctx);
+  const r = FM.pathRun('ssp245'), s20 = FM.sample(2020, r), s1750 = FM.sample(1750, r), s2100 = FM.sample(2100, r);
+  check('AIR_T0 = 14 °C (earth-model.js, 값 불변 — 조감 기록 표와 같은 기준)', AIR_T0 === 14);
+  check('tab-future.js 는 AIR_T0 를 다시 선언하지 않는다 (단일 HTML 중복 선언 방지)', !/const AIR_T0\b/.test(read('js/tab-future.js')));
+  check('육지 증폭 = 1.59/1.09 ≈ 1.46 (AR6 SPM A.1.2)', Math.abs(FM.K.LAND_AMP - 1.46) < 0.01, FM.K.LAND_AMP.toFixed(4));
+  check('해양 증폭 = 0.88/1.09 ≈ 0.81', Math.abs(FM.K.OCEAN_AMP - 0.81) < 0.01, FM.K.OCEAN_AMP.toFixed(4));
+  let ampG = true, ampO = true, sstOk = true;
+  for (const p of PATHS) for (const y of [1850, 1950, 2023, 2050, 2100, 2200]) {
+    const s = FM.sample(y, FM.pathRun(p));
+    if (Math.abs((FM.airTemp('green', s) - AIR_T0) / s.T - 1.46) > 0.01) ampG = false;
+    if (Math.abs((FM.airTemp('ocean', s) - AIR_T0) / s.T - 0.81) > 0.01) ampO = false;
+    if (FM.seaTemp(0, s) !== s.sst) sstOk = false;
+  }
+  check('녹지 대기 편차 ÷ T = 1.46 ± 0.01 (세 경로 × 6개 연도)', ampG);
+  check('해양 대기 편차 ÷ T = 0.81 ± 0.01', ampO);
+  check('개방 해역 수온 = 엔진 o.sst (차이 0, 조감 water_temp 와 같은 값)', sstOk);
+  // 1750년 엔진 T는 0에 아주 가깝지만 정확히 0은 아니다(첫해 배출 적분) → ±0.01
+  check('1750년: 세 구역 대기 ≈ AIR_T0 (T ≈ 0, 도시 없음)', ['green', 'ocean', 'city'].every(z => Math.abs(FM.airTemp(z, s1750) - AIR_T0) < 0.1)
+    && ['green', 'ocean'].every(z => Math.abs(FM.airTemp(z, s1750) - AIR_T0) < 0.01), `T ${s1750.T.toExponential(2)}`);
+  const uhi = s => FM.airTemp('city', s) - FM.airTemp('green', s);
+  check('도심 − 녹지: 2020년 2.0 ± 0.01 °C (fp_uhi)', Math.abs(uhi(s20) - 2) < 0.01, uhi(s20).toFixed(4));
+  check('도심 − 녹지: 1750년 < 0.1 °C', uhi(s1750) < 0.1, uhi(s1750).toFixed(4));
+  check('도심 − 녹지: 2020년 열섬은 세 경로가 같다 (역사 구간)', PATHS.every(p => uhi(FM.sample(2020, FM.pathRun(p))) === uhi(s20)));
+  check('열섬은 도시 규모를 따라 줄지 않는다 (1.5 °C 경로 2100 ≥ 2020)', uhi(FM.sample(2100, FM.pathRun('ssp119'))) >= uhi(s20),
+    `ssp119 2100 ${uhi(FM.sample(2100, FM.pathRun('ssp119'))).toFixed(2)} · ssp245 2100 ${uhi(s2100).toFixed(2)}`);
+  let coldOk = true, iceOk = true;
+  for (const p of PATHS) for (const o of FM.pathRun(p)) {
+    for (const prox of [0, 0.5, 1]) if (FM.seaTemp(prox, o) < -1.9) coldOk = false;
+    if (FM.iceSurfaceTemp(o) > 0) iceOk = false;
+  }
+  // 엔진 궤적만으로는 상한에 안 닿으므로 큰 T 를 직접 넣어 상한·하한도 본다
+  const hot = { T: 20, sst: 38 }, cold = { T: 0, sst: 5 };
+  check('냉수대 수온 ≥ −1.9 °C (세 경로 전 구간 + 차가운 바다)', coldOk && FM.seaTemp(1, cold) === -1.9);
+  check('빙하 표면 ≤ 0 °C (세 경로 전 구간 + T 20 °C)', iceOk && FM.iceSurfaceTemp(hot) === 0);
+  check('냉수대: 유빙 바로 옆 = sst − 12', Math.abs(FM.seaTemp(1, s20) - (s20.sst - 12)) < 1e-12);
+  let jMax = 0;
+  for (let x = -3; x <= 3; x += 0.013) for (let z = -1.5; z <= 1.5; z += 0.017) jMax = Math.max(jMax, Math.abs(FM.tempJitter(x, z)));
+  check('지점 흔들림 |j| ≤ 0.3 °C (열섬 2 °C보다 충분히 작게, fp_jitter)', jMax <= 0.3 + 1e-12, `최대 ${jMax.toFixed(3)}`);
+  check('알 수 없는 구역은 오류', (() => { try { FM.airTemp('beach', s20); return false; } catch (e) { return true; } })());
+}
+{
+  // 옛 회귀식·여름 정오 기준·지면 3종이 1인칭에 남아 있지 않은가 (주석은 빼고 코드만)
+  const code = f => read(f).replace(/\/\/.*$/gm, '').replace(/<!--[\s\S]*?-->/g, '');
+  const fp = ['firstperson/fp-world.js', 'firstperson/fp-tools.js', 'firstperson/fp-field.js', 'firstperson/fp-main.js'];
+  check('warmingSince280·climateAnomaly 삭제 (earth-model.js·1인칭 어디서도 안 씀)',
+    !/warmingSince280|climateAnomaly/.test(code('js/earth-model.js')) && fp.every(f => !/warmingSince280|climateAnomaly/.test(code(f))));
+  check('계절 표·일교차 곡선 삭제 (SEASONS·seasonDef·diurnal)', fp.every(f => !/\bSEASONS\b|seasonDef|seasonEnv|diurnal|DIURNAL_AT_NOON/.test(code(f))));
+  const tools = code('firstperson/fp-tools.js');
+  check('온도계 지점에 지면 3종 없음 (해변 모래·녹지 지면·도시 지면, D9)', !/beach\s*:|'beach'|녹지 지면|도시 지면|해변 모래/.test(tools)
+    && !/녹지 지면|도시 지면|해변 모래/.test(code('firstperson/fp-field.js')) && !/녹지 지면|도시 지면|해변 모래/.test(code('firstperson/index.html')));
+  check('도움말 온도계 문단에 "연평균"', /<b>1 온도계<\/b>[\s\S]{0,300}연평균/.test(read('firstperson/index.html')));
+}
+
 // ── 표 (세이브포인트에 붙인다) ───────────────────────────────────────────────
 console.log('\n      경로     연도   CO₂ppm   T°C    sst°C   pH      Ω      화석GtC  누적최대GtC');
 for (const p of PATHS) {
   for (const y of [1750, 2023, 2026, 2100]) {
     const s = FM.sample(y, FM.pathRun(p));
     console.log(`      ${p}  ${y}  ${s.ppm.toFixed(1).padStart(7)}  ${s.T.toFixed(3).padStart(6)}  ${s.sst.toFixed(3)}  ${s.pH.toFixed(4)}  ${s.omega.toFixed(3)}  ${s.fossil.toFixed(2).padStart(7)}  ${s.cumFossilMax.toFixed(1).padStart(7)}`);
+  }
+}
+
+console.log('\n      C2 지점 기온 (°C, 연평균, 흔들림 제외)');
+console.log('      경로     연도   해양대기  녹지대기  도심대기  해수(개방)  해수(냉수대)  빙하표면');
+for (const p of PATHS) {
+  for (const y of [1750, 2023, 2026, 2100]) {
+    const s = FM.sample(y, FM.pathRun(p)), f = v => v.toFixed(2).padStart(8);
+    console.log(`      ${p}  ${y}  ${f(FM.airTemp('ocean', s))}  ${f(FM.airTemp('green', s))}  ${f(FM.airTemp('city', s))}  ${f(FM.seaTemp(0, s))}    ${f(FM.seaTemp(1, s))}    ${f(FM.iceSurfaceTemp(s))}`);
   }
 }
 

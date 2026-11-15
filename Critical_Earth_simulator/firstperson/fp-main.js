@@ -37,7 +37,9 @@ const FPScenario = (() => {
   S.label = () => (S.year <= EarthSystem.LAST_HIST_YEAR ? `${S.year}년 (실제 배출)` : `${PRESETS[S.preset]} ${S.year}년`);
   return S;
 })();
-applyWorldCO2(FPScenario.ppm());
+// 4차 C2: 기온·해수온은 엔진 표본(T·sst)에서 읽으므로 세계에 그해 표본을 같이 넣는다. C5에서 applyWorldState(s) 하나로 합친다.
+FPWorld.sample = FPScenario.sample();
+applyWorldCO2(FPWorld.sample.ppm);
 FPPlayer.init(camera, glCanvas);
 FPTools.init(camera);   // 단축바 + 손에 든 도구 (camera를 씬에 넣는 것도 여기서 처리)
 FPMinimap.init();
@@ -70,7 +72,8 @@ const fpYearOut = document.getElementById('fpYearOut');
 const fpGlobalCo2 = document.getElementById('fpGlobalCo2');
 if (FPScenario.preset === 'custom') fpScenario.querySelector('[value="custom"]').hidden = false;
 function applyScenarioYear() {
-  const ppm = FPScenario.ppm();
+  FPWorld.sample = FPScenario.sample();
+  const ppm = FPWorld.sample.ppm;
   fpScenario.value = FPScenario.preset;
   fpYear.value = FPScenario.year;
   fpYearOut.textContent = FPScenario.year;

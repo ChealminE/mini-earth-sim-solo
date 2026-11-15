@@ -370,7 +370,7 @@ const SOURCES = {
     summary: '산업화 이전 전 지구 평균 기온을 14 °C로 놓고 모형의 기온 편차를 더한 값입니다(기록 표의 air_temp).',
     kind: 'model',
     org: '이 프로그램',
-    dataset: 'air_temp = AIR_T0(14 °C) + T (js/tab-future.js)',
+    dataset: 'air_temp = AIR_T0(14 °C, js/earth-model.js) + T (js/tab-future.js 기록 표 · firstperson/fp-model.js 대기 온도의 기준)',
     version: '-',
     cite: '이 프로그램 js/tab-future.js',
     url: REPO_URL + 'js/tab-future.js',

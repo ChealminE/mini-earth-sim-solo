@@ -68,7 +68,7 @@ CO₂ 배출이 대기·기온·바다(pH·포화도 Ω)를 어떻게 바꾸는�
 
 조감 모드와 1인칭 모드는 **같은 해수 화학(`js/earth-model.js`)을 공유**합니다. 해양 pH는 회귀식이 아니라 탄산 평형식(K₀·K₁·K₂ + 총알칼리도 일정)을 직접 풀어 구합니다(관측 35점 RMSE 0.008). 이 파일을 고치면 **두 모드에 동시에 반영**되므로, 한쪽만 바꿔서 두 화면이 다른 값을 내놓는 일이 없도록 여기서만 수정하세요.
 
-조감 모드의 미래 예측·현재 실태 모형선은 **지구 시스템 엔진(`js/earth-system.js`)**을 씁니다. 배출량(`data/*.csv` → `js/earth-data.js`)을 4상자 탄소순환(대기·표층 바다·심층 바다·토양과 식생)에 넣어 시간에 따라 적분하고, 기온은 2층 에너지 균형(복사강제력 5.35·ln(CO₂/278))으로 계산합니다. NOAA 지구 평균 CO₂(1979~2024)를 RMSE 3.7 ppm으로 재현합니다(검증: `node tools/test_earth_system.js`). 화면의 모든 수치 출처는 `js/sources.js` 등록부에 있고 `docs/데이터출처.md` 로 정리됩니다. 1인칭 모드는 아직 예전 log₂ 기온 회귀(`climateAnomaly`)를 쓰며, 다음 작업에서 엔진과 연동합니다.
+조감 모드의 미래 예측·현재 실태 모형선은 **지구 시스템 엔진(`js/earth-system.js`)**을 씁니다. 배출량(`data/*.csv` → `js/earth-data.js`)을 4상자 탄소순환(대기·표층 바다·심층 바다·토양과 식생)에 넣어 시간에 따라 적분하고, 기온은 2층 에너지 균형(복사강제력 5.35·ln(CO₂/278))으로 계산합니다. NOAA 지구 평균 CO₂(1979~2024)를 RMSE 3.7 ppm으로 재현합니다(검증: `node tools/test_earth_system.js`). 화면의 모든 수치 출처는 `js/sources.js` 등록부에 있고 `docs/데이터출처.md` 로 정리됩니다. 1인칭 모드도 같은 엔진의 그해 값을 씁니다(`firstperson/fp-model.js`, 검증: `node tools/test_fp_model.js`). 지점 기온은 그해 연평균으로, 엔진 기온 편차에 IPCC AR6 육지·해양 증폭(1.46·0.81)을 곱해 냅니다.
 
 - 참조 구현(파이썬): `tools/earth_system_ref/engine.py` — 식을 고칠 때는 여기부터 고치고 대조 테스트로 JS와 맞춥니다
 - 대조 테스트: `node tools/test_earth_system.js` (파이썬+numpy 필요)

@@ -21,90 +21,38 @@ const FPTools = {
 };
 
 // ── 측정 지점 종류 ──────────────────────────────────────────────────────────
-// 온도계는 어디를 겨눠도 값이 나와야 하므로, 크로스헤어가 닿은 것이 무엇인지
-// 8가지로 나눈다. 하늘/허공을 겨누면 그 지점의 '대기'를 잰다.
-// base = 산업화 이전(280ppm)의 온도 [°C]
-// amp  = 전 지구 승온에 대한 그 표면의 증폭계수.
-//        실제 온도 = base + amp × warmingSince280(ppm)
-//        warmingSince280()은 js/earth-model.js에 있는 공유 기후 모델이다. 즉 여기 온도는
-//        조감 모드 '미래 예측' 탭의 기온편차와 같은 곡선을 타고 움직인다.
-//        예전엔 (1000ppm에서 +N도) 식으로 직접 박아 놔서 두 모드가 따로 놀았다.
-// day = 일교차 진폭 [°C]. 하루 중 최저(새벽 5시)와 최고(오후 2시)의 차이가 이 값의 2배다.
-//       base는 '정오' 기준으로 맞춰 두었으므로 정오에는 이 항이 0이 된다.
+// 온도계는 어디를 겨눠도 값이 나와야 하므로, 크로스헤어가 닿은 것을 5가지로 나눈다.
+// 4차 C2(마스터 D9): 지면 3종(해변 모래·녹지 지면·도시 지면)을 뺐다 — 연평균 기준 문헌값이 없다.
+//   땅을 겨눠도 그 구역의 '대기'를 잰다. 하늘·허공을 겨눠도 그 구역 대기다.
+// 값은 전부 '그해 연평균(하루 평균)'이고 fp-model.js(FPModel)에서만 낸다(마스터 D2). 화면이 낮이어도 일교차·계절 항은 없다.
+//   대기  : airTemp(구역) = AIR_T0 + 증폭 × 엔진 T (+ 도심 열섬)   — 증폭은 AR6 육지 1.46 · 해양 0.81
+//   해수  : seaTemp(냉수대 근접도) = 엔진 o.sst (개방 해역) … 유빙 옆 −12 °C
+//   빙하  : iceSurfaceTemp = min(0, −6 + 0.81 T)                  — 융해 잠열로 0 °C 상한
+// 예전 표(base·amp·day: 여름 정오 기준값 + 근거 없는 증폭 1.30/1.00/0.75 + 일교차)는 지웠다.
 const SPOT = {
-  sea:      { base: SEA_BASE_T, amp: SEA_WARM_AMP, day: 0.6, label: '해수' },
-  ice:      { base: -6, amp: SEA_WARM_AMP, day: 1.2, label: '빙하', cap: 0 },
-  beach:    { base: 28, amp: 1.15, day: 7.0, label: '해변 모래' },
-  green:    { base: 24, amp: 1.00, day: 6.5, label: '녹지 지면' },
-  city:     { base: 32, amp: 1.30, day: 4.5, label: '도시 지면' },
-  airOcean: { base: 17, amp: SEA_WARM_AMP, day: 0.6, label: '해양 대기' },
-  airGreen: { base: 22, amp: 0.95, day: 5.0, label: '녹지 대기' },
-  airCity:  { base: 29, amp: 1.20, day: 3.5, label: '도심 대기' },
+  sea:      { label: '해수' },
+  ice:      { label: '빙하' },
+  airOcean: { label: '해양 대기', zone: 'ocean' },
+  airGreen: { label: '녹지 대기', zone: 'green' },
+  airCity:  { label: '도심 대기', zone: 'city' },
 };
-// 일교차 진폭의 근거 - 그리고 이 값들이 '도시 열섬'의 핵심이다.
-//   도시(4.5)가 녹지(6.5)보다 일교차가 작다. 콘크리트·아스팔트가 낮에 받은 열을 품고
-//   있다가 밤에 천천히 내놓고, 증발산으로 식지도 않기 때문이다.
-//   그래서 도시-녹지 기온차(열섬 강도)는 낮보다 밤에 훨씬 커진다:
-//     정오  도시 32.0 - 녹지 24.0 = 8.0°C
-//     새벽  도시 23.6 - 녹지 11.9 = 11.7°C   <- 열섬은 밤에 심하다
-//   정오에 고정된 세계에서는 이 사실을 보여줄 방법이 아예 없었다.
-//   바다(0.6)가 거의 안 변하는 건 물의 열용량이 크기 때문이다.
-//   모래(7.0)가 가장 크게 흔들린다 - 사막의 밤이 추운 이유와 같다.
-// 증폭계수의 근거:
-//  - 바다·빙하 0.75 : 물의 열용량이 커서 육지보다 천천히 데워진다. 실제로도 해양 표층은
-//    전 지구 평균보다 덜 오른다. 해수 온도는 fp-world.js와 상수를 공유해서, 온도계로 잰
-//    값과 산호가 반응하는 값이 반드시 같다.
-//  - 녹지 1.00 : 기준.
-//  - 도시 1.30 : 열섬. 포장면이 낮에 열을 더 받고 증발산으로 식지도 않는다.
-//  - 해변 1.15 : 마른 모래는 아스팔트만큼은 아니어도 풀밭보다 훨씬 잘 달궈진다.
-//  - 대기는 그 아래 지면보다 조금 낮다. 낮에 데워지는 건 지면이고 공기는 전달받는 쪽이라서.
-//    바다 위 대기만 해수와 같은 계수인데, 물이 대기 온도를 붙잡기 때문이다.
-//
-// 빙하의 cap: 얼음 표면은 녹는점 위로 못 올라간다. 들어온 열을 녹는 데 다 쓰기 때문
-// (융해 잠열). CO2가 아무리 높아도 0°C에서 멈추게 상한을 걸었다.
+// 구역 → 대기 지점 이름 (땅·허공을 겨눴을 때)
+const AIR_SPOT = { ocean: 'airOcean', green: 'airGreen', city: 'airCity' };
 
 // 4차 B4(마스터 D8): 동물·어류 체온 측정을 뺐다. 동물·어류는 풍경으로 남고, 광선은 그들을 지나쳐
 // 뒤의 땅·물·대기를 잰다(측정 대상 목록에서 뺐다).
-const AIR_MIX_H = 0.06;        // 지면에서 이 높이(실척 3m) 안쪽은 지면 열의 영향을 받는다
 const AIR_SAMPLE_DIST = 0.3;   // 허공을 겨눴을 때 대기를 뜨는 거리 (실척 15m)
-// 대기 -> 그 아래 지면의 대응 관계 (지면 열 섞임 계산용)
-const SPOT_GROUND = { airOcean: 'sea', airGreen: 'green', airCity: 'city' };
 
-// 바다·빙하 계열은 계절 진폭이 훨씬 작다 (물의 열용량)
-const SEA_SPOTS = { sea: 1, ice: 1, airOcean: 1 };
-// SPOT.base 값들은 계절이 없던 시절 '여름 정오' 기준으로 맞춰 둔 값이다.
-// 그래서 여름을 0점으로 삼아 그 차이만 더한다 (여름에는 이 항이 0).
-// 4차 B3에서 계절 선택을 빼 지금은 늘 0이다. C2가 연평균 기준값으로 바꿀 때 이 함수째 정리한다.
-function seasonTempOffset(spot) {
-  const S = seasonDef(), SUM = SEASONS.summer;
-  return SEA_SPOTS[spot] ? (S.seaT - SUM.seaT) : (S.temp - SUM.temp);
-}
-function spotBaseTemp(spot, ppm, hour) {
-  const S = SPOT[spot];
-  const h = hour == null ? FPWorld.hour : hour;
-  // (diurnal(h) - 정오값)이라 정오에는 일교차 항이 0이 된다.
-  // 4차 B2: 날씨 보정(일교차 계수·기온 오프셋)을 뺐다. 맑음일 때 계수 1·오프셋 0이었으므로 값은 그대로다.
-  return S.base + S.amp * warmingSince280(ppm)
-       + S.day * (diurnal(h) - DIURNAL_AT_NOON)
-       + seasonTempOffset(spot);
-}
-function measureTemperature(spot, x, z, ppm, aboveGround) {
-  const S = SPOT[spot];
+// s = 지금 연도·경로의 엔진 표본(fp-world.js fpSample). 4차 C2에서 ppm 인자 대신 받는다 —
+// 기온은 그해 엔진 상태(T·sst)가 정하지 그 자리 CO₂ 농도가 정하지 않는다.
+function measureTemperature(spot, x, z, s) {
   // 해수는 fp-world.js의 seaTempAt() 하나만 쓴다. 해수 분석기·pH미터·산호가 읽는 수온과
-  // 반드시 같아야 하므로 여기서는 지점 흔들림·일교차 보정을 얹지 않는다.
-  // (바다는 열용량이 커서 원래 일교차가 0.6°C뿐이었고, 지점 간 차이는 이제 냉수대가 만든다.)
-  if (spot === 'sea') return seaTempAt(x, z, ppm);
-  // 같은 구역 안에서도 지점마다 조금씩 다르게 (측정하는 맛)
-  const jitter = Math.sin(x * 37.1 + z * 21.7) * 0.5 + Math.sin(x * 11.3 - z * 53.9) * 0.35;
-  let v = spotBaseTemp(spot, ppm) + jitter;
-  // 대기를 잴 때 지면 바로 위면 지면 온도 쪽으로 끌어당긴다.
-  // 뜨거운 아스팔트 바로 위 공기가 뜨거운 건 실제로 그렇고, 위로 갈수록 옅어진다.
-  if (aboveGround != null && SPOT_GROUND[spot]) {
-    const w = 1 - Math.min(1, Math.max(0, aboveGround) / AIR_MIX_H);
-    v += (spotBaseTemp(SPOT_GROUND[spot], ppm) - spotBaseTemp(spot, ppm)) * w * 0.6;
-  }
-  if (S.cap != null) v = Math.min(S.cap, v);
-  return v;
+  // 반드시 같아야 하므로 여기서는 지점 흔들림을 얹지 않는다(지점 간 차이는 냉수대가 만든다).
+  if (spot === 'sea') return seaTempAt(x, z);
+  // 같은 구역 안에서도 지점마다 조금씩 다르게 (측정하는 맛, ±0.3 °C — 등록부 fp_jitter, 연출)
+  const jitter = FPModel.tempJitter(x, z);
+  if (spot === 'ice') return Math.min(FPModel.K.ICE_CAP, FPModel.iceSurfaceTemp(s) + jitter);
+  return FPModel.airTemp(SPOT[spot].zone, s) + jitter;
 }
 
 // 해양 pH: 예전엔 슬라이더 CO2 하나만 넣어서 바다 어디서 재도 같은 값이었다.
@@ -179,7 +127,8 @@ FPAir.update = function (dt) {
 };
 // 구역 대기 CO2 [ppm] = 배경 + 그 구역의 몫
 FPAir.zoneCO2 = function (zone, ppm) {
-  return (ppm == null ? FPWorld.co2 : ppm) + seasonDef().co2 + (this.D[zone] != null ? this.D[zone] : this.D.green);
+  // 4차 C2: 계절 진동(여름 −1 ppm)을 뺐다 — 값은 연평균. 구역 식은 C3에서 FPModel.zoneCO2 로 바뀐다.
+  return (ppm == null ? FPWorld.co2 : ppm) + (this.D[zone] != null ? this.D[zone] : this.D.green);
 };
 
 // 어떤 지점이 나무 수관에 얼마나 가까운지 (0=밖, 1=줄기 바로 옆)
@@ -192,9 +141,7 @@ function measureCO2(ppm, x, z, zone, px, pz) {
   const k = FPWorld.co2k;
   // 4차 B3: 낮 고정이라 햇빛 세기 1. 아래 밤 호흡 항(resp)은 0이 되고, 식 정리는 C3에서 한다.
   const lit = 1;
-  // 구역 대기 = 배경 + 그 구역 상태(FPAir, 정오 정상 상태값).
-  // 배경의 계절 진동(킬링 곡선): 북반구 식생이 봄에 CO2를 뱉고 여름내 빨아들여 가을에 최저가 된다.
-  // 슬라이더 값은 연평균이고, 실제로 재는 값은 이만큼 계절을 탄다.
+  // 구역 대기 = 배경 + 그 구역 상태(FPAir, 정오 정상 상태값). 배경은 연평균(4차 C2에서 계절 진동을 뺐다).
   let v = FPAir.zoneCO2(zone, ppm);
 
   // 나무 그늘 아래는 낮에 특히 낮다. 잎이 바로 위에서 CO2를 빨아들이는 자리라
@@ -248,15 +195,10 @@ function pickTarget() {
     p.x = Math.max(-hw, Math.min(hw, p.x));
     p.z = Math.max(-hd, Math.min(hd, p.z));
     const zone = p.x < -half ? 'ocean' : (p.x > half ? 'city' : 'green');
-    // 대기가 열을 주고받는 상대는 바로 아래 '표면'이다. 바다 위에서는 해저가 아니라
-    // 수면이 그 상대이므로 구역에 따라 기준면을 다르게 잡는다.
-    const surf = zone === 'ocean'
-      ? FPPlayer.waterHeightAt(p.x, p.z, performance.now() / 1000)
-      : FPPlayer.terrainHeightAt(p.x, p.z);   // 맵 밖이면 -1 = 자유 대기
+    // 4차 C2: 지면 온도를 뺐으므로 '지면 바로 위 공기는 지면 쪽으로 끌린다'는 보정(aboveGround)도 없다.
     return {
       point: p, zone, isWater: false, isAir: true, dist: AIR_SAMPLE_DIST,
-      spot: zone === 'ocean' ? 'airOcean' : (zone === 'city' ? 'airCity' : 'airGreen'),
-      aboveGround: surf < 0 ? 1 : p.y - surf,
+      spot: AIR_SPOT[zone],
     };
   }
 
@@ -267,15 +209,14 @@ function pickTarget() {
   let spot;
   if (FPWorld.iceMeshes.includes(h.object)) spot = 'ice';
   else if (isWater) spot = 'sea';
-  else if (zone === 'city') spot = 'city';
-  else if (zone === 'green') spot = 'green';
+  else if (zone !== 'ocean') spot = AIR_SPOT[zone];   // 4차 C2(D9): 녹지·도심 땅을 겨눠도 그 구역 대기
   else {
-    // 해양 구역의 단단한 바닥(해변 경사로·해저 모래). 수면 위로 나와 있으면 해변 모래,
+    // 해양 구역의 단단한 바닥(해변 경사로·해저 모래). 수면 위로 나와 있으면 해양 대기(예전 '해변 모래'),
     // 수면 아래면 그 위를 덮고 있는 해수를 잰 것으로 본다.
     const waterY = FPPlayer.waterHeightAt(p.x, p.z, performance.now() / 1000);
-    spot = p.y > waterY ? 'beach' : 'sea';
+    spot = p.y > waterY ? 'airOcean' : 'sea';
   }
-  return { point: p, zone, isWater, isAir: false, spot, dist: h.distance, aboveGround: 0 };
+  return { point: p, zone, isWater, isAir: false, spot, dist: h.distance };
 }
 
 // ── 계측기 사양 ─────────────────────────────────────────────────────────────
@@ -651,7 +592,7 @@ FPTools.use = function () {
     const label = hit.zone === 'city' ? '도심' : (hit.zone === 'green' ? '녹지' : '해양');
     this.beginReading(tool, v, `ppm · ${label}`, '#f0b45c');
   } else if (tool.kind === 'temp') {
-    const v = measureTemperature(hit.spot, hit.point.x, hit.point.z, ppm, hit.aboveGround);
+    const v = measureTemperature(hit.spot, hit.point.x, hit.point.z, fpSample());
     this.beginReading(tool, v, `°C · ${SPOT[hit.spot].label}`, '#ff8f6b');
   } else if (tool.kind === 'ph') {
     // pH는 바다에서만. 해양 구역이면서 수면 아래인 지점만 유효.

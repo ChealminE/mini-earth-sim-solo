@@ -392,7 +392,7 @@ function buildFirstPersonWorld(renderer) {
     ramp.castShadow = true;
     world.add(ramp);
     FPWorld.walkables.push(ramp);
-    FPWorld.beachRamp = ramp;   // 온도계가 '해변 모래'를 따로 집어낼 수 있게
+    FPWorld.beachRamp = ramp;   // 해변 경사로 (4차 C2부터 온도계는 여기서 해양 대기를 잰다 — 지면 온도 삭제)
   }
 
   // ── 해양: 수면 + 물 몸통 ────────────────────────────────────────────────
@@ -1352,70 +1352,32 @@ function buildFirstPersonWorld(renderer) {
 
 // ── 시각 ────────────────────────────────────────────────────────────────────
 // 4차 B3(마스터 D2): 낮 고정. 시각 슬라이더·시간 흐름(T)·밤·노을·별을 뺐다.
-// 정오에는 diurnal(h) − DIURNAL_AT_NOON = 0 이라 측정값이 예전 기본(정오 정지)과 같다.
-// 일교차 곡선은 C2가 측정값을 연평균으로 바꿀 때 정리한다 — 그 전까지 1인칭 온도는 '여름 정오' 기준.
+// 4차 C2: 측정값이 '그해 연평균(하루 평균)'이 되면서 일교차 곡선(diurnal)도 지웠다. 화면은 낮이어도 값에는 시각 항이 없다.
+// hour 는 야장 CSV 의 열(fp-field.js)만 쓴다 — 열 정리는 G에서.
 FPWorld.hour = 12;
 
-// 일주 변화 곡선: -1(새벽 5시 최저) ~ +1(오후 2시 최고).
-// 해가 뜬 뒤 지면이 데워지는 데 시간이 걸리기 때문에 최고기온은 정오가 아니라 오후 2시다.
-// 상승 9시간 / 하강 15시간으로 비대칭이라, 반코사인 두 조각을 이어 붙인다.
-const T_MIN_H = 5, T_MAX_H = 14;
-function diurnal(hour) {
-  let h = ((hour % 24) + 24) % 24;
-  if (h >= T_MIN_H && h <= T_MAX_H) {
-    // 새벽 최저 -> 오후 최고 (9시간 동안 상승)
-    return -Math.cos((h - T_MIN_H) / (T_MAX_H - T_MIN_H) * Math.PI);
-  }
-  // 오후 최고 -> 다음날 새벽 최저 (15시간 동안 하강)
-  const t = (h > T_MAX_H ? h - T_MAX_H : h + 24 - T_MAX_H) / (24 - (T_MAX_H - T_MIN_H));
-  return Math.cos(t * Math.PI);
-}
-const DIURNAL_AT_NOON = diurnal(12);   // 정오를 기준점으로 삼아 기존 보정값을 유지한다
-
 // ── 환경 합성 ───────────────────────────────────────────────────────────────
-// 하늘색·안개는 CO2와 계절 표가 함께 정한다(4차 B2에서 날씨를, B3에서 시간을 뺐다).
+// 하늘색·안개 반영은 이 함수 하나가 전담한다(4차 B2에서 날씨를, B3에서 시간을, C2에서 계절을 뺐다).
 // 예전엔 applyWorldCO2()가 하늘색과 안개를 직접 써 놓고 applyTimeOfDay()가 그 위에
-// 덮어쓰는 구조였다. 여기에 계절과 날씨를 더하면 "비가 개면 계절 색이 사라지는" 식으로
-// 마지막에 부른 쪽만 남는 버그가 반드시 난다.
-// 그래서 각 요인은 '자기 몫'만 상태에 적어 두고, 화면 반영은 이 함수 하나가 전담한다.
-//   하늘색 = CO2 기준색 → 계절 색조
-//   안개   = CO2 기준거리 × 계절계수      (곱셈으로 합성, 덮어쓰기 금지)
-//   조명   = 기본세기 (낮 고정)
+// 덮어써서 마지막에 부른 쪽만 남는 버그가 났다 — 요인이 하나만 남았어도 반영 경로는 하나로 둔다.
+//   하늘색 = CO2 기준색 · 안개 = CO2 기준거리 · 조명 = 기본세기 (낮 고정)
 
-// ── 계절 (여름 하나만) ──────────────────────────────────────────────────────
-// 4차 B3(마스터 D2): 계절 선택을 뺐다. SPOT.base 가 '여름 정오' 값으로 맞춰져 있어서
-// 지금 표를 지우면 온도가 흔들린다 → C2가 연평균 기준값으로 바꿀 때까지 'summer' 하나만 남긴다.
-// temp/seaT : 기온·해수 오프셋 [°C] (seasonTempOffset 이 여름을 0점으로 삼아 지금은 늘 0)
-// co2       : CO2 계절 진동 [ppm] (여름 −1, FPAir.zoneCO2 가 더한다)
-// sky/skyW/fogK : 하늘 색조·안개 계수 (여름은 중립값)
-const SEASONS = {
-  summer: { ko: '여름', temp: +8.0, seaT: +2.5, co2: -1, sky: 0xffffff, skyW: 0.00, fogK: 1.00 },
-};
-function seasonDef() { return SEASONS.summer; }
-// applyEnvironment()가 쓰는 이름을 그대로 유지 (하늘색·안개 몫만 꺼내 준다)
-const SEASON_ENV = SEASONS;
-function seasonEnv() { return SEASON_ENV.summer; }
+// 4차 C2: B3에서 남겨 둔 계절 표(SEASONS 'summer' 하나 — 기온 +8·해수 +2.5·CO₂ −1·하늘 색조 0·안개 계수 1)를 지웠다.
+// 측정값이 연평균이 되어 '여름 정오' 기준이 필요 없어졌고, 하늘 색조·안개 계수는 여름이 중립값(0·1)이라 화면은 같다.
 
 const _envColor = new THREE.Color();
-const _envTint = new THREE.Color();
 
 function applyEnvironment() {
   const L = FPWorld.lights;
   if (!L) return;
-  const S = seasonEnv();
 
-  // 1) CO2가 정한 '맑은 낮의 하늘색'에서 출발
+  // CO2가 정한 '맑은 낮의 하늘색'·안개 기준거리 그대로 (계절 색조·계수는 C2에서 지웠다. CO₂ 항은 C5에서 뺀다)
   _envColor.copy(FPWorld.daySky || CLEAR_SKY);
-  // 2) 계절 색조 (여름은 가중치 0 — C2에서 표를 정리할 때 같이 본다)
-  if (S.skyW > 0) _envColor.lerp(_envTint.setHex(S.sky), S.skyW);
   FPWorld.skyMat.color.copy(_envColor);
   FPWorld.scene.fog.color.copy(_envColor);
-
-  // 안개 거리: CO2가 정한 기준거리에 계절 계수를 곱한다
   const fb = FPWorld.fogBase;
-  const k = S.fogK;
-  FPWorld.scene.fog.far = fb.far * k;
-  FPWorld.scene.fog.near = fb.near * k;
+  FPWorld.scene.fog.far = fb.far;
+  FPWorld.scene.fog.near = fb.near;
 
   // 조명: 낮 고정이라 기본 세기 그대로 (예전 한낮 daylight = 1 일 때와 같은 값)
   L.sun.intensity = L.base.sun;
@@ -1457,17 +1419,22 @@ function oceanPH(ppm) {
 // 열 스트레스: 표층 수온이 백화 임계를 넘긴 정도 (0=정상, 1=완전 백화)
 // 산호는 '평년 최고수온 + 1°C'가 몇 주 이어지면 백화한다(NOAA의 Degree Heating Week
 // 개념). 여기서는 그 임계를 산업화 이전 해수온 + 1.0°C로 잡고, +3.5°C에서 전면 백화로 본다.
-// 이 두 값은 fp-tools.js의 온도표(SPOT.sea)가 그대로 가져다 쓴다.
-// 수온을 두 군데서 따로 정의하면 "잰 값"과 "산호가 반응하는 값"이 어긋난다.
-const SEA_BASE_T = 18.0;        // 280ppm에서의 표층 수온 [°C]
-const SEA_WARM_AMP = 0.75;      // 바다는 열용량이 커서 전 지구 승온보다 덜 오른다
+// 수온은 fp-model.js 한 곳(FPModel.seaTemp)에서만 낸다 — "잰 값"과 "산호가 반응하는 값"이 어긋나지 않게.
+// SEA_BASE_T = 엔진 sst0(18 °C, 산업화 이전 표층 수온). 아래 백화 임계에만 남았다 — C4에서 coralHealthy(T)로 바꾸며 지운다.
+const SEA_BASE_T = EarthSystem.PARAMS.sst0;
 // 백화 임계. 실제로는 '그 지역 월최고수온 + 1°C가 몇 주'가 기준인데 이 모형엔 계절이
 // 없으므로, 산업화 이전 수온 대비 +1.5°C에서 시작해 +4.0°C에서 전면 백화로 잡았다.
 //   418ppm -> 14% (요즘 실제로 관측되는 정도) / 600ppm -> 80% / 667ppm 이상 -> 전면
 const BLEACH_ON = 1.5, BLEACH_FULL = 4.0;
-function seaTemperature(ppm) {
-  // 계절 항(여름을 0점으로 삼은 차이)은 4차 B3에서 계절을 빼며 늘 0이 됐다 — C2가 연평균 기준으로 다시 정한다.
-  return SEA_BASE_T + SEA_WARM_AMP * warmingSince280(ppm);
+// 지금 연도·경로의 엔진 표본(fp-main.js 가 연도·경로를 바꿀 때 FPWorld.sample 에 넣는다).
+// 첫 화면을 그리기 전(buildFirstPersonWorld 중)에 불리면 아직 비어 있으므로 2023년 역사 값으로 대신한다.
+function fpSample() {
+  return FPWorld.sample || FPModel.sample(EarthSystem.LAST_HIST_YEAR, FPModel.pathRun('ssp245'));
+}
+// 개방 해역 수온 = 엔진 o.sst (4차 C2 — 예전 18 + 0.75 × 회귀식 대신. 조감 기록 표 water_temp 와 같은 값)
+// ppm 인자는 받지 않는다: 수온은 그해 엔진 상태가 정하고, 그 자리의 CO₂ 농도가 정하지 않는다.
+function seaTemperature() {
+  return FPModel.seaTemp(0, fpSample());
 }
 
 // ── 빙하 냉수대 ─────────────────────────────────────────────────────────────
@@ -1478,9 +1445,8 @@ function seaTemperature(ppm) {
 //
 // 온도계(해수)·해수 분석기·산호가 전부 이 함수 하나를 읽는다. 셋이 같은 값을 써야
 // "내가 잰 수온"과 "산호가 반응하는 수온"이 어긋나지 않는다.
-const COLD_POOL_DT = 12;      // 유빙 바로 옆에서 개방 해역보다 낮아지는 폭 [°C]
+// 냉수대 폭(12 °C)·어는점(−1.9 °C)은 FPModel.K(COLD_POOL_DT·SEA_FREEZE_T, 등록부 fp_cold_pool)로 옮겼다. 반경은 세계 기하라 여기 둔다.
 const COLD_POOL_R = 0.35;     // 유빙 가장자리에서 냉수대가 사라지는 거리 [유닛] (≈ 17m)
-const SEA_FREEZE_T = -1.9;    // 염분 35 해수의 어는점 [°C] - 이보다 차가워질 수는 없다
 // 0 = 냉수대 밖, 1 = 유빙 바로 옆. 가장 가까운 유빙 하나가 정한다.
 // 거리는 유빙 '중심'이 아니라 '가장자리'에서 잰다 - 유빙마다 크기가 달라서
 // 충돌체 반지름을 그대로 쓴다. 충돌체 좌표는 이미 월드 좌표다.
@@ -1496,9 +1462,8 @@ function iceProximity(x, z) {
   }
   return p;
 }
-function seaTempAt(x, z, ppm) {
-  const base = seaTemperature(ppm);     // CO2·계절 반영 (개방 해역 수온)
-  return Math.max(SEA_FREEZE_T, base - COLD_POOL_DT * iceProximity(x, z));
+function seaTempAt(x, z) {
+  return FPModel.seaTemp(iceProximity(x, z), fpSample());
 }
 
 // ── 해수 pCO2의 동적 평형 ───────────────────────────────────────────────────
@@ -1530,7 +1495,7 @@ function seaPCO2(ppm) {
   return FPWorld.pco2Sea != null ? FPWorld.pco2Sea : ppm;
 }
 function seaStateAt(x, z, ppm) {
-  const temp = seaTempAt(x, z, ppm);
+  const temp = seaTempAt(x, z);
   const pco2 = seaPCO2(ppm);
   const s = seawaterState(pco2, temp);
   s.temp = temp;
@@ -1539,7 +1504,7 @@ function seaStateAt(x, z, ppm) {
 }
 // 개방 해역(냉수대 밖)의 해수 상태 - HUD가 쓰는 '바다 대표값'
 function openSeaState(ppm) {
-  const temp = seaTemperature(ppm), pco2 = seaPCO2(ppm);
+  const temp = seaTemperature(), pco2 = seaPCO2(ppm);
   const s = seawaterState(pco2, temp);
   s.temp = temp;
   s.pco2 = pco2;
@@ -1555,7 +1520,7 @@ function bleachFromTemp(t) {
   return Math.min(1, Math.max(0, excess / (BLEACH_FULL - BLEACH_ON)));
 }
 function coralBleaching(ppm, x, z) {
-  return bleachFromTemp(x == null ? seaTemperature(ppm) : seaTempAt(x, z, ppm));
+  return bleachFromTemp(x == null ? seaTemperature() : seaTempAt(x, z));
 }
 // 석회화 가능성: Ω가 3 아래로 내려가면 성장이 느려지고, 1 밑이면 골격이 녹는다.
 // 어류·수초가 기댈 서식지가 남아 있는지를 이 값이 정한다.
@@ -1573,7 +1538,7 @@ function oceanHealth(ppm) {
 }
 // 가장 차가운 물(유빙 바로 옆)의 Ω - Ω<1 경고는 여기가 먼저 켜진다
 function coldPoolOmega(ppm) {
-  const t = Math.max(SEA_FREEZE_T, seaTemperature(ppm) - COLD_POOL_DT);
+  const t = FPModel.seaTemp(1, fpSample());   // 유빙 바로 옆(prox 1)
   return seawaterState(seaPCO2(ppm), t).omega;
 }
 function applyWorldCO2(ppm) {

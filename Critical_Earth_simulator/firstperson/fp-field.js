@@ -23,7 +23,8 @@ const FPField = {
 };
 
 const SPOT_KO = {
-  sea: '해수', ice: '빙하', beach: '해변 모래', green: '녹지 지면', city: '도시 지면',
+  // 4차 C2(마스터 D9): 지면 3종(해변 모래·녹지 지면·도시 지면)을 뺐다 — 땅을 겨눠도 그 구역 대기를 잰다
+  sea: '해수', ice: '빙하',
   airOcean: '해양 대기', airGreen: '녹지 대기', airCity: '도심 대기',
 };
 const KIND_KO = { temp: '온도', ph: 'pH', co2: 'CO2', sea: '해수분석' };
