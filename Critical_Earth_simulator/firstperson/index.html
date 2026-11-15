@@ -51,7 +51,7 @@
     <tr><td><span class="key">G</span></td><td>비행 모드 켜기/끄기</td></tr>
     <tr><td><span class="key">V</span> 또는 <span class="key">F5</span></td><td>1인칭 / 3인칭 전환</td></tr>
     <tr><td><span class="key">R</span></td><td>출발 지점으로 되돌아가기</td></tr>
-    <tr><td><span class="key">E</span></td><td>설정창 열기/닫기 (밝기·CO₂·시각)</td></tr>
+    <tr><td><span class="key">E</span></td><td>설정창 열기/닫기 (CO₂·시각)</td></tr>
     <tr><td><span class="key">F</span></td><td>야장 열기/닫기 (탐구 과제·측정 기록·통계·횡단 조사·CSV)</td></tr>
     <tr><td><span class="key">T</span></td><td>시간 흐름 켜기/끄기 (낮↔밤)</td></tr>
     <tr><td><span class="key">M</span></td><td>미니맵 크기 (보통 → 크게 → 끄기)</td></tr>
@@ -153,10 +153,6 @@
 <div id="settingsPanel" class="hidden">
   <div class="settings-box">
     <h3>설정 <span class="hint-key">E</span> 로 닫기</h3>
-    <label class="row">
-      <span class="lbl">밝기</span>
-      <input type="range" id="brightnessSlider" min="0.6" max="2.4" step="0.05" value="1.15">
-    </label>
     <!-- 3차 E4: CO₂는 직접 정하지 않는다(배출의 결과 — 3차 마스터 결정 9). 배출 경로와 연도를 고르면 조감 미래 예측과 같은 모형이 계산한다 -->
     <div class="row">
       <span class="lbl">배출 경로</span>
@@ -206,23 +202,6 @@
     <p class="note">계절은 기온(여름 +8 / 겨울 −10°C)·일출일몰·경관을 함께 바꿉니다.
       <b>CO₂도 계절을 탑니다</b> — 북반구 식생 때문에 봄에 높고 가을에 낮습니다(킬링 곡선).
       슬라이더 값은 연평균이고, 센서로 재는 값은 그 위에서 흔들립니다.</p>
-    <div class="row">
-      <span class="lbl">날씨</span>
-      <div class="btn-row wrap" id="weatherBtns">
-        <button data-w="clear">맑음</button><button data-w="rain">비</button
-        ><button data-w="storm">폭풍</button><button data-w="snow">눈</button
-        ><button data-w="squall">스콜</button><button data-w="fog">안개</button>
-      </div>
-    </div>
-    <label class="row check">
-      <input type="checkbox" id="weatherRandomChk"><span class="lbl">무작위 날씨 (5분마다 바뀜)</span>
-    </label>
-    <p class="note">날씨는 <b>측정값도 바꿉니다.</b> 비는 지면을 2.5°C 낮추고,
-      <b>안개는 일교차를 0.4배로 죽입니다</b> — 복사냉각과 복사가열을 둘 다 막기 때문입니다.
-      안개 낀 날 밤낮 온도를 재서 맑은 날과 비교해 보세요. 스콜은 2~3분 뒤 저절로 갭니다.</p>
-    <label class="row check">
-      <input type="checkbox" id="soundChk" checked><span class="lbl">환경음 (파도·바람·풀벌레·차량)</span>
-    </label>
     <label class="row check">
       <input type="checkbox" id="timeFlowChk"><span class="lbl">시간 흐르게 하기 (5분에 하루) — <span class="hint-key">T</span></span>
     </label>
@@ -244,8 +223,6 @@
 <script src="/js/earth-data.js"></script>
 <script src="/js/earth-system.js"></script>
 <script src="fp-world.js"></script>
-<script src="fp-weather.js"></script>
-<script src="fp-audio.js"></script>
 <script src="fp-minimap.js"></script>
 <script src="fp-field.js"></script>
 <script src="fp-tools.js"></script>

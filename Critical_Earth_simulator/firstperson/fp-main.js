@@ -7,6 +7,8 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
+// 노출은 1.15 고정(4차 B2에서 밝기 슬라이더를 뺐다). 조감은 1.1(2차 F2)인데 1인칭은 하늘이 화면 대부분이라
+// 같은 값이면 화면 전체가 어둡게 느껴져서 조금 밝게 둔다.
 renderer.toneMappingExposure = 1.15;
 
 const camera = new THREE.PerspectiveCamera(75, 1, 0.002, 60);
@@ -39,7 +41,6 @@ const FPScenario = (() => {
 applyWorldCO2(FPScenario.ppm());
 FPPlayer.init(camera, glCanvas);
 FPTools.init(camera);   // 단축바 + 손에 든 도구 (camera를 씬에 넣는 것도 여기서 처리)
-FPWeather.init(FPWorld.scene);
 FPMinimap.init();
 FPAir.reset();          // 구역 대기 CO2를 지금 시각의 정상 상태에서 시작
 equilibrateSeaCO2();    // 해수 pCO2도 지금 해양 대기와 평형에서 시작
@@ -57,15 +58,6 @@ function fit() {
 }
 window.addEventListener('resize', fit);
 fit();
-
-// ── 화면 밝기 슬라이더 (main 브랜치와 동일한 이유: 노트북마다 체감 밝기가 달라서) ──
-const brightness = document.getElementById('brightnessSlider');
-const savedExposure = Number(localStorage.getItem('fpExposure'));
-if (savedExposure) { renderer.toneMappingExposure = savedExposure; brightness.value = savedExposure; }
-brightness.addEventListener('input', () => {
-  renderer.toneMappingExposure = Number(brightness.value);
-  localStorage.setItem('fpExposure', brightness.value);
-});
 
 // ── CO2 슬라이더: 걸어다니면서 하늘이 흐려지는 걸 실시간으로 보게 하는 게 목적 ──
 const co2Slider = document.getElementById('co2Slider');
@@ -140,33 +132,6 @@ seasonBtns.addEventListener('click', e => {
 applySeason(FPWorld.season);
 syncSeasonUI();
 
-// ── 날씨 ────────────────────────────────────────────────────────────────────
-const weatherBtns = document.getElementById('weatherBtns');
-const weatherRandomChk = document.getElementById('weatherRandomChk');
-function syncWeatherUI() {
-  weatherBtns.querySelectorAll('button').forEach(b => {
-    b.classList.toggle('on', b.dataset.w === FPWeather.kind);
-  });
-  weatherRandomChk.checked = FPWeather.random;
-}
-weatherBtns.addEventListener('click', e => {
-  const b = e.target.closest('button');
-  if (!b) return;
-  FPWeather.random = false;      // 손으로 고르면 무작위는 끈다
-  FPWeather.set(b.dataset.w);
-  syncWeatherUI();
-});
-weatherRandomChk.addEventListener('change', () => {
-  FPWeather.setRandom(weatherRandomChk.checked);
-});
-syncWeatherUI();
-
-// ── 환경음 ──────────────────────────────────────────────────────────────────
-// 브라우저는 사용자 조작 없이 소리를 못 내게 막는다. 게임 시작(클릭) 시점에 켠다.
-const soundChk = document.getElementById('soundChk');
-soundChk.addEventListener('change', () => FPAudio.setEnabled(soundChk.checked));
-glCanvas.addEventListener('click', () => { FPAudio.init(); FPAudio.setEnabled(soundChk.checked); });
-
 // ── 야장 ────────────────────────────────────────────────────────────────────
 FPField.init();
 // 계측기가 값을 '확정'했을 때만 기록한다 (수렴 중인 값은 아직 못 믿는 값이라서)
@@ -197,9 +162,7 @@ function animate() {
   FPTools.update(dt);          // 측정 중인 계측기의 값이 안정되어 가는 과정
   FPAir.update(dt);            // 구역 대기 CO2·해수 pCO2 (0.2초 틱, 매 프레임 적분하지 않음)
   updateTime(dt);              // 시간 흐름이 켜져 있을 때만 동작
-  FPWeather.update(dt);        // 비/눈 입자, 번개, 스콜 종료, 무작위 전환
   FPMinimap.update(dt);        // 초당 10회만 다시 그린다
-  FPAudio.update(dt);          // 위치·시간·내연차 비율에 맞춰 환경음을 섞는다
   updateSunShadow(FPPlayer.pos.x, FPPlayer.pos.z);
 
   // 수면 파도: 잔물결까지 형상으로 만들고 매 프레임 법선을 다시 계산해야
@@ -265,7 +228,7 @@ function animate() {
     else if (FPPlayer.sprinting) mode.push('달리기');
     hudMode.textContent = mode.length ? mode.join(' · ') : '걷기';
     hudTime.textContent = hourLabel(FPWorld.hour) + (FPWorld.timeFlowing ? '' : ' · 정지 (T)')
-      + ` · ${SEASONS[FPWorld.season].ko} · ${WEATHER[FPWeather.kind].ko} · ${FPAir.windLabel()}`;
+      + ` · ${SEASONS[FPWorld.season].ko} · ${FPAir.windLabel()}`;
     // 전 지구 = 조감과 같은 모형의 그 해 값 / 이 지점 = 구역 대기(열섬·광합성·해륙풍·계절이 더해진 1인칭 고유의 차이)
     hudCo2.textContent = `CO₂ 전 지구 평균 ${FPWorld.co2.toFixed(0)} ppm (${FPScenario.teacher ? '교사 입력' : '조감과 같은 모형 · ' + FPScenario.label()})`
       + ` · 이 지점 공기 ${FPAir.zoneCO2(zoneKeyAt()).toFixed(0)} ppm`;

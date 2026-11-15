@@ -102,7 +102,7 @@ const FPWorld = {
   waterMesh: null,
   waveGeo: null, wavePosAttr: null, waveBase: null,
   waterWall: null,    // 물 옆면(윗변이 파도를 따라감)
-  // CO2가 정하는 기준 시야거리. 계절·날씨 계수가 여기에 곱해진다(applyEnvironment).
+  // CO2가 정하는 기준 시야거리. 계절 계수가 여기에 곱해진다(applyEnvironment).
   fogBase: { far: 7.0, near: 0.25 },
   // 실측 도구가 측정 지점을 구분하는 데 쓰는 목록
   trees: [],          // {x, z, r} - 나무 근처는 광합성으로 CO2가 낮게 나온다
@@ -1480,19 +1480,15 @@ const NIGHT_SKY = new THREE.Color(0x0b1526);
 const DUSK_SKY = new THREE.Color(0xd98a52);
 
 // ── 환경 합성 ───────────────────────────────────────────────────────────────
-// 하늘색·안개·조명은 CO2 / 시간 / 계절 / 날씨 네 가지가 동시에 건드린다.
+// 하늘색·안개·조명은 CO2 / 시간 / 계절 세 가지가 동시에 건드린다(4차 B2에서 날씨를 뺐다).
 // 예전엔 applyWorldCO2()가 하늘색과 안개를 직접 써 놓고 applyTimeOfDay()가 그 위에
 // 덮어쓰는 구조였다. 여기에 계절과 날씨를 더하면 "비가 개면 계절 색이 사라지는" 식으로
 // 마지막에 부른 쪽만 남는 버그가 반드시 난다.
 // 그래서 각 요인은 '자기 몫'만 상태에 적어 두고, 화면 반영은 이 함수 하나가 전담한다.
-//   하늘색 = CO2 기준색 → 계절 색조 → 시간(밤/황혼) → 날씨(흐림)
-//   안개   = CO2 기준거리 × 계절계수 × 날씨계수      (곱셈으로 합성, 덮어쓰기 금지)
-//   조명   = 기본세기 × 시간계수 × 날씨계수
-//
-// 계절/날씨 테이블의 실제 값은 Stage B/C에서 채운다. 지금은 전부 중립값(1.0, 가중치 0)이라
-// 이 리팩터만으로는 화면이 조금도 바뀌지 않아야 한다.
+//   하늘색 = CO2 기준색 → 계절 색조 → 시간(밤/황혼)
+//   안개   = CO2 기준거리 × 계절계수      (곱셈으로 합성, 덮어쓰기 금지)
+//   조명   = 기본세기 × 시간계수
 FPWorld.season = 'summer';
-FPWorld.weather = 'clear';
 
 // ── 계절 ────────────────────────────────────────────────────────────────────
 // temp   : 기온 오프셋 [°C]. 중위도 연교차(최난월-최한월)는 20°C 안팎이라 여름 +8 / 겨울 -10.
@@ -1527,17 +1523,7 @@ const SEASON_ORDER = ['spring', 'summer', 'autumn', 'winter'];
 function seasonDef() { return SEASONS[FPWorld.season] || SEASONS.summer; }
 // applyEnvironment()가 쓰는 이름을 그대로 유지 (하늘색·안개 몫만 꺼내 준다)
 const SEASON_ENV = SEASONS;
-// 날씨가 환경에 주는 몫 (입자·소리·기온 보정은 Stage C에서 fp-weather.js가 맡는다)
-const WEATHER_ENV = {
-  clear:  { sky: 0xffffff, skyW: 0.00, fogK: 1.00, lightK: 1.00 },
-  rain:   { sky: 0x6b7a85, skyW: 0.55, fogK: 0.55, lightK: 0.62 },
-  storm:  { sky: 0x3c4650, skyW: 0.75, fogK: 0.35, lightK: 0.45 },
-  snow:   { sky: 0x9aa8b4, skyW: 0.60, fogK: 0.45, lightK: 0.75 },
-  squall: { sky: 0x55626d, skyW: 0.70, fogK: 0.30, lightK: 0.55 },
-  fog:    { sky: 0xb8c0c6, skyW: 0.80, fogK: 0.12, lightK: 0.80 },
-};
 function seasonEnv() { return SEASON_ENV[FPWorld.season] || SEASON_ENV.summer; }
-function weatherEnv() { return WEATHER_ENV[FPWorld.weather] || WEATHER_ENV.clear; }
 
 const _envColor = new THREE.Color();
 const _envTint = new THREE.Color();
@@ -1547,7 +1533,7 @@ function applyEnvironment() {
   FPWorld.daylight = d;
   const L = FPWorld.lights;
   if (!L) return;
-  const S = seasonEnv(), W = weatherEnv();
+  const S = seasonEnv();
 
   // 1) CO2가 정한 '맑은 낮의 하늘색'에서 출발
   _envColor.copy(FPWorld.daySky || CLEAR_SKY);
@@ -1557,32 +1543,26 @@ function applyEnvironment() {
   const dusk = 1 - Math.abs(d - 0.5) * 2;
   _envColor.lerpColors(NIGHT_SKY, _envTint.copy(_envColor), d);
   _envColor.lerp(DUSK_SKY, dusk * 0.55);
-  // 4) 날씨: 흐릴수록 회색으로 끌어당긴다. 밤에는 흐림도 어둡게 보여야 하므로
-  //    날씨 색조 자체를 그 시각의 밝기만큼 낮춰서 섞는다.
-  if (W.skyW > 0) {
-    _envTint.setHex(W.sky).multiplyScalar(0.25 + 0.75 * d);
-    _envColor.lerp(_envTint, W.skyW);
-  }
   FPWorld.skyMat.color.copy(_envColor);
   FPWorld.scene.fog.color.copy(_envColor);
 
-  // 안개 거리: CO2가 정한 기준거리에 계절·날씨 계수를 곱한다
+  // 안개 거리: CO2가 정한 기준거리에 계절 계수를 곱한다
   const fb = FPWorld.fogBase;
-  const k = S.fogK * W.fogK;
+  const k = S.fogK;
   FPWorld.scene.fog.far = fb.far * k;
   FPWorld.scene.fog.near = fb.near * k;
 
   // 조명: 밤에도 완전히 캄캄하면 아무것도 못 하므로 달빛 정도(15%)는 남긴다
-  const lit = (0.15 + 0.85 * d) * W.lightK;
+  const lit = 0.15 + 0.85 * d;
   L.sun.intensity = L.base.sun * lit;
   L.lampSpot.intensity = L.base.spot * lit;
-  L.ambient.intensity = L.base.ambient * (0.30 + 0.70 * d) * W.lightK;
-  L.hemi.intensity = L.base.hemi * (0.25 + 0.75 * d) * W.lightK;
+  L.ambient.intensity = L.base.ambient * (0.30 + 0.70 * d);
+  L.hemi.intensity = L.base.hemi * (0.25 + 0.75 * d);
   // 거대 전등의 전구도 같이 꺼진다 - 이 세계의 광원이 저것이라는 걸 보여주는 부분
   L.bulbMat.color.setRGB(1, 0.972, 0.886).multiplyScalar(0.25 + 0.75 * d);
-  // 별은 밤이면서 하늘이 뚫려 있을 때만 보인다 (구름이 덮으면 안 보여야 한다)
+  // 별은 밤에만 보인다
   if (FPWorld.stars) {
-    FPWorld.stars.material.opacity = Math.max(0, 1 - d * 1.6) * (1 - W.skyW);
+    FPWorld.stars.material.opacity = Math.max(0, 1 - d * 1.6);
   }
 }
 
@@ -1642,8 +1622,8 @@ function applySeason(name) {
   FPWorld.refresh();
 }
 
-// 상태를 바꾼 쪽(CO2·시간·계절·날씨 UI)은 전부 이것만 부르면 된다.
-// 갱신 경로를 하나로 모아 두면 "어떤 순서로 눌러도 넷 다 반영"이 보장된다.
+// 상태를 바꾼 쪽(CO2·시간·계절 UI)은 전부 이것만 부르면 된다.
+// 갱신 경로를 하나로 모아 두면 "어떤 순서로 눌러도 전부 반영"이 보장된다.
 FPWorld.refresh = function () { applyWorldCO2(FPWorld.co2); };
 
 function updateTime(dt) {
@@ -1807,7 +1787,7 @@ function applyWorldCO2(ppm) {
   FPWorld.co2k = k;
 
   // CO2는 '맑은 낮의 하늘색'과 '기준 시야거리'까지만 정한다.
-  // 실제 화면 값은 여기에 계절·시간·날씨를 합성한 결과라 applyEnvironment()가 마무리한다.
+  // 실제 화면 값은 여기에 계절·시간을 합성한 결과라 applyEnvironment()가 마무리한다.
   FPWorld.daySky = new THREE.Color().lerpColors(CLEAR_SKY, HAZY_SKY, k);
   // 맑을 때 7유닛(≈350m)까지 보이다가, 1000ppm에선 1.1유닛(≈55m) 앞도 안 보이게
   FPWorld.fogBase = { far: 7.0 - k * 5.9, near: 0.25 - k * 0.22 };
@@ -1841,7 +1821,7 @@ function applyWorldCO2(ppm) {
     FPWorld.smoke.mat.color.setHSL(0.09, 0.05, 0.62 - k * 0.35);
     FPWorld.smoke.rate = 0.10 + k * 0.55;
   }
-  applyEnvironment();   // 하늘색·안개·조명은 CO2·시간·계절·날씨가 함께 정한다
+  applyEnvironment();   // 하늘색·안개·조명은 CO2·시간·계절이 함께 정한다
 }
 
 // 그림자 카메라를 플레이어 주변 좁은 범위로 계속 옮겨서 눈앞 그림자 해상도를 확보.

@@ -95,18 +95,15 @@ function spotBaseTemp(spot, ppm, hour) {
   const S = SPOT[spot];
   const h = hour == null ? FPWorld.hour : hour;
   // (diurnal(h) - 정오값)이라 정오에는 일교차 항이 0이 된다.
-  // 일교차 진폭에 날씨 계수를 곱하는 게 이 모형의 요점 중 하나다:
-  // 안개·구름은 낮의 복사가열과 밤의 복사냉각을 둘 다 막아 밤낮 차이를 죽인다.
-  const wDay = typeof weatherDiurnalK === 'function' ? weatherDiurnalK() : 1;
-  const wTemp = typeof weatherTempOffset === 'function' ? weatherTempOffset(spot) : 0;
+  // 4차 B2: 날씨 보정(일교차 계수·기온 오프셋)을 뺐다. 맑음일 때 계수 1·오프셋 0이었으므로 값은 그대로다.
   return S.base + S.amp * warmingSince280(ppm)
-       + S.day * wDay * (diurnal(h) - DIURNAL_AT_NOON)
-       + seasonTempOffset(spot) + wTemp;
+       + S.day * (diurnal(h) - DIURNAL_AT_NOON)
+       + seasonTempOffset(spot);
 }
 function measureTemperature(spot, x, z, ppm, aboveGround) {
   const S = SPOT[spot];
   // 해수는 fp-world.js의 seaTempAt() 하나만 쓴다. 해수 분석기·pH미터·산호가 읽는 수온과
-  // 반드시 같아야 하므로 여기서는 지점 흔들림·일교차·날씨 보정을 얹지 않는다.
+  // 반드시 같아야 하므로 여기서는 지점 흔들림·일교차 보정을 얹지 않는다.
   // (바다는 열용량이 커서 원래 일교차가 0.6°C뿐이었고, 지점 간 차이는 이제 냉수대가 만든다.)
   // 어류는 변온동물이라 체온이 곧 그 자리의 수온이다.
   if (spot === 'sea' || spot === 'bodyFish') return seaTempAt(x, z, ppm);
