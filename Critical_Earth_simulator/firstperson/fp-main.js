@@ -43,7 +43,7 @@ applyWorldCO2(FPWorld.sample.ppm);
 FPPlayer.init(camera, glCanvas);
 FPTools.init(camera);   // 단축바 + 손에 든 도구 (camera를 씬에 넣는 것도 여기서 처리)
 FPMinimap.init();
-FPAir.reset();          // 구역 대기 CO2를 정상 상태에서 시작
+FPAir.reset();          // 게임 시간(야장 game_time)을 0에서 시작 (구역 CO₂는 4차 C3부터 적분 없이 FPModel 이 바로 낸다)
 equilibrateSeaCO2();    // 해수 pCO2도 지금 해양 대기와 평형에서 시작
 FPAir.onTick.push(stepSeaCO2);   // 해수는 대기와 같은 0.2초 틱에서 천천히 따라간다
 FPAir.onTick.push(() => applyOceanHealth(FPWorld.co2));   // 산호·어류·수초도 같은 틱에서
@@ -180,7 +180,7 @@ function animate() {
     if (FPPlayer.inWater) mode.push('수영');
     else if (FPPlayer.sprinting) mode.push('달리기');
     hudMode.textContent = mode.length ? mode.join(' · ') : '걷기';
-    // 전 지구 = 조감과 같은 모형의 그 해 값 / 이 지점 = 구역 대기(도시 돔·광합성·해양 흡수가 더해진 1인칭 고유의 차이)
+    // 전 지구 = 조감과 같은 모형의 그 해 값 / 이 지점 = 구역 대기(도심 증가분·녹지 흡수 — 해양은 배경 그대로, 4차 C3)
     hudCo2.textContent = `CO₂ 전 지구 평균 ${FPWorld.co2.toFixed(0)} ppm (조감과 같은 모형 · ${FPScenario.label()})`
       + ` · 이 지점 공기 ${FPAir.zoneCO2(zoneKeyAt()).toFixed(0)} ppm`;
     const gas = FPWorld.gasCarCount, ev = FPWorld.cars.length - gas;

@@ -70,51 +70,28 @@ function isSeaHit(hit) {
 }
 
 // ── 대기 CO2 ────────────────────────────────────────────────────────────────
-// 슬라이더 값은 '전 지구 평균'이고, 실제로 재는 값은 서 있는 자리에 따라 달라진다.
-//  - 도심: 배기·난방·건물이 몰려 있고 바람이 막혀 늘 평균보다 높다(도시 CO2 돔).
-//  - 녹지: 광합성이 낮 동안 공기 중 CO2를 빨아들여 평균보다 낮다. CO2가 높을수록
-//    흡수량 자체도 커져서(CO2 비료 효과) 낮아지는 폭이 함께 커진다.
-//  - 해양: 바닷물이 CO2를 녹여 흡수하므로 역시 평균보다 낮다.
-//    이 흡수가 바로 해수 pH를 떨어뜨리는 원인이라, pH 측정값과 같은 이야기를 한다.
-// 4차 B3(마스터 D2, 낮 고정): 밤 값(nightOff·nightRise)과 해륙풍 이류를 뺐다.
-// 구역 대기는 이제 '정오 정상 상태값' — 예전 zoneCO2Target(12) 와 같다.
-const CO2_ZONE = {
-  city:  { off: 55,  rise: 120 },
-  green: { off: -30, rise: -40 },
-  ocean: { off: -15, rise: -30 },
-};
-// 구역 대기 CO2 = 배경(전 지구 평균 + 계절 진동) + 그 구역의 몫 D_z.
-//   dD_z/dt = (off_z + rise_z·k − D_z) / τ_z      국지 평형으로 수렴
-// 연도·배출 경로를 바꿔 k(co2k)가 바뀌면 D_z 가 τ 동안 새 정상값으로 옮겨 간다. 배경은 즉시 바뀐다.
-// 해수 pCO2 동적 평형(fp-world.js stepSeaCO2)이 같은 0.2초 틱(onTick)에 붙어 있다 —
-// C4에서 해수 쪽을 통째로 바꾸므로 그때까지 틱과 게임일 환산(AIR_DAY_S)을 남긴다.
-const AIR_TAU_Z = 0.1;       // 국지 평형 수렴 시간 [게임 일] = 실시간 30초
+// 4차 C3: 구역 대기 CO₂는 FPModel.zoneCO2(fp-model.js)가 그해 엔진 표본으로 바로 낸다(연평균).
+//  - 해양 대기 = 배경(o.ppm) 그대로 — NOAA 지구 평균이 바다 위 관측소 평균이다(문헌값 2-4). 예전 −15~−30 ppm 삭제.
+//  - 도심 = 배경 + 서울 '도시 증가분' 23 ppm × 그해 화석 배출 ÷ 2020년 (문헌값 2-3). 예전 +55~+120 ppm 삭제.
+//  - 녹지·나무 밑 = 3차 낮 정상 상태값 그대로(정량 문헌 미확보 — assumption + unverified).
+// 예전 구역 몫 D_z 를 τ 30초로 따라가던 적분(CO2_ZONE·zoneCO2Target·AIR_TAU_Z)은 지웠다 — 연도를 뛰어넘는 구조와 맞지 않는다.
+// 남은 0.2초 틱은 해수 pCO2 동적 평형(fp-world.js stepSeaCO2)과 산호 갱신만 돌린다 — C4에서 바다를 엔진 표층 상태로
+// 바꾸면 FPAir 를 통째로 지운다. 그때까지 게임일 환산(AIR_DAY_S)을 남긴다.
 const AIR_TICK = 0.2;        // 상태 갱신 주기 [실시간 초] - 렌더 루프가 아니라 이 틱에서 돈다
-// 게임 1일 = 실시간 300초. 예전 시간 흐름(DAY_SECONDS)에서 온 환산이고, τ(AIR_TAU_Z·SEA_TAU_SW)가
+// 게임 1일 = 실시간 300초. 예전 시간 흐름(DAY_SECONDS)에서 온 환산이고, τ(SEA_TAU_SW)가
 // 게임일 단위라 남겨 둔다. 시간 흐름 자체는 B3에서 없어졌다.
 const AIR_DAY_S = 300;
-const AIR_ZONES = ['ocean', 'green', 'city'];
 const FPAir = {
-  D: { ocean: 0, green: 0, city: 0 },   // 배경(전 지구 평균+계절)에서 벗어난 몫 [ppm]
   _acc: 0,
   elapsedDays: 0,   // 공기·바다가 흘러온 게임 시간 [일] (야장 game_time)
   onTick: [],    // 같은 틱에 같이 돌아야 하는 다른 상태 (해수 pCO2 등)
 };
-// 국지 평형값 = 정오의 고정 오프셋
-function zoneCO2Target(zone) {
-  const Z = CO2_ZONE[zone] || CO2_ZONE.green;
-  return Z.off + Z.rise * FPWorld.co2k;
-}
-// 한 번 적분. dtDay = 게임 시간 [일]. 틱이 짧아(τ의 1% 미만) 오일러로 충분하다.
+// 한 번 적분. dtDay = 게임 시간 [일].
 FPAir.step = function (dtDay) {
-  const D = this.D;
-  for (const z of AIR_ZONES) D[z] += (zoneCO2Target(z) - D[z]) / AIR_TAU_Z * dtDay;
   this.elapsedDays += dtDay;
   for (const f of this.onTick) f(dtDay);
 };
-// 처음 열었을 때는 정상 상태에서 시작한다
 FPAir.reset = function () {
-  for (const z of AIR_ZONES) this.D[z] = zoneCO2Target(z);
   this.elapsedDays = 0;
 };
 // 매 프레임 불리지만 실제 적분은 0.2초마다 한 번
@@ -125,10 +102,9 @@ FPAir.update = function (dt) {
     this.step(AIR_TICK / AIR_DAY_S);
   }
 };
-// 구역 대기 CO2 [ppm] = 배경 + 그 구역의 몫
-FPAir.zoneCO2 = function (zone, ppm) {
-  // 4차 C2: 계절 진동(여름 −1 ppm)을 뺐다 — 값은 연평균. 구역 식은 C3에서 FPModel.zoneCO2 로 바뀐다.
-  return (ppm == null ? FPWorld.co2 : ppm) + (this.D[zone] != null ? this.D[zone] : this.D.green);
+// 구역 대기 CO2 [ppm] — HUD '이 지점 공기'와 해수 평형(oceanAirCO2)이 부른다. 나무·굴뚝 같은 국소 항은 없다.
+FPAir.zoneCO2 = function (zone) {
+  return FPModel.zoneCO2(zone, fpSample());
 };
 
 // 어떤 지점이 나무 수관에 얼마나 가까운지 (0=밖, 1=줄기 바로 옆)
@@ -137,35 +113,26 @@ function treeShadeAt(x, z) {
   for (const t of FPWorld.trees) s = Math.max(s, 1 - Math.hypot(x - t.x, z - t.z) / t.r);
   return Math.max(0, s);
 }
-function measureCO2(ppm, x, z, zone, px, pz) {
-  const k = FPWorld.co2k;
-  // 4차 B3: 낮 고정이라 햇빛 세기 1. 아래 밤 호흡 항(resp)은 0이 되고, 식 정리는 C3에서 한다.
-  const lit = 1;
-  // 구역 대기 = 배경 + 그 구역 상태(FPAir, 정오 정상 상태값). 배경은 연평균(4차 C2에서 계절 진동을 뺐다).
-  let v = FPAir.zoneCO2(zone, ppm);
-
-  // 나무 그늘 아래는 낮에 특히 낮다. 잎이 바로 위에서 CO2를 빨아들이는 자리라
-  // 같은 녹지 안에서도 확연히 차이가 난다.
-  // 밤에는 반대로 잎과 뿌리의 호흡 때문에 나무 밑이 오히려 더 높다.
+// 센서 한 번의 참값 [ppm]. 값 계산은 FPModel.zoneCO2, 여기서는 세계 좌표로 '얼마나 가까운가'만 잰다.
+// s = 그해 엔진 표본(fpSample). (x, z) = 겨눈 지점, (px, pz) = 서 있는 자리.
+function measureCO2(s, x, z, zone, px, pz) {
+  const opt = {};
+  // 나무 그늘 아래는 낮에 특히 낮다(잎이 바로 위에서 CO2를 빨아들이는 자리).
   // 겨눈 지점과 '서 있는 자리' 중 나무에 가까운 쪽을 쓴다. 손에 든 센서가 실제로
   // 빨아들이는 건 내 주변 공기라, 나무 밑에 서 있으면 어디를 겨누든 낮게 나와야 한다.
   // (이걸 겨눈 지점만으로 계산했더니 나무 밑에서 비스듬히 내려다보는 순간 표본이
   //  수관 밖으로 빠져나가 효과가 사라졌다.)
-  if (zone === 'green') {
-    const shade = Math.max(treeShadeAt(x, z), px == null ? 0 : treeShadeAt(px, pz));
-    const draw = (55 + 60 * k) * lit;          // 낮: 광합성 흡수
-    const resp = (40 + 35 * k) * (1 - lit);    // 밤: 호흡 배출
-    v += shade * (resp - draw);
-  }
-
+  if (zone === 'green') opt.treeShade = Math.max(treeShadeAt(x, z), px == null ? 0 : treeShadeAt(px, pz));
   // 국소 배출원: 공장 굴뚝과 내연기관차 배기구 바로 옆은 확 치솟는다
   const sx = FPWorld.ZONE_W + 0.6, sz = 0.55;             // 공장 굴뚝 월드 좌표
-  v += Math.max(0, 1 - Math.hypot(x - sx, z - sz) / 0.55) * 260 * k;
+  opt.stackNear = Math.max(0, 1 - Math.hypot(x - sx, z - sz) / 0.55);
+  let ex = 0;
   for (const c of FPWorld.cars) {
-    if (!c.isGas) continue;
-    v += Math.max(0, 1 - Math.hypot(x - c.tailPos.x, z - c.tailPos.z) / 0.10) * 110;
+    if (!c.isGas) continue;   // 전기차는 배기구가 없다
+    ex += Math.max(0, 1 - Math.hypot(x - c.tailPos.x, z - c.tailPos.z) / 0.10);
   }
-  return Math.max(150, v);   // 산업화 이전보다 낮게는 안 내려가도록
+  opt.exhaustNear = ex;
+  return FPModel.zoneCO2(zone, s, opt);
 }
 
 // 크로스헤어가 가리키는 지점이 무엇인지 판정.
@@ -588,7 +555,7 @@ FPTools.use = function () {
       drawDisplay(tool, 'ERR', '수중 · 측정 불가', '#e2705f');
       return;
     }
-    const v = measureCO2(ppm, hit.point.x, hit.point.z, hit.zone, FPPlayer.pos.x, FPPlayer.pos.z);
+    const v = measureCO2(fpSample(), hit.point.x, hit.point.z, hit.zone, FPPlayer.pos.x, FPPlayer.pos.z);
     const label = hit.zone === 'city' ? '도심' : (hit.zone === 'green' ? '녹지' : '해양');
     this.beginReading(tool, v, `ppm · ${label}`, '#f0b45c');
   } else if (tool.kind === 'temp') {

@@ -9,8 +9,8 @@
 //
 // 들어 있는 것: C1 연도·경로 → 엔진 표본(runFor·pathRun·sample)과 '현재' 연도(NOW_YEAR)
 //              C2 airTemp(zone, s) · seaTemp(prox, s) · iceSurfaceTemp(s) · tempJitter — 기온·해수온 (연평균)
+//              C3 zoneCO2(zone, s, opt) · urbanCO2(s, localCut)                    — 구역 대기 CO₂ (연평균)
 // 단계별로 여기에 더한다(TASK_4차_C_모델정렬.md):
-//   C3 zoneCO2(zone, s, opt)                                       — 구역 대기 CO₂
 //   C4 seaState(prox, s)                                           — 바다 = 엔진의 그해 표층 상태
 //   상수는 맨 위 K 한 곳에 모으고, 각 줄에 등록부(js/sources.js) 키를 주석으로 단다.
 //
@@ -43,6 +43,20 @@ const FPModel = (() => {
     ICE_CAP: 0,                 // 융해 잠열로 얼음 표면은 0 °C 위로 못 오른다 · fp_ice_surface
     // 같은 구역 안 지점마다 조금씩 다른 값(측정하는 맛). 구역 차이(열섬 2 °C)보다 충분히 작게 ±0.3 °C 안.
     JITTER: 0.3,                // fp_jitter (assumption)
+    // ── C3 구역 대기 CO₂ ──
+    // 해양 대기 = 배경 그대로: NOAA 지구 평균 자체가 바다 위 관측소 평균이다(문헌값 2-4, 등록부 co2_noaa_gl).
+    // 도심 '도시 증가분': 서울 20~27 ppm(여름 27·겨울 20)의 가운데 23 ppm을 2020년 값으로 둔다(문헌값 2-3).
+    URBAN_CO2: 23,              // fp_urban_co2 (calibrated, unverified — 원 자료 대조 필요, 발췌 9)
+    URBAN_REF_YEAR: 2020,       // fp_urban_co2 — 서울 관측(2020 발표) 시기. 다른 해는 그해 화석 배출 ÷ 2020년 화석 배출 비율
+    LOCAL_CUT_MAX: 0.42,        // 도시 증가분을 줄일 수 있는 상한(코로나19 거리두기 −42 %, 문헌값 1-6) · fp_urban_co2. 값은 F4가 채운다
+    // 녹지·나무 밑: 정량 문헌 미확보(문헌값 2-5) → 3차 모형의 낮 정상 상태값을 그대로 두고 assumption + unverified 로 밝힌다.
+    // 오프셋 = OFF + RISE × k, k = (배경 − CO2_MIN) ÷ (CO2_MAX − CO2_MIN) — 3차의 co2k 와 같은 식(earth-model.js 상수 불변)
+    GREEN_OFF: -30, GREEN_RISE: -40,   // 녹지 대기 [ppm] · fp_green_co2 (assumption, unverified — 발췌 6)
+    TREE_OFF: -55, TREE_RISE: -60,     // 나무 수관 바로 밑 추가 몫(낮 광합성 흡수) [ppm] · fp_tree_co2 (assumption, unverified — 발췌 6)
+    // 굴뚝·배기구 바로 옆 국소 효과 (3차 값 그대로, 연출)
+    STACK_PEAK: 260,            // 공장 굴뚝 바로 옆 최대 증가 [ppm] × stackLevel(그해 화석 배출) · fp_local_source (assumption)
+    EXHAUST_PEAK: 110,          // 내연기관차 배기구 바로 옆 최대 증가 [ppm] · fp_local_source (assumption)
+    CO2_FLOOR: 150,             // 측정값 하한 [ppm] — 국소 흡수 항이 겹쳐도 비현실적으로 내려가지 않게 (3차 값)
   });
 
   // ── 연도·경로 → 엔진 궤적 ────────────────────────────────────────────────
@@ -118,6 +132,40 @@ const FPModel = (() => {
     return K.JITTER * (0.6 * Math.sin(x * 37.1 + z * 21.7) + 0.4 * Math.sin(x * 11.3 - z * 53.9));
   }
 
+  // ── C3 구역 대기 CO₂ ─────────────────────────────────────────────────────
+  // 도시 증가분 기준: 2020년 화석 배출. 2020년은 역사 구간이라 경로와 상관없이 같은 값이다.
+  let fossilRef = null;
+  function fossil2020() {
+    if (fossilRef == null) fossilRef = sample(K.URBAN_REF_YEAR, pathRun('ssp245')).fossil;
+    return fossilRef;
+  }
+  // 배경 CO₂를 0(280 ppm) ~ 1(1000 ppm)로 — 녹지·나무 밑 3차 모형이 이 비율로 흡수 폭을 키웠다(CO₂ 시비 효과).
+  const co2Frac = ppm => Math.min(1, Math.max(0, (ppm - CO2_MIN) / (CO2_MAX - CO2_MIN)));
+  // 도심 '도시 증가분' [ppm] = 23 × 그해 화석 배출 ÷ 2020년 화석 배출 × (1 − localCut), 0 이상.
+  // 도시 공기는 그 도시가 '지금' 내는 배출에 바로 반응한다(전 지구 CO₂와 다르다, 문헌값 1-6) — 그래서 누적이 아니라 그해 배출.
+  function urbanCO2(s, localCut) {
+    const cut = Math.min(K.LOCAL_CUT_MAX, Math.max(0, localCut || 0));
+    return K.URBAN_CO2 * Math.max(0, s.fossil / fossil2020()) * (1 - cut);
+  }
+  // 구역 대기 CO₂ [ppm] (연평균). zone = 'ocean' | 'green' | 'city'.
+  //   opt.treeShade  0(수관 밖) ~ 1(줄기 바로 옆) — 녹지 나무 밑 흡수
+  //   opt.localCut   0 ~ 0.42 — 우리 도시 교통 행동(F4)
+  //   opt.stackNear  0 ~ 1 — 공장 굴뚝까지의 근접도 (fp-tools 가 세계 좌표로 잰다)
+  //   opt.exhaustNear 0 ~ (차 수) — 내연기관차 배기구 근접도의 합 (전기차는 호출부에서 뺀다)
+  function zoneCO2(zone, s, opt = {}) {
+    const bg = s.ppm, k = co2Frac(bg);
+    let v;
+    if (zone === 'ocean') v = bg;
+    else if (zone === 'city') v = bg + urbanCO2(s, opt.localCut);
+    else if (zone === 'green') v = bg + K.GREEN_OFF + K.GREEN_RISE * k + (opt.treeShade || 0) * (K.TREE_OFF + K.TREE_RISE * k);
+    else throw new Error('알 수 없는 구역: ' + zone);
+    // 국소 배출원: 굴뚝은 그해 화석 배출(stackLevel — 조감 굴뚝 연기와 같은 값, 0 이하 배출이면 굴뚝이 꺼진다)
+    v += (opt.stackNear || 0) * K.STACK_PEAK * EarthVisual.stackLevel(s.fossil);
+    v += (opt.exhaustNear || 0) * K.EXHAUST_PEAK;
+    return Math.max(K.CO2_FLOOR, v);
+  }
+
   return { NOW_YEAR, YEAR_MIN, YEAR_MAX, K, runFor, emissionsFor, pathRun, sample,
-    airTemp, urbanHeat, seaTemp, iceSurfaceTemp, tempJitter };
+    airTemp, urbanHeat, seaTemp, iceSurfaceTemp, tempJitter,
+    co2Frac, urbanCO2, zoneCO2 };
 })();

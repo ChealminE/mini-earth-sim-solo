@@ -172,6 +172,37 @@ for (const p of PATHS) {
   check('도움말 온도계 문단에 "연평균"', /<b>1 온도계<\/b>[\s\S]{0,300}연평균/.test(read('firstperson/index.html')));
 }
 
+// ── C3 구역 대기 CO₂ (§6-3 · §6-4) ─────────────────────────────────────────
+{
+  const r = FM.pathRun('ssp245'), s20 = FM.sample(2020, r), s1750 = FM.sample(1750, r), s2100 = FM.sample(2100, r);
+  const urb = s => FM.zoneCO2('city', s) - s.ppm;
+  let oceanOk = true;
+  for (const p of PATHS) for (const o of FM.pathRun(p)) if (Math.abs(FM.zoneCO2('ocean', o) - o.ppm) > 0.01) oceanOk = false;
+  check('해양 대기 CO₂ = 배경 ±0.01 ppm (세 경로 전 구간, 문헌값 2-4)', oceanOk);
+  check('도심 − 배경: 2020년 23 ± 0.5 ppm (서울 도시 증가분, 문헌값 2-3)', Math.abs(urb(s20) - 23) <= 0.5, urb(s20).toFixed(3));
+  check('도심 − 배경: 1750년 < 1 ppm', urb(s1750) < 1, urb(s1750).toFixed(3));
+  check('도심 − 배경: 현재 정책 2100년 < 2020년', urb(s2100) < urb(s20), `${urb(s2100).toFixed(2)} < ${urb(s20).toFixed(2)}`);
+  check('도심 − 배경: 2020년은 세 경로가 같다 (역사 구간)', PATHS.every(p => urb(FM.sample(2020, FM.pathRun(p))) === urb(s20)));
+  const u119 = FM.sample(2100, FM.pathRun('ssp119'));
+  check('도심 증가분 ≥ 0 (화석 배출 음수인 1.5 °C 2100년 → 0)', urb(u119) === 0 && FM.pathRun('ssp119').every(o => urb(o) >= 0), `F ${u119.fossil.toFixed(2)}`);
+  check('localCut 0.42 → 증가분 × 0.58, 상한 0.42에서 멈춤 (문헌값 1-6)',
+    Math.abs(FM.zoneCO2('city', s20, { localCut: 0.42 }) - s20.ppm - urb(s20) * 0.58) < 1e-9
+    && FM.zoneCO2('city', s20, { localCut: 0.9 }) === FM.zoneCO2('city', s20, { localCut: 0.42 })
+    && FM.zoneCO2('city', s20, { localCut: -1 }) === FM.zoneCO2('city', s20));
+  const g = FM.zoneCO2('green', s20), t = FM.zoneCO2('green', s20, { treeShade: 1 });
+  check('녹지 < 배경, 나무 밑 < 녹지 (3차 낮 정상 상태값, assumption)', g < s20.ppm && t < g, `녹지 ${(g - s20.ppm).toFixed(1)} · 나무 밑 ${(t - s20.ppm).toFixed(1)} ppm`);
+  check('국소 굴뚝: 그해 화석 배출 ≤ 0이면 굴뚝 곁도 배경과 같음 (stackLevel)', FM.zoneCO2('city', u119, { stackNear: 1 }) === FM.zoneCO2('city', u119)
+    && FM.zoneCO2('city', s20, { stackNear: 1 }) > FM.zoneCO2('city', s20) + 200);
+  check('국소 배기구: 근접도 1 → +110 ppm', Math.abs(FM.zoneCO2('ocean', s20, { exhaustNear: 1 }) - s20.ppm - 110) < 1e-9);
+  check('측정 하한 150 ppm', FM.zoneCO2('green', { ppm: 160, fossil: 0 }, { treeShade: 1 }) === 150);
+  check('알 수 없는 구역은 오류', (() => { try { FM.zoneCO2('sky', s20); return false; } catch (e) { return true; } })());
+  const code = f => read(f).replace(/\/\/.*$/gm, '');
+  const tools = code('firstperson/fp-tools.js');
+  check('옛 구역 오프셋·적분 삭제 (CO2_ZONE·zoneCO2Target·AIR_TAU_Z, 도심 +55~+120·해양 −15~−30)',
+    !/CO2_ZONE|zoneCO2Target|AIR_TAU_Z|FPAir\.D\b|this\.D\[/.test(tools));
+  check('구역 CO₂ 계산은 FPModel.zoneCO2 하나 (fp-tools 의 측정·HUD 모두)', (tools.match(/FPModel\.zoneCO2\(/g) || []).length === 2 && !/\* 260|\* 110|55 \+ 60/.test(tools));
+}
+
 // ── 표 (세이브포인트에 붙인다) ───────────────────────────────────────────────
 console.log('\n      경로     연도   CO₂ppm   T°C    sst°C   pH      Ω      화석GtC  누적최대GtC');
 for (const p of PATHS) {
@@ -187,6 +218,15 @@ for (const p of PATHS) {
   for (const y of [1750, 2023, 2026, 2100]) {
     const s = FM.sample(y, FM.pathRun(p)), f = v => v.toFixed(2).padStart(8);
     console.log(`      ${p}  ${y}  ${f(FM.airTemp('ocean', s))}  ${f(FM.airTemp('green', s))}  ${f(FM.airTemp('city', s))}  ${f(FM.seaTemp(0, s))}    ${f(FM.seaTemp(1, s))}    ${f(FM.iceSurfaceTemp(s))}`);
+  }
+}
+
+console.log('\n      C3 구역 대기 CO₂ (ppm, 연평균, 계측 오차 제외 · 괄호 = 배경과의 차)');
+console.log('      경로     연도   배경     해양대기        녹지대기        나무밑(근접1)    도심대기');
+for (const p of PATHS) {
+  for (const y of [1750, 2023, 2026, 2100]) {
+    const s = FM.sample(y, FM.pathRun(p)), f = v => `${v.toFixed(1).padStart(6)} (${(v - s.ppm >= 0 ? '+' : '') + (v - s.ppm).toFixed(1)})`.padEnd(15);
+    console.log(`      ${p}  ${y}  ${s.ppm.toFixed(1).padStart(6)}  ${f(FM.zoneCO2('ocean', s))} ${f(FM.zoneCO2('green', s))} ${f(FM.zoneCO2('green', s, { treeShade: 1 }))} ${f(FM.zoneCO2('city', s))}`);
   }
 }
 
