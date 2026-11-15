@@ -11,6 +11,7 @@
 //              C2 airTemp(zone, s) · seaTemp(prox, s) · iceSurfaceTemp(s) · tempJitter — 기온·해수온 (연평균)
 //              C3 zoneCO2(zone, s, opt) · urbanCO2(s, localCut)                    — 구역 대기 CO₂ (연평균)
 //              C4 seaState(prox, s) · coralState · oceanHealth                     — 바다 = 엔진의 그해 표층 상태
+//              C5 society(s, preset, levers) · cityState(s, soc, n)               — 도시·차·굴뚝 (연출, EarthVisual 규칙)
 //   상수는 맨 위 K 한 곳에 모으고, 각 줄에 등록부(js/sources.js) 키를 주석으로 단다.
 //
 // 로드 순서: earth-model → earth-data → earth-system → earth-visual → fp-model → fp-world …
@@ -61,6 +62,10 @@ const FPModel = (() => {
     HAB_OMEGA_LO: 1.0,          // shell_omega (Ω = 1 경계)
     HAB_OMEGA_HI: 3.4,          // fp_habitat (assumption — 3차 값, 산업화 이전 표층 Ω 3.66 조금 아래)
     BLEACH_FISH_W: 0.5,         // 백화가 어류·수초 건강에 얹히는 비중 (3차 값) · fp_habitat (assumption)
+    // ── C5 시각 언어 (연출 — 조감 EarthVisual 규칙: 도시·차·굴뚝은 배출 역사, CO₂는 보이지 않음) ──
+    CARS: 10,                   // 1인칭 도로의 자동차 최대 대수(3차 모형 그대로) · city_scale
+    BLD_MIN_N: 1,               // 도시 규모 0(1750년)에도 서 있는 건물 수 — 마을 한 채 · fp_city (assumption)
+    BLD_H_MIN: 0.4,             // 도시 규모 0일 때 건물 높이 배율(낮은 집) → 1에서 3차 높이 그대로 · fp_city (assumption)
   });
 
   // ── 연도·경로 → 엔진 궤적 ────────────────────────────────────────────────
@@ -210,7 +215,40 @@ const FPModel = (() => {
     return c.habitat * (1 - K.BLEACH_FISH_W * c.bleach);
   }
 
+  // ── C5 시각 언어 = 조감 EarthVisual 규칙 ─────────────────────────────────────
+  // 그해 사회 모습 { ev, renew, nuclear, removal } — 조감 tab-future.js applyLevers3D 와 같은 규칙:
+  //   직접 설계(레버 시작 해 이후) = 그해 레버 값, 그 밖 = EarthVisual.presetSociety(그해 화석 배출).
+  function society(s, preset, levers) {
+    const ES = EarthSystem;
+    if (preset === 'custom' && levers && s.year >= ES.LEVER_START) {
+      const l = ES.leversAt(levers, s.year);
+      return { ev: l.ev, renew: l.renewShare, nuclear: l.nuclearShare, removal: l.ccs / ES.LEVER_RANGE.ccs[1] };
+    }
+    return EarthVisual.presetSociety(s.fossil || 0, s.year, ES.LEVER_NOW, ES.E2023, ES.LAST_HIST_YEAR);
+  }
+  // 1인칭 도시 모습(연출, 등록부 city_scale · fp_city). CO₂ 농도는 하나도 쓰지 않는다 — CO₂는 무색이고(2차 D2),
+  // 도시·차·굴뚝은 배출의 역사(누적 최댓값·그해 배출)를 따른다(2차 D3). 조감 3D 도시와 같은 함수다.
+  //   건물: 개수 1 + round((N − 1) × level), 높이 배율 BLD_H_MIN + (1 − BLD_H_MIN) × level   (level = cityLevel(cumFossilMax))
+  //   자동차: 대수 round(CARS × carFrac(level)), 그중 전기차 round(대수 × soc.ev)
+  //   굴뚝·연기: stackLevel(그해 화석 배출) — 0 이하 배출이면 굴뚝도 연기도 없다
+  //   포집 타워: soc.removal > 0 일 때만
+  function cityState(s, soc, nBuildings) {
+    const level = EarthVisual.cityLevel(s.cumFossilMax || 0);
+    const cars = Math.round(K.CARS * EarthVisual.carFrac(level));
+    const ev = Math.round(cars * Math.min(1, Math.max(0, soc.ev)));
+    const stack = EarthVisual.stackLevel(s.fossil || 0);
+    return {
+      level,
+      buildings: Math.min(nBuildings, K.BLD_MIN_N + Math.round((nBuildings - K.BLD_MIN_N) * level)),
+      heightK: K.BLD_H_MIN + (1 - K.BLD_H_MIN) * level,
+      cars, evCars: ev, gasCars: cars - ev,
+      stack, stackOn: EarthVisual.stackCount(s.fossil || 0) > 0,
+      removal: soc.removal, nuclear: soc.nuclear, renew: soc.renew,
+    };
+  }
+
   return { NOW_YEAR, YEAR_MIN, YEAR_MAX, K, runFor, emissionsFor, pathRun, sample,
+    society, cityState,
     airTemp, urbanHeat, seaTemp, iceSurfaceTemp, tempJitter,
     co2Frac, urbanCO2, zoneCO2,
     seaPCO2, seaState, habitatFromOmega, coralState, oceanHealth };

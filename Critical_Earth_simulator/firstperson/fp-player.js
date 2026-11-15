@@ -91,8 +91,8 @@ FPPlayer.waterHeightAt = function (x, z, t) {
   const lx = x + FPWorld.ZONE_W;               // oceanGroup 로컬 x
   const halfW = (FPWorld.ZONE_W - 0.08) / 2, halfD = FPWorld.waveD / 2;
   if (Math.abs(lx) > halfW || Math.abs(z) > halfD) return -Infinity;
-  const k = Math.min(1, Math.max(0, (FPWorld.co2 - 280) / 320));
-  return FPWorld.waveBaseY + FPWorld.waveHeightAt(lx, -z, t, k, halfD);
+  // 4차 C5: 파도 세기의 CO₂ 항을 지웠다(예전 여기만 (CO₂ − 280)/320 으로 그려진 물결(co2k)과 다른 세기를 써서 수면과 몸이 어긋났다)
+  return FPWorld.waveBaseY + FPWorld.waveHeightAt(lx, -z, t);
 };
 
 // ── 충돌: 원기둥/사각 콜라이더 밖으로 밀어냄 ────────────────────────────────

@@ -35,17 +35,19 @@ const WAVE_OCT = {
   midA: 0.008, midB: 0.006,       // 중간 물결
   ripA: 0.0028, ripB: 0.0022,     // 잔물결 (반사 반짝임을 만드는 층)
 };
-// 최대 진폭 = 전 옥타브 합 * 폭풍계수. 육지(GROUND_BASE)보다 확실히 낮게 유지된다.
+// 최대 진폭 = 전 옥타브 합. 육지(GROUND_BASE)보다 확실히 낮게 유지된다.
+// 4차 C5: 예전에는 CO₂가 높을수록 파도가 거칠어졌다(× (1 + co2k × 0.5)). CO₂ 농도와 파고 사이에 근거 있는 대응이 없고
+// CO₂는 눈에 보이지 않는다(2차 D2) → CO₂ 항(폭풍계수)을 지웠다. 파도는 연도와 상관없이 같다.
 const WAVE_MAX_AMPLITUDE =
-  (WAVE_OCT.swellA + WAVE_OCT.swellB + WAVE_OCT.midA + WAVE_OCT.midB + WAVE_OCT.ripA + WAVE_OCT.ripB) * 1.5;
-function waveHeightAt(lx, ly, t, intensity, halfD) {
+  WAVE_OCT.swellA + WAVE_OCT.swellB + WAVE_OCT.midA + WAVE_OCT.midB + WAVE_OCT.ripA + WAVE_OCT.ripB;
+function waveHeightAt(lx, ly, t) {
   const swell = Math.sin(lx * 1.5 + t * 0.70) * WAVE_OCT.swellA
               + Math.sin(ly * 1.9 - t * 0.55) * WAVE_OCT.swellB;
   const mid = Math.sin(lx * 5.5 + ly * 4.2 + t * 1.60) * WAVE_OCT.midA
             + Math.sin(ly * 6.3 - lx * 4.1 + t * 1.90) * WAVE_OCT.midB;
   const ripple = Math.sin(lx * 14.0 + ly * 11.0 + t * 3.40) * WAVE_OCT.ripA
                + Math.sin(ly * 15.0 - lx * 17.0 + t * 4.10) * WAVE_OCT.ripB;
-  return (swell + mid + ripple) * (1 + intensity * 0.5);   // CO2가 높을수록 거칠어짐
+  return swell + mid + ripple;
 }
 
 // 파도 표면의 법선을 '미분으로 직접' 구한다.
@@ -53,8 +55,8 @@ function waveHeightAt(lx, ly, t, intensity, halfD) {
 // 정점 12,500개를 매 프레임 처리하면 3ms 넘게 먹는다(측정치). 파도 수식을 이미 알고 있으니
 // 편미분 한 번이면 끝나고, 결과도 면 평균이 아니라 정확한 접평면 법선이라 반사가 더 매끈하다.
 // 반환은 waveMesh 로컬 좌표계 기준 - 이 평면은 -90도 회전해서 쓰므로 로컬 +z가 '위'다.
-function waveNormalAt(lx, ly, t, intensity, out) {
-  const S = 1 + intensity * 0.5, O = WAVE_OCT;
+function waveNormalAt(lx, ly, t, out) {
+  const O = WAVE_OCT;
   const c1 = Math.cos(lx * 1.5 + t * 0.70);
   const c2 = Math.cos(ly * 1.9 - t * 0.55);
   const c3 = Math.cos(lx * 5.5 + ly * 4.2 + t * 1.60);
@@ -62,9 +64,9 @@ function waveNormalAt(lx, ly, t, intensity, out) {
   const c5 = Math.cos(lx * 14.0 + ly * 11.0 + t * 3.40);
   const c6 = Math.cos(ly * 15.0 - lx * 17.0 + t * 4.10);
   const dx = (O.swellA * 1.5 * c1 + O.midA * 5.5 * c3 - O.midB * 4.1 * c4
-            + O.ripA * 14.0 * c5 - O.ripB * 17.0 * c6) * S;
+            + O.ripA * 14.0 * c5 - O.ripB * 17.0 * c6);
   const dy = (O.swellB * 1.9 * c2 + O.midA * 4.2 * c3 + O.midB * 6.3 * c4
-            + O.ripA * 11.0 * c5 + O.ripB * 15.0 * c6) * S;
+            + O.ripA * 11.0 * c5 + O.ripB * 15.0 * c6);
   const inv = 1 / Math.sqrt(dx * dx + dy * dy + 1);
   out[0] = -dx * inv; out[1] = -dy * inv; out[2] = inv;
 }
@@ -102,7 +104,7 @@ const FPWorld = {
   waterMesh: null,
   waveGeo: null, wavePosAttr: null, waveBase: null,
   waterWall: null,    // 물 옆면(윗변이 파도를 따라감)
-  // CO2가 정하는 기준 시야거리(applyEnvironment).
+  // 시야거리(applyEnvironment). 4차 C5: CO₂와 무관하게 맑은 낮 값으로 고정(예전 1000 ppm에서 1.1유닛까지 줄어들던 연출 삭제).
   fogBase: { far: 7.0, near: 0.25 },
   // 실측 도구가 측정 지점을 구분하는 데 쓰는 목록
   trees: [],          // {x, z, r} - 나무 근처는 광합성으로 CO2가 낮게 나온다
@@ -113,8 +115,8 @@ const FPWorld = {
   waveHeightAt, waveNormalAt, wetlandY,
 };
 
+// 4차 C5: 하늘은 늘 맑은 낮 색이다. 예전 HAZY_SKY(CO₂가 높으면 누렇게)는 지웠다 — CO₂는 무색 기체다(2차 D2, 조감과 같은 규칙).
 const CLEAR_SKY = new THREE.Color(0xbcdcf5);
-const HAZY_SKY = new THREE.Color(0xc99a5e);
 
 function buildFirstPersonWorld(renderer) {
   const scene = new THREE.Scene();
@@ -1013,6 +1015,9 @@ function buildFirstPersonWorld(renderer) {
     [0.55, -0.15, 0.12, 0.28], [-0.5, 0.2, 0.15, 0.32], [-0.1, 0.5, 0.16, 0.42],
     [0.35, 0.45, 0.13, 0.22], [0.55, 0.15, 0.14, 0.36]
   ];
+  // 4차 C5: 건물 개수·높이는 그해 도시 규모(cityLevel(cumFossilMax))를 따른다 — applyWorldState 가 바꾼다.
+  // 낮은 건물부터 나타나게 높이 순으로 세워 둔다(1750년 = 가장 낮은 1채).
+  FPWorld.buildings = [];
   bldDefs.forEach(([x, z, w, h], i) => {
     const facade = T.buildingFacade.clone();
     facade.needsUpdate = true;
@@ -1031,12 +1036,15 @@ function buildFirstPersonWorld(renderer) {
     bld.receiveShadow = true;
     cityGroup.add(bld);
     // 충돌체는 월드 좌표로 등록 (cityGroup이 +ZONE_W만큼 밀려 있음)
-    FPWorld.boxes.push({
+    const box = {
       minX: x + ZONE_W - w / 2, maxX: x + ZONE_W + w / 2,
       minZ: z - w / 2, maxZ: z + w / 2,
       top: GROUND_BASE + h,
-    });
+    };
+    FPWorld.boxes.push(box);
+    FPWorld.buildings.push({ mesh: bld, box, h, w, facade });
   });
+  FPWorld.buildings.sort((a, b) => a.h - b.h);
 
   // 도로 (main 브랜치에서 추가한 십자 교차로 그대로)
   const ROAD_W = 0.12, MAIN_ROAD_Z = -0.01, CROSS_ROAD_X = 0.09;
@@ -1067,7 +1075,7 @@ function buildFirstPersonWorld(renderer) {
   const glassMat = new THREE.MeshStandardMaterial({ color: 0x9fd0e8, transparent: true, opacity: 0.55, roughness: 0.15, metalness: 0.3, side: THREE.DoubleSide });
   function buildCarModel() {
     const group = new THREE.Group();
-    const bodyMat = gasCarMat;   // 실제 재질은 applyWorldCO2()에서 EV/내연으로 교체됨
+    const bodyMat = gasCarMat;   // 실제 재질은 applyWorldState()에서 EV/내연으로 교체됨
     const bodyParts = [];        // 색을 갈아끼울 대상 (바퀴·유리·배기구는 제외)
     const wheelR = 0.011, bodyH = 0.028, cabinH = 0.024, cabinWidth = 0.038;
     const bodyBottomY = wheelR * 2;
@@ -1234,7 +1242,7 @@ function buildFirstPersonWorld(renderer) {
     c.speed = c.baseSpeed;
   }
 
-  FPWorld.cars = [];
+  FPWorld.cars = [];   // 4차 C5: 그해 달리는 차만 — applyWorldState 가 allCars 에서 고른다
   let carIndex = 0;
   for (const lane of ['main', 'cross']) {
     const R = ROADS[lane];
@@ -1261,6 +1269,16 @@ function buildFirstPersonWorld(renderer) {
       carIndex++;
     }
   }
+  // 4차 C5: 대수가 도시 규모를 따르므로 전체(allCars)와 그해 달리는 차(cars)를 나눈다. 주행·미니맵·배기·CO₂ 센서는 cars 만 본다.
+  // 차선이 한쪽으로 몰리지 않게 두 도로를 번갈아 켠다.
+  {
+    const m = FPWorld.cars.filter(c => c.lane === 'main'), x = FPWorld.cars.filter(c => c.lane === 'cross');
+    FPWorld.allCars = [];
+    for (let i = 0; i < Math.max(m.length, x.length); i++) {
+      if (m[i]) FPWorld.allCars.push(m[i]);
+      if (x[i]) FPWorld.allCars.push(x[i]);
+    }
+  }
   FPWorld.placeCar = placeCar;
   FPWorld.respawnCar = respawnCar;
   FPWorld.ROADS = ROADS;
@@ -1273,8 +1291,8 @@ function buildFirstPersonWorld(renderer) {
   FPWorld.evCarMat = evCarMat;
   FPWorld.gasCarMat = gasCarMat;
 
-  // 배기가스 파티클: 내연기관차 대수에 맞춰 파티클을 나눠 배정한다.
-  // (전부 전기차가 되면 opacity 0으로 통째로 사라짐)
+  // 배기가스 파티클: 내연기관차 한 대에 EXHAUST_PER_CAR 개씩(updateExhaust 가 drawRange 로 그 수만 그린다).
+  // 4차 C5: 예전에는 불투명도·크기가 CO₂에 비례했다 — 이제 한 대가 내는 배기는 늘 같고, 대수만 도시 규모·전기차 비율을 따른다.
   const EXHAUST_PER_CAR = 14;
   const exCount = FPWorld.cars.length * EXHAUST_PER_CAR;
   const exGeo = new THREE.BufferGeometry();
@@ -1282,7 +1300,7 @@ function buildFirstPersonWorld(renderer) {
   const exLife = new Float32Array(exCount);
   for (let i = 0; i < exCount; i++) exLife[i] = Math.random();
   const exhaust = new THREE.Points(exGeo, new THREE.PointsMaterial({
-    color: 0x6b6660, size: 0.012, transparent: true, opacity: 0.5, depthWrite: false,
+    color: 0x6b6660, size: 0.014, transparent: true, opacity: 0.35, depthWrite: false,   // 고정값(연출) — 예전 2023년 무렵 값보다 조금 진하게
   }));
   // 프러스텀 컬링 끄기. three.js는 boundingSphere를 지오메트리 생성 시점에 한 번만
   // 계산하고, 정점을 매 프레임 갱신해도 다시 계산하지 않는다. 배기 입자는 "살아 있는
@@ -1308,7 +1326,9 @@ function buildFirstPersonWorld(renderer) {
   stack.position.set(0.6, GROUND_BASE + 0.175, 0.55);
   stack.castShadow = true;
   cityGroup.add(stack);
-  FPWorld.cylinders.push({ x: 0.6 + ZONE_W, z: 0.55, r: 0.045, top: GROUND_BASE + 0.35 });
+  const stackCol = { x: 0.6 + ZONE_W, z: 0.55, r: 0.045, top: GROUND_BASE + 0.35 };
+  FPWorld.cylinders.push(stackCol);
+  FPWorld.stack = { mesh: stack, col: stackCol, top: stackCol.top };
 
   const smokeCount = 90;
   const smokeGeo = new THREE.BufferGeometry();
@@ -1320,8 +1340,8 @@ function buildFirstPersonWorld(renderer) {
   const smoke = new THREE.Points(smokeGeo, smokeMat);
   smoke.frustumCulled = false;   // 배기가스와 같은 이유(굴뚝 연기도 매 프레임 위치가 바뀜)
   cityGroup.add(smoke);
-  // rate/opacity/size는 applyWorldCO2()가 CO2 농도에 맞춰 계속 바꿔준다
-  FPWorld.smoke = { geo: smokeGeo, mat: smokeMat, life: smokeLife, count: smokeCount, x: 0.6, z: 0.55, rate: 0.3 };
+  // rate/opacity/size는 applyWorldState()가 그해 화석 배출(stackLevel)에 맞춰 바꿔준다
+  FPWorld.smoke = { points: smoke, geo: smokeGeo, mat: smokeMat, life: smokeLife, count: smokeCount, x: 0.6, z: 0.55, rate: 0.3 };
 
   // 탄소포집 타워
   const tower = new THREE.Mesh(
@@ -1339,7 +1359,10 @@ function buildFirstPersonWorld(renderer) {
   towerFan.rotation.x = Math.PI / 2;
   cityGroup.add(towerFan);
   FPWorld.towerFan = towerFan;
-  FPWorld.cylinders.push({ x: -0.65 + ZONE_W, z: 0.15, r: 0.065, top: GROUND_BASE + 0.3 });
+  const towerCol = { x: -0.65 + ZONE_W, z: 0.15, r: 0.065, top: GROUND_BASE + 0.3 };
+  FPWorld.cylinders.push(towerCol);
+  // 4차 C5: 포집 타워는 대기에서 탄소를 거둬들이는 해(조감과 같은 presetSociety.removal > 0)에만 선다. 예전에는 1750년에도 서 있었다.
+  FPWorld.tower = { meshes: [tower, towerFan], col: towerCol, top: towerCol.top, speed: 0 };
 
   return FPWorld;
 }
@@ -1359,7 +1382,7 @@ FPWorld.hour = 12;
 // 하늘색·안개 반영은 이 함수 하나가 전담한다(4차 B2에서 날씨를, B3에서 시간을, C2에서 계절을 뺐다).
 // 예전엔 applyWorldCO2()가 하늘색과 안개를 직접 써 놓고 applyTimeOfDay()가 그 위에
 // 덮어써서 마지막에 부른 쪽만 남는 버그가 났다 — 요인이 하나만 남았어도 반영 경로는 하나로 둔다.
-//   하늘색 = CO2 기준색 · 안개 = CO2 기준거리 · 조명 = 기본세기 (낮 고정)
+//   하늘색 = 맑은 낮 색 · 안개 = 기준거리 · 조명 = 기본세기 (낮 고정, 4차 C5부터 CO₂와 무관)
 
 // 4차 C2: B3에서 남겨 둔 계절 표(SEASONS 'summer' 하나 — 기온 +8·해수 +2.5·CO₂ −1·하늘 색조 0·안개 계수 1)를 지웠다.
 // 측정값이 연평균이 되어 '여름 정오' 기준이 필요 없어졌고, 하늘 색조·안개 계수는 여름이 중립값(0·1)이라 화면은 같다.
@@ -1370,8 +1393,8 @@ function applyEnvironment() {
   const L = FPWorld.lights;
   if (!L) return;
 
-  // CO2가 정한 '맑은 낮의 하늘색'·안개 기준거리 그대로 (계절 색조·계수는 C2에서 지웠다. CO₂ 항은 C5에서 뺀다)
-  _envColor.copy(FPWorld.daySky || CLEAR_SKY);
+  // 맑은 낮의 하늘색·안개 기준거리 고정 (계절 색조·계수는 C2에서, CO₂ 항은 C5에서 지웠다)
+  _envColor.copy(CLEAR_SKY);
   FPWorld.skyMat.color.copy(_envColor);
   FPWorld.scene.fog.color.copy(_envColor);
   const fb = FPWorld.fogBase;
@@ -1388,7 +1411,7 @@ function applyEnvironment() {
 
 // 상태를 바꾼 쪽(연도·배출 경로 UI)은 전부 이것만 부르면 된다.
 // 갱신 경로를 하나로 모아 두면 "어떤 순서로 눌러도 전부 반영"이 보장된다.
-FPWorld.refresh = function () { applyWorldCO2(FPWorld.co2); };
+FPWorld.refresh = function () { if (FPWorld.sample) applyWorldState(FPWorld.sample, FPWorld.society); };
 
 // ── 해양 pH ─────────────────────────────────────────────────────────────────
 // 예전엔 여기서 자체 곡선을 썼다. 1000ppm에서 pH 6.15까지 떨어뜨려 백화를 극적으로
@@ -1474,47 +1497,77 @@ function openSeaState() {
 function coldPoolOmega() {
   return FPModel.seaState(1, fpSample()).omega;
 }
-function applyWorldCO2(ppm) {
-  FPWorld.co2 = ppm;
-  const k = Math.min(1, Math.max(0, (ppm - CO2_MIN) / (CO2_MAX - CO2_MIN)));
-  FPWorld.co2k = k;
+// ── 세계 상태 = 그해 엔진 표본 (4차 C5) ────────────────────────────────────────
+// 1인칭 세계 상태를 바꾸는 함수는 이것 하나다(예전 applyWorldCO2(ppm) 대체). E2(시간 이동)도 이것만 부른다.
+//   s   = 엔진 표본(FPModel.sample: ppm·T·sst·pH·omega·dic·fossil·cumFossilMax·year)
+//   soc = 그해 사회 모습(FPModel.society — 전기차·재생·원자력·포집). 없으면 시나리오(SSP) 규칙.
+// 시각 언어는 조감 EarthVisual 규칙을 따른다: 변수 하나에 표현 하나, CO₂는 보이지 않음(하늘·안개·파도 고정),
+// 도시·차·굴뚝은 배출의 역사(등록부 city_scale·fp_city — 연출), 산호·유빙은 기온(coral_sr15·glacier_scale).
+function applyWorldState(s, soc) {
+  soc = soc || FPModel.society(s);
+  FPWorld.sample = s;
+  FPWorld.society = soc;
+  FPWorld.co2 = s.ppm;   // 전 지구 CO₂ — HUD·야장 기록용 숫자일 뿐 화면 연출에는 쓰지 않는다
+  const C = FPModel.cityState(s, soc, FPWorld.buildings ? FPWorld.buildings.length : 0);
+  FPWorld.city = C;
 
-  // CO2는 '맑은 낮의 하늘색'과 '기준 시야거리'까지만 정한다.
-  // 실제 화면 값은 여기에 계절·시간을 합성한 결과라 applyEnvironment()가 마무리한다.
-  FPWorld.daySky = new THREE.Color().lerpColors(CLEAR_SKY, HAZY_SKY, k);
-  // 맑을 때 7유닛(≈350m)까지 보이다가, 1000ppm에선 1.1유닛(≈55m) 앞도 안 보이게
-  FPWorld.fogBase = { far: 7.0 - k * 5.9, near: 0.25 - k * 0.22 };
-  // 탁해진 대기에서는 수면 반사도 함께 죽는다
-  if (FPWorld.waterMesh) FPWorld.waterMesh.material.envMapIntensity = 1.6 - k * 0.9;
+  // 건물: 낮은 것부터 C.buildings 채, 높이 × heightK. 충돌 상자 윗면도 같이(안 그러면 낮아진 건물 위 허공에 선다)
+  if (FPWorld.buildings) {
+    FPWorld.buildings.forEach((b, i) => {
+      const on = i < C.buildings, h = b.h * C.heightK;
+      b.mesh.visible = on;
+      b.mesh.scale.y = C.heightK;
+      b.mesh.position.y = FPWorld.GROUND_BASE + h / 2;
+      b.facade.repeat.y = Math.max(1, Math.round(h * 4));   // 층수가 높이를 따라가게(창문이 늘어나 보이지 않게)
+      b.box.top = on ? FPWorld.GROUND_BASE + h : -Infinity;
+    });
+  }
 
-  // 자동차: CO2가 낮을수록 전기차 비율이 높아짐 (280ppm=전부 EV, 1000ppm=전부 내연)
-  if (FPWorld.cars) {
-    const gasCount = Math.round(FPWorld.cars.length * k);
-    FPWorld.cars.forEach((car, i) => {
-      const isGas = i < gasCount;
+  // 자동차: 대수 = 도시 규모(석유 시대 전에는 없음), 전기차 비율 = 그해 사회 모습(예전 'ppm 비례 — 280 ppm이면 전부 전기차' 삭제)
+  if (FPWorld.allCars) {
+    FPWorld.cars = FPWorld.allCars.slice(0, C.cars);
+    FPWorld.allCars.forEach((car, i) => {
+      const on = i < C.cars, isGas = on && i >= C.evCars;   // 앞쪽 evCars 대가 전기차
+      car.group.visible = on;
       car.isGas = isGas;
+      if (!on) {   // 서 있지 않은 차는 충돌·주행에서 빠진다
+        car.box.minX = car.box.maxX = car.box.minZ = car.box.maxZ = 1e9;
+        return;
+      }
       const mat = isGas ? FPWorld.gasCarMat : FPWorld.evCarMat;
       car.bodyParts.forEach(p => { p.material = mat; });
       car.tailMesh.visible = isGas;                         // 전기차엔 배기구 자체가 없음
       car.bolts.forEach(b => { b.visible = !isGas; });       // 후드 + 양 옆면 번개 마크
+      FPWorld.placeCar(car);
     });
-    FPWorld.gasCarCount = gasCount;
+    FPWorld.gasCarCount = C.gasCars;
   }
-  // 배기가스·굴뚝 연기의 양(불투명도/크기)도 같이 움직인다
-  if (FPWorld.exhaust) {
-    FPWorld.exhaust.points.material.opacity = 0.55 * k;
-    FPWorld.exhaust.points.material.size = 0.010 + k * 0.010;
+
+  // 굴뚝·연기: 그해 화석 배출(stackLevel). 배출이 0 이하(또는 굴뚝 0개 수준)면 굴뚝도 연기도 없다
+  if (FPWorld.stack) {
+    FPWorld.stack.mesh.visible = C.stackOn;
+    FPWorld.stack.col.top = C.stackOn ? FPWorld.stack.top : -Infinity;
   }
-  // 해양 산성화 -> 산호 백화 + 수초·어류 개체수 감소: 해수 pCO2와 같이 0.2초 틱에서 갱신한다
-  // (시간이 흐르면 applyWorldCO2가 매 프레임 불리므로 여기서 산호 수백 개를 다시 풀지 않는다)
   if (FPWorld.smoke) {
-    // CO2가 낮으면 굴뚝 연기가 거의 안 보이고, 높으면 시커멓게 뿜어져 나옴
-    FPWorld.smoke.mat.opacity = 0.05 + k * 0.55;
-    FPWorld.smoke.mat.size = 0.03 + k * 0.075;
-    FPWorld.smoke.mat.color.setHSL(0.09, 0.05, 0.62 - k * 0.35);
-    FPWorld.smoke.rate = 0.10 + k * 0.55;
+    const L = C.stackOn ? C.stack : 0;
+    FPWorld.smoke.points.visible = L > 0;
+    FPWorld.smoke.mat.opacity = 0.05 + L * 0.55;
+    FPWorld.smoke.mat.size = 0.03 + L * 0.075;
+    FPWorld.smoke.mat.color.setHSL(0.09, 0.05, 0.62 - L * 0.35);
+    FPWorld.smoke.rate = 0.10 + L * 0.55;
   }
-  applyEnvironment();   // 하늘색·안개·조명은 CO2·시간·계절이 함께 정한다
+  // 포집 타워: 대기에서 탄소를 거둬들이는 해에만
+  if (FPWorld.tower) {
+    const on = C.removal > 0;
+    FPWorld.tower.meshes.forEach(m => { m.visible = on; });
+    FPWorld.tower.col.top = on ? FPWorld.tower.top : -Infinity;
+    FPWorld.tower.speed = on ? 0.5 + 1.5 * C.removal : 0;   // 조감 towerFan 과 같은 회전 규칙
+  }
+  // 수면 반사: 맑은 낮 값으로 고정(예전에는 CO₂가 높으면 반사가 죽었다)
+  if (FPWorld.waterMesh) FPWorld.waterMesh.material.envMapIntensity = 1.6;
+
+  applyEnvironment();   // 하늘색·안개·조명 (고정)
+  applyOceanHealth();   // 산호·어류·수초·유빙 = 그해 엔진 표층 상태와 기온 (C4)
 }
 
 // 그림자 카메라를 플레이어 주변 좁은 범위로 계속 옮겨서 눈앞 그림자 해상도를 확보.
@@ -1779,12 +1832,12 @@ function updateAnimals(dt, t) {
 
 // ── 물 옆면: 윗변을 수면(파도) 높이에 맞춘다 ────────────────────────────────
 // 윗변 정점만 훑으므로 파도 본체(7천 정점)에 비하면 비용은 무시할 수준이다.
-function updateWaterWalls(t, intensity, halfD) {
+function updateWaterWalls(t) {
   const W = FPWorld.waterWall;
   if (!W) return;
   const arr = W.attr.array;
   for (let k = 0; k < W.topN; k++) {
-    arr[k * 6 + 1] = FPWorld.waveBaseY + FPWorld.waveHeightAt(W.sx[k], W.sy[k], t, intensity, halfD);
+    arr[k * 6 + 1] = FPWorld.waveBaseY + FPWorld.waveHeightAt(W.sx[k], W.sy[k], t);
   }
   W.attr.needsUpdate = true;
 }
@@ -1911,7 +1964,9 @@ function updateExhaust(dt) {
     return;
   }
   ex.points.visible = true;
-  for (let i = 0; i < ex.count; i++) {
+  const n = Math.min(ex.count, gasCars.length * ex.perCar);   // 내연기관차 한 대당 같은 양
+  ex.geo.setDrawRange(0, n);
+  for (let i = 0; i < n; i++) {
     const car = gasCars[i % gasCars.length];
     ex.life[i] += dt * (0.9 + (i % 5) * 0.12);
     if (ex.life[i] > 1) ex.life[i] -= 1;

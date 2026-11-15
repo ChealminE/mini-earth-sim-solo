@@ -34,12 +34,14 @@ const FPScenario = (() => {
   // 경로별 캐시도 FPModel 이 갖는다.
   S.sample = () => FPModel.sample(S.year, FPModel.pathRun(S.preset, levers));
   S.ppm = () => S.sample().ppm;
+  // 그해 사회 모습(전기차 비율 등) — 조감과 같은 규칙(FPModel.society). 직접 설계면 레버 값
+  S.society = s => FPModel.society(s, S.preset, levers);
   S.label = () => (S.year <= EarthSystem.LAST_HIST_YEAR ? `${S.year}년 (실제 배출)` : `${PRESETS[S.preset]} ${S.year}년`);
   return S;
 })();
-// 4차 C2: 기온·해수온은 엔진 표본(T·sst)에서 읽으므로 세계에 그해 표본을 같이 넣는다. C5에서 applyWorldState(s) 하나로 합친다.
+// 4차 C5: 세계 상태는 applyWorldState(그해 엔진 표본, 그해 사회 모습) 하나로 바꾼다(첫 반영은 아래 applyScenarioYear).
+// 도구·미니맵을 만들기 전에 한 번 넣어 둔다 — 그 전에 fpSample()을 읽는 곳이 2023년 대체값으로 떨어지지 않게.
 FPWorld.sample = FPScenario.sample();
-applyWorldCO2(FPWorld.sample.ppm);
 FPPlayer.init(camera, glCanvas);
 FPTools.init(camera);   // 단축바 + 손에 든 도구 (camera를 씬에 넣는 것도 여기서 처리)
 FPMinimap.init();
@@ -69,14 +71,12 @@ const fpYearOut = document.getElementById('fpYearOut');
 const fpGlobalCo2 = document.getElementById('fpGlobalCo2');
 if (FPScenario.preset === 'custom') fpScenario.querySelector('[value="custom"]').hidden = false;
 function applyScenarioYear() {
-  FPWorld.sample = FPScenario.sample();
-  const ppm = FPWorld.sample.ppm;
+  const s = FPScenario.sample();
   fpScenario.value = FPScenario.preset;
   fpYear.value = FPScenario.year;
   fpYearOut.textContent = FPScenario.year;
-  fpGlobalCo2.textContent = ppm.toFixed(0);
-  applyWorldCO2(ppm);
-  applyOceanHealth();   // 산호·어류·수초·유빙 크기 = 그해 엔진 표층 상태
+  fpGlobalCo2.textContent = s.ppm.toFixed(0);
+  applyWorldState(s, FPScenario.society(s));   // 도시·차·굴뚝·산호·유빙 (C5) — 하늘·파도는 연도와 무관
 }
 fpScenario.addEventListener('change', () => { FPScenario.preset = fpScenario.value; applyScenarioYear(); });
 fpYear.addEventListener('input', () => { FPScenario.year = Number(fpYear.value); applyScenarioYear(); });
@@ -116,8 +116,7 @@ function animate() {
 
   // 수면 파도: 잔물결까지 형상으로 만들고 매 프레임 법선을 다시 계산해야
   // 환경맵 반사가 물결 기울기를 따라 잘게 반짝인다 (반사가 보이는 핵심)
-  const intensity = FPWorld.co2k;
-  const halfD = FPWorld.waveD / 2;
+  // 4차 C5: 파도 세기는 CO₂와 무관(예전 co2k 항 삭제)
   const pa = FPWorld.wavePosAttr, base = FPWorld.waveBase;
   const na = FPWorld.waveGeo.attributes.normal;
   // setZ()/setXYZ()는 정점 7천 개 × 매 프레임이면 호출 오버헤드만으로도 무시 못 할 비용이라
@@ -125,14 +124,14 @@ function animate() {
   const parr = pa.array, narr = na.array;
   for (let i = 0, p = 0; i < pa.count; i++, p += 3) {
     const lx = base[p], ly = base[p + 1];
-    parr[p + 2] = FPWorld.waveHeightAt(lx, ly, t, intensity, halfD);
-    FPWorld.waveNormalAt(lx, ly, t, intensity, _wn);
+    parr[p + 2] = FPWorld.waveHeightAt(lx, ly, t);
+    FPWorld.waveNormalAt(lx, ly, t, _wn);
     narr[p] = _wn[0]; narr[p + 1] = _wn[1]; narr[p + 2] = _wn[2];
   }
   pa.needsUpdate = true;
   na.needsUpdate = true;
   // 물 옆면의 윗변도 같은 파도식으로 맞춰 올려 수면과 정확히 맞물리게 한다
-  updateWaterWalls(t, intensity, halfD);
+  updateWaterWalls(t);
   // 미세 법선맵을 서로 다른 속도로 흘려서 정지된 무늬처럼 보이지 않게
   FPWorld.waterNormal.offset.x = (t * 0.02) % 1;
   FPWorld.waterNormal.offset.y = (t * 0.013) % 1;
@@ -143,7 +142,7 @@ function animate() {
   updateOceanLife(dt, t);
   updateExhaust(dt);
 
-  // 공장 연기 (양·속도는 CO2에 따라 applyWorldCO2가 정한 rate를 따름)
+  // 공장 연기 (양·속도는 그해 화석 배출에 따라 applyWorldState 가 정한 rate를 따름)
   const sm = FPWorld.smoke;
   const sp = sm.geo.attributes.position;
   for (let i = 0; i < sm.count; i++) {
@@ -156,7 +155,7 @@ function animate() {
       sm.z + Math.cos(i * 7.3 + t * 0.2) * 0.06 * life);
   }
   sp.needsUpdate = true;
-  FPWorld.towerFan.rotation.z = t * 1.4;
+  FPWorld.towerFan.rotation.z = t * FPWorld.tower.speed;
 
   // 수중 화면 효과
   waterOverlay.classList.toggle('on', FPPlayer.underwater);

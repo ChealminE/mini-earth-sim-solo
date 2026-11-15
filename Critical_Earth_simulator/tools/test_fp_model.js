@@ -246,6 +246,48 @@ for (const p of PATHS) {
   check('유빙 크기 = EarthVisual.glacierFrac(T), 충돌체 같이 갱신', /glacierFrac\(T\)/.test(code('firstperson/fp-world.js')) && /collider\.r\s*=/.test(code('firstperson/fp-world.js')));
 }
 
+// ── C5 시각 언어 = EarthVisual 규칙 ──────────────────────────────────────────
+{
+  const N = 8;   // fp-world.js bldDefs 건물 수
+  const nB = (read('firstperson/fp-world.js').match(/const bldDefs = \[([\s\S]*?)\n  \];/) || [, ''])[1].split('],').filter(t => /\d/.test(t)).length;
+  check('건물 정의 8채 (fp-world.js bldDefs)', nB === N, `${nB}`);
+  const st = (p, y) => { const s = FM.sample(y, FM.pathRun(p)); return FM.cityState(s, FM.society(s, p), N); };
+  const c1750 = st('ssp245', 1750), c2023 = st('ssp245', 2023);
+  check('1750년: 건물 1~2채, 자동차 0대, 굴뚝·연기 없음, 포집 타워 없음', c1750.buildings >= 1 && c1750.buildings <= 2 && c1750.cars === 0 && !c1750.stackOn && c1750.removal === 0,
+    `건물 ${c1750.buildings} 높이×${c1750.heightK.toFixed(2)}`);
+  check('1900년: 아직 자동차 없음 (조감과 같은 carFrac)', st('ssp245', 1900).cars === 0);
+  check('2023년: 전기차 = round(대수 × LEVER_NOW.ev)', c2023.evCars === Math.round(c2023.cars * ES.LEVER_NOW.ev) && c2023.cars + 0 === c2023.evCars + c2023.gasCars,
+    `${c2023.cars}대 중 전기 ${c2023.evCars}`);
+  let mono = true;
+  for (const p of PATHS) { let prev = null; for (const o of FM.pathRun(p)) { const c = FM.cityState(o, FM.society(o, p), N);
+    if (prev && (c.buildings < prev.buildings || c.heightK < prev.heightK || c.cars < prev.cars)) mono = false; prev = c; } }
+  check('건물 수·높이·자동차 대수는 줄지 않는다 (누적 최댓값, 세 경로 전 구간)', mono);
+  const u = st('ssp119', 2100);
+  check('1.5 °C 2100: 화석 배출 음수 → 굴뚝·연기 없음, 포집 타워, 전부 전기차', !u.stackOn && u.removal > 0 && u.gasCars === 0, `차 ${u.cars} 전기 ${u.evCars} 포집 ${u.removal.toFixed(2)}`);
+  check('같은 해 같은 도시: 도시 규모·굴뚝 = 조감 EarthVisual.cityLevel·stackLevel', PATHS.every(p => YEARS.every(y => {
+    const s = FM.sample(y, FM.pathRun(p)), c = FM.cityState(s, FM.society(s, p), N);
+    return c.level === V.cityLevel(s.cumFossilMax) && c.stack === V.stackLevel(s.fossil);
+  })));
+  const levers = { ...ES.LEVER_NOW, ev: 0.8 };
+  const sc = FM.sample(2050, FM.pathRun('custom', levers));
+  check('직접 설계: 전기차 비율 = 그해 레버 값 (조감 applyLevers3D 와 같은 규칙)', FM.society(sc, 'custom', levers).ev === ES.leversAt(levers, 2050).ev);
+  // 하늘·안개·파도는 CO₂와 무관 — 연출 코드에서 CO₂ 비례 항이 없어야 한다
+  const code = f => read(f).replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+  const w = code('firstperson/fp-world.js'), m = code('firstperson/fp-main.js'), pl = code('firstperson/fp-player.js');
+  check('하늘·안개 고정: HAZY_SKY·daySky·co2k 없음', ![w, m, pl, code('firstperson/fp-tools.js'), code('firstperson/fp-minimap.js')].some(t => /HAZY_SKY|daySky|co2k/.test(t)));
+  check('파도 고정: waveHeightAt·waveNormalAt 에 세기(intensity) 항 없음, 1인칭 몸과 수면이 같은 식', !/intensity \* 0\.5|FPWorld\.co2 - 280/.test(w + pl) && /waveHeightAt\(lx, -z, t\)/.test(pl));
+  check('세계 상태 함수 하나: applyWorldState(s, soc), applyWorldCO2 없음', /function applyWorldState\(s, soc\)/.test(w) && !/applyWorldCO2/.test(w + m));
+  const body = (w.match(/function applyWorldState\(s, soc\) \{([\s\S]*?)\n\}/) || [, ''])[1];
+  check('applyWorldState 는 CO₂(s.ppm)를 숫자 기록에만 쓴다 (연출에는 안 씀)', (body.match(/s\.ppm/g) || []).length === 1 && /FPWorld\.co2 = s\.ppm/.test(body));
+  check('CO2_MIN/CO2_MAX 상수 불변 (280 / 1000, 함정 7)', vm.runInContext('CO2_MIN === 280 && CO2_MAX === 1000', ctx));
+  check('건물·자동차·굴뚝·포집 타워 충돌체가 보이는 것과 같이 갱신된다', /b\.box\.top = on \?/.test(body) && /car\.box\.minX = car\.box\.maxX/.test(body)
+    && /stack\.col\.top = C\.stackOn/.test(body) && /tower\.col\.top = on/.test(body));
+  console.log('\n      C5 도시 모습 (건물 수·높이 배율 · 자동차 대수(전기) · 굴뚝 · 포집)');
+  for (const p of PATHS) console.log('      ' + p + '  ' + [1750, 1850, 1950, 2023, 2050, 2100].map(y => {
+    const c = st(p, y); return `${y}: 건물 ${c.buildings}×${c.heightK.toFixed(2)} 차 ${c.cars}(${c.evCars}) 굴뚝 ${c.stackOn ? c.stack.toFixed(2) : '없음'}${c.removal > 0 ? ' 포집' : ''}`;
+  }).join(' | '));
+}
+
 // ── 표 (세이브포인트에 붙인다) ───────────────────────────────────────────────
 console.log('\n      경로     연도   CO₂ppm   T°C    sst°C   pH      Ω      화석GtC  누적최대GtC');
 for (const p of PATHS) {

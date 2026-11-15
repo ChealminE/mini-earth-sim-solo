@@ -868,6 +868,22 @@ const SOURCES = {
       '엔진 기준 냉수대(유빙 바로 옆) Ω는 1750~2200년 세 경로 모두 1.5 위라 Ω < 1 경고는 뜨지 않는다 — 억지로 켜지 않는다.',
     related: ['shell_omega', 'coral_sr15', 'glacier_scale'],
   },
+  // ── 4차 C5: 1인칭 도시 모습 (firstperson/fp-model.js cityState · fp-world.js applyWorldState) ──
+  fp_city: {
+    label: '1인칭 도시 건물·자동차·굴뚝 (연출)',
+    summary: '1인칭 도시의 건물 수·높이, 자동차 대수와 전기차 비율, 굴뚝 연기는 조감 3D 도시와 같은 규칙으로 배출의 역사를 따르게 연출했습니다. CO₂ 농도로는 하늘·안개·파도를 바꾸지 않습니다(CO₂는 무색).',
+    kind: 'assumption',
+    org: '이 프로그램',
+    dataset: '건물 개수 1 + round(7 × L), 높이 배율 0.4 + 0.6 × L (L = cityLevel(누적 화석 최댓값)) · 자동차 round(10 × carFrac(L)), 전기차 비율 = presetSociety(그해 화석 배출).ev 또는 직접 설계 레버 · 굴뚝·연기 = stackLevel(그해 화석 배출) · 포집 타워 = removal > 0',
+    version: '-',
+    cite: '이 프로그램의 연출 규칙. 도시 규모 함수는 city_scale(js/earth-visual.js)과 같다',
+    url: REPO_URL + 'firstperson/fp-model.js',
+    license: '-',
+    status: 'verified',
+    note: '근거 있는 공식이 아니라 학습 경로(산업혁명 이후 도시·차·굴뚝이 늘었다)를 눈으로 따라가게 정한 대응이다(EarthVisual 규칙 3). 1750년 건물 1채(낮은 집)·자동차 0대·굴뚝 없음, 2023년 건물 6채·자동차 9대(전기차 0대 — 3 %의 9대는 반올림 0). ' +
+      '4차 C5에서 예전 연출(CO₂가 높으면 하늘이 누렇고 시야 55 m·파도가 거칠어짐·280 ppm이면 전부 전기차)을 지웠다 — 조감 2차 D2·D3과 같은 규칙.',
+    related: ['city_scale', 'emis_gcp', 'ssp_emissions'],
+  },
 };
 
 // 종류 이름 (ⓘ 상자 배지·출처 문서 공용)
