@@ -23,7 +23,7 @@ if not exist ".venv\Scripts\python.exe" (
 )
 
 echo.
-echo 필요한 패키지 설치 중... (fastapi, uvicorn, bleak 등)
+echo 필요한 패키지 설치 중... (fastapi, uvicorn)
 ".venv\Scripts\python.exe" -m pip install --upgrade pip
 ".venv\Scripts\python.exe" -m pip install -r requirements.txt
 
