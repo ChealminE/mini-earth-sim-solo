@@ -288,6 +288,33 @@ for (const p of PATHS) {
   }).join(' | '));
 }
 
+// ── C6 등록부 (§6 등록부 새 키) ──────────────────────────────────────────────
+{
+  const { SOURCES } = require(path.join(ROOT, 'js', 'sources.js'));
+  // 지시서 §6 표: 키 → [kind, status]. status null = 지정 없음(assumption 은 연출임을 밝힌 것이라 이 등록부 관례상 verified 도 된다)
+  const WANT = {
+    fp_land_amp: ['param', 'verified'], fp_ocean_amp: ['param', 'verified'],
+    fp_uhi: ['calibrated', 'unverified'], fp_urban_co2: ['calibrated', 'unverified'],
+    fp_green_co2: ['assumption', 'unverified'], fp_tree_co2: ['assumption', null], fp_local_source: ['assumption', null],
+    fp_cold_pool: ['assumption', null], fp_ice_surface: ['assumption', null], fp_jitter: ['assumption', null],
+  };
+  const bad = Object.entries(WANT).filter(([k, [kind, st]]) => !SOURCES[k] || SOURCES[k].kind !== kind || (st && SOURCES[k].status !== st));
+  check('§6 새 키 10개: 등록부에 있고 kind·status 가 지시서대로', bad.length === 0, bad.map(([k]) => k).join(', '));
+  // 문헌값 파일에 해당 절이 없는 순수 연출(fp_jitter)은 '문헌값 해당 절 없음'과 근거 지시서 절을 적는다
+  check('새 키 note 에 식(dataset)과 문헌값 절 번호', Object.keys(WANT).every(k => SOURCES[k] && SOURCES[k].dataset
+    && /문헌값 \d-\d|문헌값 해당 절 없음/.test(SOURCES[k].note + SOURCES[k].cite)));
+  // 1인칭 계산 코드 주석이 가리키는 등록부 키는 전부 있어야 한다(지어낸 키 없음)
+  const refs = new Set();
+  for (const f of ['firstperson/fp-model.js', 'firstperson/fp-world.js', 'firstperson/fp-tools.js']) {
+    for (const m of read(f).matchAll(/\b(fp_[a-z0-9]+(?:_[a-z0-9]+)*|city_scale|coral_sr15|glacier_scale|shell_omega|model_air_temp|co2_noaa_gl)\b/g)) refs.add(m[1]);
+  }
+  refs.delete('fp_model');   // 'test_fp_model' 파일 이름
+  const missing = [...refs].filter(k => !SOURCES[k]);
+  check('1인칭 코드가 가리키는 등록부 키가 전부 있음', missing.length === 0, missing.length ? missing.join(', ') : `${refs.size}개`);
+  check('AR6 증폭 근거 = 발췌본 A.1.2 (verified 두 키의 page)', ['fp_land_amp', 'fp_ocean_amp'].every(k => /IPCC_AR6_WG1_SPM\.md 15행/.test(SOURCES[k].page))
+    && /1\.59 \[1\.34 to 1\.83\]/.test(read('docs/refs/발췌/IPCC_AR6_WG1_SPM.md')) && /0\.88 \[0\.68 to 1\.01\]/.test(read('docs/refs/발췌/IPCC_AR6_WG1_SPM.md')));
+}
+
 // ── 표 (세이브포인트에 붙인다) ───────────────────────────────────────────────
 console.log('\n      경로     연도   CO₂ppm   T°C    sst°C   pH      Ω      화석GtC  누적최대GtC');
 for (const p of PATHS) {
