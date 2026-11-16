@@ -16,7 +16,7 @@ html, body {
 canvas#gl { position: fixed; inset: 0; width: 100%; height: 100%; display: block; cursor: pointer; }
 
 /* ── 3D 위 종이 패널 (공통 바탕) ─────────────────────────────────────────── */
-#hud, #keyLine, #hotbar, #fieldBadge, #toast, .start-box, .resume-box, .ob-box {
+#hud, #timeline, #keyLine, #hotbar, #fieldBadge, #toast, .start-box, .resume-box, .ob-box {
   background: color-mix(in srgb, var(--paper-2) var(--fp-panel-mix), transparent);
   border: 1px solid var(--rule);
   color: var(--ink);
@@ -98,6 +98,53 @@ canvas#gl { position: fixed; inset: 0; width: 100%; height: 100%; display: block
 }
 #hud .hud-year[data-era="future"] { color: var(--on-fill); background: var(--ctl-time-on); }
 
+/* ── 타임라인 막대 (4차 E1, firstperson/fp-timeline.js) — 화면 위 가운데 ──
+   자리: 왼쪽 위 HUD(가장 긴 글 '2100년 · 기준 미래 (1.5 °C 탄소중립)'에서도 약 300 px 안)·오른쪽 위 기록 배지 사이,
+   알림 토스트(top 18 % — 720 px 에서 130 px)보다 위에서 끝나게(헤드리스 1280×720 실측 아래 끝 약 117 px).
+   폭은 1280 px 에서 HUD 와 겹치지 않는 680 px 까지. 시간 영역색(파랑) 한 가지.
+   z-index 6 = 시작 안내(50)보다 아래: 잠금이 풀린 채 학습지가 닫혀 있으면 그 클릭은 3D 로 돌아가는 클릭이어야 한다 */
+#timeline {
+  position: fixed; top: 10px; left: 50%; transform: translateX(-50%); z-index: 6;
+  display: flex; gap: var(--sp-3); align-items: stretch;
+  width: max-content; max-width: min(680px, calc(100vw - 600px)); box-sizing: border-box;
+  padding: 6px var(--sp-3); border-radius: var(--radius);
+}
+#timeline p { margin: 0; }
+#timeline .tl-main { display: flex; flex-direction: column; gap: 2px; flex: none; }   /* 폭 = 정거장 줄 — 슬라이더·안내가 그 폭을 따른다 */
+#timeline .tl-stops { display: flex; gap: var(--sp-1); }
+#timeline .tl-stops .btn { min-height: 28px; font-variant-numeric: tabular-nums; }
+/* 세밀 조정 슬라이더 — 조감 #tlScrub(css/paper.css)와 같은 바탕: ① 과거 회색 채움(--p-obs 까지, JS 가 넣는다) ② 전체 폭 파란 점선 ③ 바탕.
+   정거장 줄 아래 얇게(트랙 8 px) */
+#timeline #tlYear {
+  -webkit-appearance: none; appearance: none; width: 100%; height: 22px; min-height: 22px; margin: 0;
+  background: transparent; cursor: pointer;
+  --p-obs: 60.67%;
+  --track: linear-gradient(to right, color-mix(in srgb, var(--ink-3) 62%, var(--paper-3)) 0 var(--p-obs), transparent var(--p-obs)) 0 0 / 100% 100% no-repeat,
+           linear-gradient(to right, var(--ctl-time) 0 6px, transparent 6px) 0 50% / 10px 2px repeat-x,
+           var(--paper-3);
+}
+#timeline #tlYear::-webkit-slider-runnable-track { height: 8px; border-radius: 4px; background: var(--track); border: 1px solid var(--rule); }
+#timeline #tlYear::-moz-range-track { height: 8px; border-radius: 4px; background: var(--track); border: 1px solid var(--rule); }
+#timeline #tlYear::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; margin-top: -5px; border-radius: 50%;
+  background: var(--ctl-time); border: 2px solid var(--paper); box-shadow: 0 0 0 1.5px var(--ctl-time); }
+#timeline #tlYear::-moz-range-thumb { width: 12px; height: 12px; border-radius: 50%; background: var(--ctl-time); border: 2px solid var(--paper); box-shadow: 0 0 0 1.5px var(--ctl-time); }
+/* 실제 배출 뒤(고른 경로) — 손잡이도 점선 테두리 (조감과 같은 약속) */
+#timeline #tlYear.is-future::-webkit-slider-thumb { background: var(--paper); border: 2px dashed var(--ctl-time); box-shadow: none; }
+#timeline #tlYear.is-future::-moz-range-thumb { background: var(--paper); border: 2px dashed var(--ctl-time); box-shadow: none; }
+#timeline #tlYear:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+#timeline .tl-hint { font-size: var(--fs-1); line-height: 1.35; color: var(--ink-2); width: 0; min-width: 100%; }   /* 정거장 줄 폭을 넘지 않고 줄바꿈 */
+#timeline .tl-hint .key { margin: 0 1px; }
+/* 오른쪽: 지금 연도 큰 숫자 · 시대 · 갈래 이름 · 갈래 전환 */
+#timeline .tl-side { flex: none; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding-left: var(--sp-3); border-left: 1px solid var(--rule); }
+#timeline .tl-now-read { font-size: var(--fs-2); line-height: 1.15; color: var(--ink); white-space: nowrap; }
+#timeline .tl-now-read b { font-size: var(--fs-5); font-weight: 700; font-variant-numeric: tabular-nums; color: var(--ctl-time); }
+#timeline .tl-era { margin-left: 2px; font-weight: 700; }
+#timeline .tl-branch-name { font-size: var(--fs-1); line-height: 1.3; color: var(--ink-2); white-space: nowrap; }
+#timeline .tl-branch { display: flex; gap: 2px; }
+#timeline .tl-branch .btn { min-height: 26px; }
+#timeline .tl-note { font-size: var(--fs-1); line-height: 1.3; color: var(--ink-2); white-space: nowrap; }
+#timeline .tl-note[hidden] { display: none; }
+
 /* ── 늘 보이는 키 안내 (4차 D4): 화면 맨 아래 한 줄. 단축바는 그 위로 올렸다. 학습지가 열리면 숨긴다 ── */
 #keyLine {
   position: fixed; left: 50%; bottom: 8px; transform: translateX(-50%); z-index: 5;
@@ -125,8 +172,7 @@ canvas#gl { position: fixed; inset: 0; width: 100%; height: 100%; display: block
 /* 예전 8.5 px → --fs-1(13.2 px). '해수분석기' 다섯 글자가 한 줄에 들어가게 칸을 84 px 로 넓혔다 */
 #hotbar .slot .nm { font-size: var(--fs-1); font-weight: 600; white-space: nowrap; }
 
-/* 배출 경로 고르기 = 시나리오 영역(초록). theme.css 에는 select--time 만 있어 여기서 같은 규칙으로 더한다 */
-select.select--scen { --c: var(--ctl-scen); --c-bg: var(--ctl-scen-bg); }
+/* 4차 E1: 학습지 [과제]의 배출 경로 목록(select--scen)을 타임라인으로 옮기며 지웠다 — 경로 선택은 F3 '사회의 선택' */
 
 /* ── 기록 배지 (오른쪽 위 — 학습지가 닫혀 있어도 기록이 쌓이는 걸 보이게) ── */
 #fieldBadge {
@@ -282,6 +328,12 @@ select.select--scen { --c: var(--ctl-scen); --c-bg: var(--ctl-scen-bg); }
 body.sheet-open canvas#gl, body.sheet-open #waterOverlay { width: 60%; right: auto; }
 body.sheet-open #crosshair { left: 30%; }
 body.sheet-open #toast { left: 30%; }
+/* 4차 E1: 학습지가 열려도 타임라인은 3D 칸(왼쪽 60 %) 위 가운데. 이때는 마우스로 누르는 때라 [ · ] 키 안내는 뺀다 */
+body.sheet-open #timeline { left: 30%; }
+body.sheet-open #timeline .tl-hint { display: none; }
+/* 1280 px 에서 3D 칸은 768 px — 가운데 타임라인(약 600 px)이 왼쪽 위 HUD 와 겹친다. 학습지가 열린 동안은 걷기·도구가 막혀
+   HUD 의 구역·도구 글이 쓸모없고 연도·갈래는 타임라인이 크게 보여 주므로 HUD 를 숨긴다(닫으면 다시 보인다) */
+body.sheet-open #hud { display: none; }
 body.sheet-open #hotbar, body.sheet-open #keyLine, body.sheet-open #fieldBadge { display: none; }
 
 /* ── 학습지 [과제] '조작법' 절 (4차 D4, 예전 H 패널) ── */

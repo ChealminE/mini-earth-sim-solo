@@ -58,6 +58,8 @@ const FPSheet = (() => {
     isOpen = false;
     // 패널 안에 초점이 남아 있으면 숨긴 요소에 글이 들어가거나 Space 가 버튼을 누른다
     if (el.contains(document.activeElement)) document.activeElement.blur();
+    // 4차 E1: 타임라인 버튼·슬라이더에 남은 초점도 뺀다 — 남으면 탐험 중 Space(점프)가 정거장을 누르고 ←/→ 가 연도를 민다
+    if (typeof FPTimeline !== 'undefined') FPTimeline.blur();
     if (typeof SourceTip !== 'undefined') SourceTip.close();
     el.hidden = true;
     document.body.classList.remove('sheet-open');

@@ -28,7 +28,10 @@ const FPScenario = (() => {
   try { levers = q.get('levers') ? JSON.parse(q.get('levers')) : null; } catch (e) { levers = null; }
   const S = {
     preset: PRESETS[q.get('scenario')] && (q.get('scenario') !== 'custom' || levers) ? q.get('scenario') : 'ssp245',
-    year: Math.max(FPModel.YEAR_MIN, Math.min(FPModel.YEAR_MAX, Math.round(Number(q.get('year')) || EarthSystem.LAST_HIST_YEAR))),
+    // 4차 E1: 기본 연도 = '현재'(FPModel.NOW_YEAR, 마스터 D6). 예전 기본 2023(LAST_HIST_YEAR)은 '마지막 실제 배출 해'라 현재와 다르다
+    year: Math.max(FPModel.YEAR_MIN, Math.min(FPModel.YEAR_MAX, Math.round(Number(q.get('year')) || FPModel.NOW_YEAR))),
+    // 갈래: 'base' = 기준 미래(고른 경로), 'mine' = 나의 미래(F3 가 연다). E1 에서는 base 만 켜진다(fp-timeline.js)
+    branch: 'base',
     PRESETS,
   };
   // 4차 C1: 엔진 궤적·그해 표본은 FPModel(fp-model.js)에서만 낸다 — 조감과 같은 해 같은 값을 node(test_fp_model)로 검사하려고.
@@ -64,27 +67,49 @@ if (typeof ResizeObserver !== 'undefined') new ResizeObserver(fit).observe(glCan
 else window.addEventListener('resize', fit);
 fit();
 
-// ── 설정창 요소 ──
+// ── 연도·갈래 바꾸기 (4차 E1) ──
 // 4차 B4(마스터 D5): 교사용 CO₂ 직접 입력(#co2Slider)을 뺐다. CO₂는 늘 배출 경로·연도의 결과다.
 // 4차 D2: HUD 의 자동차·바다·산호 줄(hudCars·hudSea·hudCoral)을 뺐다 — HUD 는 아래 'HUD' 절.
-// 배출 경로·연도 → 전 지구 CO₂ (3차 E4)
-const fpScenario = document.getElementById('fpScenario');
-const fpYear = document.getElementById('fpYear');
-const fpYearOut = document.getElementById('fpYearOut');
-const fpGlobalCo2 = document.getElementById('fpGlobalCo2');
-if (FPScenario.preset === 'custom') fpScenario.querySelector('[value="custom"]').hidden = false;
+// 4차 E1: 학습지 [과제]의 배출 경로 목록·연도 슬라이더·전 지구 CO₂ 글(#fpScenario·#fpYear·#fpGlobalCo2)을 지우고
+// 화면 위 타임라인(firstperson/fp-timeline.js)으로 옮겼다. 경로 선택은 F3 '사회의 선택'으로 간다 — E 에서는 주소의
+// ?scenario= 가 없으면 현재 정책 고정. 전 지구 CO₂ 숫자는 화면에 띄우지 않는다(HUD 와 같은 까닭 — 재야 할 값을 늘 보여 주면 잴 이유가 없다).
+// 연도 배지 글(HUD·타임라인이 같이 쓴다 — 첫 반영 applyScenarioYear 가 읽으므로 그보다 앞에 둔다). 기본은 과거 / 현재 / 기준 미래(고른 경로) — '현재' = FPModel.NOW_YEAR(마스터 D6).
+// E(타임라인)·F(나의 미래)·T(우리 사회의 미래)가 이 함수를 바꿔 끼워 '나의 미래' 같은 이름을 채운다.
+FPScenario.badge = () => {
+  const y = FPScenario.year, now = FPModel.NOW_YEAR;
+  if (y < now) return { text: `${y}년 · 과거`, era: 'past' };
+  if (y === now) return { text: `${y}년 · 현재`, era: 'now' };
+  if (FPScenario.branch === 'mine') return { text: `${y}년 · 나의 미래`, era: 'future' };
+  return { text: `${y}년 · 기준 미래 (${FPScenario.PRESETS[FPScenario.preset]})`, era: 'future' };
+};
+// 타임라인 오른쪽 글: 시대(과거·현재·미래)와 갈래 이름. 과거 = 2023년까지 실제 배출, 그 뒤 = 고른 경로(조감과 같은 약속)
+FPScenario.timelineInfo = () => {
+  const y = FPScenario.year, now = FPModel.NOW_YEAR, b = FPScenario.badge();
+  const path = FPScenario.PRESETS[FPScenario.preset];
+  const branchName = y <= EarthSystem.LAST_HIST_YEAR ? '실제 배출'
+    : y <= now ? `${path} 경로` : (FPScenario.branch === 'mine' ? '나의 미래' : `기준 미래 · ${path}`);
+  return { era: b.era, eraText: { past: '과거', now: '현재', future: '미래' }[b.era] || '', branchName };
+};
 function applyScenarioYear() {
   const s = FPScenario.sample();
-  fpScenario.value = FPScenario.preset;
-  fpYear.value = FPScenario.year;
-  fpYearOut.textContent = FPScenario.year;
-  fpGlobalCo2.textContent = s.ppm.toFixed(0);
   applyWorldState(s, FPScenario.society(s));   // 도시·차·굴뚝·산호·유빙 (C5) — 하늘·파도는 연도와 무관
+  FPTimeline.show(FPScenario.year, FPScenario.branch, FPScenario.timelineInfo());
 }
-fpScenario.addEventListener('change', () => { FPScenario.preset = fpScenario.value; applyScenarioYear(); });
-fpYear.addEventListener('input', () => { FPScenario.year = Number(fpYear.value); applyScenarioYear(); });
+// 연도·갈래가 바뀌는 길은 이것 하나(타임라인 정거장·슬라이더·[ · ] 키·현장 과제 [O년으로 가기]).
+// E2 가 여기에 '현재까지는 하나의 역사'(D6) 실행 고르기·전환 덮개·측정 취소를 더한다
+function goTo(year, branch) {
+  const y = Math.max(FPModel.YEAR_MIN, Math.min(FPModel.YEAR_MAX, Math.round(Number(year))));
+  if (!Number.isFinite(y)) return;
+  const br = branch === 'mine' && FPTimeline.mineEnabled ? 'mine' : 'base';
+  if (y === FPScenario.year && br === FPScenario.branch) return;   // 같은 해·같은 갈래면 세계를 다시 만들지 않는다
+  FPScenario.year = y;
+  FPScenario.branch = br;
+  applyScenarioYear();
+}
+FPScenario.goTo = goTo;
 // 야장 현장 과제(fp-field.js)가 '이 연도로 가기'로 부른다
-FPScenario.goYear = y => { FPScenario.year = y; applyScenarioYear(); };
+FPScenario.goYear = y => goTo(y, FPScenario.branch);
+FPTimeline.init({ onGo: goTo });   // 첫 반영(applyScenarioYear) 앞 — show() 가 막대 요소를 찾아 둔 뒤라야 그린다
 applyScenarioYear();
 
 // ── 야장 ────────────────────────────────────────────────────────────────────
@@ -107,14 +132,6 @@ const waterOverlay = document.getElementById('waterOverlay');
 // 서 있는 구역 (fp-player.js currentZone 과 같은 경계). 학생 말로는 바다·녹지·도시 세 구역이다
 const zoneKeyAt = () => (FPPlayer.underwater || FPPlayer.pos.x < -FPWorld.ZONE_W / 2 ? 'ocean' : FPPlayer.pos.x > FPWorld.ZONE_W / 2 ? 'city' : 'green');
 const ZONE_NAME = { ocean: '바다', green: '녹지', city: '도시' };
-// 연도 배지 글. 기본은 과거 / 현재 / 기준 미래(고른 경로) — '현재' = FPModel.NOW_YEAR(마스터 D6).
-// E(타임라인)·F(나의 미래)·T(우리 사회의 미래)가 이 함수를 바꿔 끼워 '나의 미래' 같은 이름을 채운다.
-FPScenario.badge = () => {
-  const y = FPScenario.year, now = FPModel.NOW_YEAR;
-  if (y < now) return { text: `${y}년 · 과거`, era: 'past' };
-  if (y === now) return { text: `${y}년 · 현재`, era: 'now' };
-  return { text: `${y}년 · 기준 미래 (${FPScenario.PRESETS[FPScenario.preset]})`, era: 'future' };
-};
 // 글이 바뀔 때만 DOM 을 건드린다 (초당 8번 같은 글을 다시 쓰면 레이아웃만 다시 계산된다)
 const setText = (el, v) => { if (el.textContent !== v) el.textContent = v; };
 let hudTimer = 0;

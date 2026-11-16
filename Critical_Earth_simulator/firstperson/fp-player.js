@@ -290,6 +290,11 @@ function bindInput(P, canvas) {
     if (e.code === 'KeyR') P.respawn();
     // 4차 D4: H 도움말 패널을 학습지 [과제] 맨 아래 '조작법' 절로 옮겼다 — H 는 그 절을 연다
     if (e.code === 'KeyH' && !e.repeat) { FPSheet.showHelp(); e.preventDefault(); return; }
+    // 4차 E1: [ · ] = 타임라인 정거장 이전/다음(fp-timeline.js). e.code 라 한글 자판에서도 같은 키. 누르고 있어도 한 칸씩만
+    if (e.code === 'BracketLeft' || e.code === 'BracketRight') {
+      if (!e.repeat) FPTimeline.step(e.code === 'BracketLeft' ? -1 : 1);
+      e.preventDefault(); return;
+    }
     if (e.code === 'Space') e.preventDefault();   // 스페이스로 페이지가 스크롤되는 것 방지
     // 숫자키 1~4로 단축바 선택 (칸 수는 fp-tools.js HOTBAR_N)
     if (e.code.startsWith('Digit')) {

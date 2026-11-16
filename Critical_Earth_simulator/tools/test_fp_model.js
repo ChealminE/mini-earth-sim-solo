@@ -391,6 +391,46 @@ for (const p of PATHS) {
   check('D4 단축키 e.code · 글 칸 무시 · Tab 단축키 없음', !/e\.key === '[a-zA-Z]'/.test(pl) && /closest\('input\[type="text"\], textarea, select'\)/.test(pl) && !/'Tab'/.test(pl + read('firstperson/fp-sheet.js')));
 }
 
+// ── E1 타임라인 막대 (firstperson/fp-timeline.js) ─────────────────────────────
+{
+  const html = read('firstperson/index.html'), css = read('firstperson/style.css'), pl = read('firstperson/fp-player.js');
+  const strip = t => t.replace(/<!--[\s\S]*?-->/g, '').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+  const tl = (html.match(/<div id="timeline"[\s\S]*?\n<\/div>/) || [''])[0];
+  const stops = [...tl.matchAll(/data-year="(\d+)"/g)].map(m => +m[1]);
+  check('E1 정거장 6개 1850 · 1950 · 2000 · 현재(NOW_YEAR) · 2050 · 2100 (btn--time)', stops.join() === [1850, 1950, 2000, FM.NOW_YEAR, 2050, 2100].join()
+    && (tl.match(/class="btn btn--time btn--sm[^"]*" type="button" data-year/g) || []).length === 6, stops.join(' · '));
+  const sl = (tl.match(/<input[^>]+id="tlYear"[^>]*>/) || [''])[0];
+  check('E1 세밀 조정 슬라이더 1750~2200, 1년 (range--time)', /min="1750"/.test(sl) && /max="2200"/.test(sl) && /step="1"/.test(sl) && /range--time/.test(sl));
+  check('E1 갈래 [기준 미래 | 나의 미래] — 나의 미래는 비활성 + "현재에서 행동을 고르면 열려요"',
+    /id="tlBase"[^>]*>기준 미래</.test(tl) && /id="tlMine"[^>]*disabled[^>]*>나의 미래</.test(tl) && /현재에서 행동을 고르면 열려요/.test(tl));
+  check('E1 오른쪽 끝 지금 연도 큰 숫자 + 갈래 이름 (#tlYearBig·#tlBranchName)', /id="tlYearBig"/.test(tl) && /id="tlBranchName"/.test(tl));
+  check('E1 막대에 "F 로 학습지를 열어 잠금을" 안내', /F<\/span> 로 학습지를 열어 잠금을/.test(tl));
+  check('E1 과거 회색 채움·미래 파란 점선 (조감 #tlScrub 와 같은 약속)', /#tlYear \{[^}]*--p-obs[\s\S]*?repeat-x/.test(css) && /#tlYear\.is-future::-webkit-slider-thumb[^}]*dashed/.test(css));
+  check('E1 학습지가 열려도 3D 칸(60 %) 위 가운데', /body\.sheet-open #timeline \{[^}]*left: 30%/.test(css));
+  const code = strip(html) + strip(read('firstperson/fp-main.js'));
+  check('E1 옛 설정 #fpScenario·#fpYear·#fpGlobalCo2 삭제', !/fpScenario|fpYear\b|fpYearOut|fpGlobalCo2/.test(code));
+  check('E1 [ · ] 키 = e.code BracketLeft/BracketRight → FPTimeline.step', /e\.code === 'BracketLeft' \|\| e\.code === 'BracketRight'/.test(pl) && /FPTimeline\.step\(/.test(pl));
+  const keyRow = (html.match(/<tr><td><span class="key">\[<\/span>[\s\S]*?<\/tr>/) || [''])[0];
+  check('E1 조작법 표 [ · ] 줄에서 "(준비 중)" 지움', keyRow && !/준비 중/.test(keyRow));
+  check('E1 1인칭 기본 연도 = NOW_YEAR (예전 LAST_HIST_YEAR 2023)', /q\.get\('year'\)\) \|\| FPModel\.NOW_YEAR/.test(read('firstperson/fp-main.js')));
+  const b = (read('tools/build_single_html.py').match(/FP_JS = \[([\s\S]*?)\]/) || [, ''])[1];
+  const srcs = [...html.matchAll(/<script[^>]+src="([^"]+)"/g)].map(m => m[1]);
+  check('E1 fp-timeline.js: index.html·빌더 FP_JS 모두 fp-onboard 뒤 · fp-tools 앞', /fp-onboard\.js", "firstperson\/fp-timeline\.js"/.test(b)
+    && srcs.indexOf('fp-timeline.js') === srcs.indexOf('fp-onboard.js') + 1 && srcs.indexOf('fp-timeline.js') < srcs.indexOf('fp-tools.js'));
+  // 정거장 이동 규칙 — 막대 모듈을 DOM 없이 불러(함수 안에서만 document 를 읽는다) step/stopFrom 을 본다
+  const c2 = vm.createContext({ FPModel: FM, EarthSystem: ES, Object, Number, String });
+  vm.runInContext(read('firstperson/fp-timeline.js'), c2, { filename: 'fp-timeline.js' });
+  const T = vm.runInContext('FPTimeline', c2);
+  const go = [];
+  c2.document = { getElementById: () => null };
+  T.init({ onGo: (y, br) => go.push([y, br]) });   // 요소가 없으면 그리지 않고 onGo 도 연결하지 않는다
+  check('E1 정거장 이전/다음 (사이에 있으면 그 방향 가장 가까운 정거장, 끝에서는 그대로)',
+    T.stopFrom(2026, 1) === 2050 && T.stopFrom(2026, -1) === 2000 && T.stopFrom(1990, 1) === 2000 && T.stopFrom(1990, -1) === 1950
+    && T.stopFrom(1850, -1) === null && T.stopFrom(2100, 1) === null && T.stopFrom(1750, 1) === 1850 && T.stopFrom(2200, -1) === 2100
+    && T.stopFrom(2000, 1) === FM.NOW_YEAR,
+    T.STOPS.join(' · '));
+}
+
 // ── 표 (세이브포인트에 붙인다) ───────────────────────────────────────────────
 console.log('\n      경로     연도   CO₂ppm   T°C    sst°C   pH      Ω      화석GtC  누적최대GtC');
 for (const p of PATHS) {

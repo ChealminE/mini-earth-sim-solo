@@ -51,7 +51,7 @@
     </section>
     <section class="ob-card" data-ob="2" hidden>
       <h2>3. 시간과 행동</h2>
-      <p>같은 자리를 <b>다른 해</b>에서 재 보세요. 연도와 배출 경로는 학습지 [과제] 탭 아래 '연도 · 배출 경로'에서 바꿉니다.</p>
+      <p>같은 자리를 <b>다른 해</b>에서 재 보세요. 연도는 화면 위 <b>타임라인</b>에서 바꿉니다 — 탐험 중에는 <span class="key">[</span> · <span class="key">]</span> 키로 정거장(1850 ~ 2100)을 오갑니다.</p>
       <p>도시의 카페·분리배출장·정류장에서 하는 탄소중립 행동(<span class="key">E</span>)과 그 행동이 만든 미래는 학습지 [나의 행동]에 쌓입니다. (준비 중)</p>
       <p class="ob-sub">조작법은 언제든 <span class="key">H</span> 또는 학습지 [과제] 맨 아래 '조작법'에서 다시 볼 수 있습니다.</p>
     </section>
@@ -68,8 +68,37 @@
 <div id="hud">
   <div class="hud-row"><span class="hud-lbl">구역</span><b id="hudZone">녹지</b><span class="hud-sub" id="hudZoneSub"></span></div>
   <!-- 연도 배지: 'O년 · 과거/현재/기준 미래'. 나의 미래·우리 사회의 미래 문구는 E·F 가 FPScenario.badge 를 바꿔 채운다 -->
-  <div class="hud-row"><span class="hud-year" id="hudYear">2023년 · 과거</span></div>
+  <div class="hud-row"><span class="hud-year" id="hudYear">2026년 · 현재</span></div>
   <div class="hud-row"><span class="hud-lbl">도구</span><b id="hudTool">온도계</b></div>
+</div>
+
+<!-- 4차 E1: 타임라인 막대 — 화면 위 가운데(HUD 왼쪽 위·기록 배지 오른쪽 위 사이, 알림 토스트(위 18 %)보다 위).
+     예전 학습지 [과제] '연도 · 배출 경로'(#fpScenario·#fpYear·#fpGlobalCo2)를 화면의 주 조작으로 올렸다(firstperson/fp-timeline.js).
+     정거장 6개 + 세밀 조정 슬라이더(1750~2200) + 갈래 [기준 미래 | 나의 미래] + 지금 연도 큰 숫자.
+     포인터 잠금 중에는 [ · ] 키로 정거장을 오가고, 마우스로 누르려면 F 로 학습지를 열어 잠금을 푼다(그 전엔 시작 안내가 덮는다) -->
+<div id="timeline" role="group" aria-label="타임라인 — 연도 바꾸기">
+  <div class="tl-main">
+    <div class="tl-stops" id="tlStops">
+      <button class="btn btn--time btn--sm" type="button" data-year="1850" aria-pressed="false">1850</button>
+      <button class="btn btn--time btn--sm" type="button" data-year="1950" aria-pressed="false">1950</button>
+      <button class="btn btn--time btn--sm" type="button" data-year="2000" aria-pressed="false">2000</button>
+      <button class="btn btn--time btn--sm tl-now" type="button" data-year="2026" aria-pressed="true">현재 2026</button>
+      <button class="btn btn--time btn--sm" type="button" data-year="2050" aria-pressed="false">2050</button>
+      <button class="btn btn--time btn--sm" type="button" data-year="2100" aria-pressed="false">2100</button>
+    </div>
+    <!-- 과거(≤ 2023, 실제 배출) = 회색 채움, 그 뒤 = 파란 점선 — 조감 2차 F3 시간 막대(#tlScrub)와 같은 약속 -->
+    <input type="range" class="range range--time" id="tlYear" min="1750" max="2200" step="1" value="2026" aria-label="연도 세밀 조정 (1750~2200년)">
+    <p class="tl-hint" id="tlHint"><span class="key">[</span><span class="key">]</span> 정거장 · 마우스로 누르려면 <span class="key">F</span> 로 학습지를 열어 잠금을 푸세요</p>
+  </div>
+  <div class="tl-side">
+    <p class="tl-now-read" aria-live="polite"><b id="tlYearBig">2026</b>년 <span class="tl-era" id="tlEra">현재</span></p>
+    <p class="tl-branch-name" id="tlBranchName">하나의 역사</p>
+    <div class="tl-branch" role="group" aria-label="미래 갈래">
+      <button class="btn btn--time btn--sm is-on" type="button" id="tlBase" aria-pressed="true">기준 미래</button>
+      <button class="btn btn--time btn--sm" type="button" id="tlMine" aria-pressed="false" disabled aria-describedby="tlMineNote">나의 미래</button>
+    </div>
+    <p class="tl-note" id="tlMineNote">현재에서 행동을 고르면 열려요</p>
+  </div>
 </div>
 
 <!-- 4차 D4: 화면 아래 한 줄, 늘 보이는 짧은 키 안내. 학습지가 열리면 숨긴다(CSS body.sheet-open).
@@ -122,24 +151,13 @@
     <p class="field-note">측정 과제의 완료 여부는 <b>학습지에 쌓인 기록 수</b>로만 판정합니다 — 값이 맞고 틀리고가 아니라,
       조건을 채울 만큼 재었는지를 봅니다. 결론은 [기록] 탭의 평균과 표준편차로 내리세요.</p>
 
-    <!-- 예전 설정창(E)에 있던 것: 연도·배출 경로. E 의 타임라인(E1)이 들어오면 그쪽으로 옮긴다 -->
-    <h3 class="sh-h" id="shTimeHead">연도 · 배출 경로</h3>
-    <!-- 3차 E4: CO₂는 직접 정하지 않는다(배출의 결과 — 3차 마스터 결정 9). 배출 경로와 연도를 고르면 조감 미래 예측과 같은 모형이 계산한다 -->
-    <div class="sh-row">
-      <label class="lbl" for="fpScenario">배출 경로</label>
-      <select id="fpScenario" class="select select--scen">
-        <option value="ssp245">현재 정책 (SSP2-4.5)</option>
-        <option value="ssp126">파리협약 2 °C (SSP1-2.6)</option>
-        <option value="ssp119">1.5 °C 탄소중립 (SSP1-1.9)</option>
-        <option value="custom" hidden>직접 설계 (조감에서 가져옴)</option>
-      </select>
-    </div>
-    <div class="sh-row">
-      <label class="lbl" for="fpYear">연도</label>
-      <input type="range" class="range range--time" id="fpYear" min="1750" max="2200" step="1" value="2023">
-      <span class="val"><span id="fpYearOut">2023</span>년</span>
-    </div>
-    <p class="sh-note">전 지구 평균 CO₂ <b><span id="fpGlobalCo2">418</span> ppm</b> — 조감 모드 미래 예측과 <b>같은 모형</b>으로 계산한 값입니다(2023년까지는 실제 배출, 그 뒤는 고른 경로).<button class="src-i" type="button" data-src="model_co2" aria-label="출처 보기: 대기 CO₂ (모형 계산)" aria-expanded="false">ⓘ</button>
+    <!-- 4차 E1: 연도·배출 경로 고르기(#fpScenario·#fpYear·#fpGlobalCo2)는 화면 위 타임라인(#timeline)으로 옮겼다.
+         경로 선택은 F3 의 '사회의 선택'으로 간다 — E 에서는 기본 현재 정책 고정(주소 ?scenario= 는 계속 받는다). 여기엔 설명만 남긴다 -->
+    <h3 class="sh-h" id="shTimeHead">시간 이동 <span class="sub">화면 위 타임라인</span></h3>
+    <p class="sh-note">화면 위 <b>타임라인</b>의 정거장(1850 · 1950 · 2000 · 현재 2026 · 2050 · 2100)을 누르거나 아래 막대로 한 해씩 옮깁니다.
+      탐험 중에는 <span class="key">[</span> · <span class="key">]</span> 키로 정거장을 오갑니다. 막대의 <b>회색</b> 구간(2023년까지)은 실제 배출,
+      <b>파란 점선</b> 구간은 고른 배출 경로입니다.</p>
+    <p class="sh-note">해마다의 전 지구 CO₂는 조감 모드 미래 예측과 <b>같은 모형</b>으로 계산합니다(2023년까지는 실제 배출, 그 뒤는 고른 경로) — 그 값은 CO₂센서로 직접 재 보세요.<button class="src-i" type="button" data-src="model_co2" aria-label="출처 보기: 대기 CO₂ (모형 계산)" aria-expanded="false">ⓘ</button>
       <!-- 4차 C5: CO₂는 무색 — 하늘·안개·파도는 연도와 무관(조감 EarthVisual 규칙). 도시는 배출 역사를 따른다(연출) -->
       CO₂는 눈에 보이지 않으므로 하늘·바다의 모습은 연도와 상관없이 같습니다.
       도시의 건물·자동차·굴뚝 연기는 그때까지의 화석연료 배출을 따라 달라집니다(연출 — 조감 모드와 같은 규칙).<button class="src-i" type="button" data-src="fp_city" aria-label="출처 보기: 1인칭 도시 건물·자동차·굴뚝 (연출)" aria-expanded="false">ⓘ</button></p>
@@ -156,7 +174,7 @@
       <tr><td><span class="key">1</span>~<span class="key">4</span></td><td>도구 (온도계 · pH미터 · CO₂센서 · 해수분석기)</td></tr>
       <tr><td><span class="key">E</span></td><td>가까운 행동 지점·카페·분리배출장·시청과 상호작용 (준비 중)</td></tr>
       <tr><td><span class="key">F</span></td><td>학습지 열기/닫기 (열린 상태에서는 <span class="key">Esc</span> 도)</td></tr>
-      <tr><td><span class="key">[</span> · <span class="key">]</span></td><td>타임라인 정거장 이전/다음 (준비 중)</td></tr>
+      <tr><td><span class="key">[</span> · <span class="key">]</span></td><td>타임라인 정거장 이전/다음 (마우스로 누르려면 <span class="key">F</span> 로 학습지를 열어 잠금을 푼다)</td></tr>
       <tr><td><span class="key">M</span> · <span class="key">R</span></td><td>미니맵 크기 · 출발점으로</td></tr>
       <tr><td><span class="key">H</span></td><td>이 조작법 열기</td></tr>
       <tr><td><span class="key">Esc</span> (탐험 중)</td><td>마우스 고정 풀기 — 다시 잠그려면 3D 화면을 클릭</td></tr>
@@ -252,6 +270,8 @@
 <script src="fp-sheet.js"></script>
 <!-- 4차 D4: 첫 진입 안내 3장 -->
 <script src="fp-onboard.js"></script>
+<!-- 4차 E1: 화면 위 타임라인(정거장·세밀 조정·갈래). fp-player([ · ] 키)·fp-main(연도 바꾸기)이 부르므로 그 앞 -->
+<script src="fp-timeline.js"></script>
 <script src="fp-tools.js"></script>
 <script src="fp-player.js"></script>
 <script src="fp-main.js"></script>
