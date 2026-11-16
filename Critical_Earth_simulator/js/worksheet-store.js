@@ -9,7 +9,7 @@
 //   answers: { 경로 id: { saveAs: 응답 } },  evidence: [...],  ui: {...},  inquiry: { on, pathId, idx, records },   ← 조감
 //   fp: {                                                                                                            ← 1인칭
 //     tasks:   { [id]: { id, title, link, obs: {연도: 글}, diff, scenario, time } },   // 조감 [기록] 탭 renderFp 가 읽는다 — 형태를 바꾸지 말 것(마스터 §6-4)
-//     records: [ /* G1 — 측정 기록 */ ],
+//     records: [ { n, time, year, branch, society, scale, city, path, zone, spot, tool, value, unit, x, z, transect, channels, … } ],  // G1 측정 기록(한 측정 = 한 줄, 최대 2,000 — fp-field.js toRecord)
 //     actions: { chosen: [...], scale: 'korea', society: 'ssp245', minigames: {...} },   // F·M
 //     society: { cards: {...}, levers: {...}, savedAt, issueNotes: {...} },             // T (우리가 설계한 사회)
 //     ui:      { sheetOpen, tab, onboarded, grade: 'high', chapter },                     // grade = 마스터 D15(고등학생만)

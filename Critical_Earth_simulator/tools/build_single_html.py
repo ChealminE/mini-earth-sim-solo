@@ -139,12 +139,13 @@ AERIAL_JS = ["js/earth-model.js", "js/earth-data.js", "js/sources.js", "js/theme
 # 4차 E1: 타임라인 막대(fp-timeline)를 fp-onboard 뒤에 넣었다.
 # 4차 F2: 행동 카드·행동 지점(fp-actions)을 fp-timeline 뒤에 넣었다.
 # 4차 M2: 카페 미니게임(fp-stage-cafe)을 fp-stage 뒤에 넣었다.
+# 4차 G1: 1인칭 학습지 내보내기 — 엑셀 쓰기(xlsx-lite, 조감과 같은 파일)를 worksheet-store 뒤에, fp-export 를 fp-society 뒤에 넣었다.
 # 4차 M1: 미니게임 무대 — 소품 도구(fp-stage-kit)·무대 관리자(fp-stage)를 fp-player 뒤, fp-main 앞에 넣었다.
 FP_JS = ["js/earth-model.js", "js/earth-data.js", "js/sources.js", "js/theme.js", "js/icons.js",
-         "js/source-tip.js", "js/worksheet-store.js", "js/earth-system.js", "js/earth-visual.js",
+         "js/source-tip.js", "js/worksheet-store.js", "js/xlsx-lite.js", "js/earth-system.js", "js/earth-visual.js",
          "js/society-core.js", "js/actions-core.js", "firstperson/fp-model.js", "firstperson/fp-world.js", "firstperson/fp-tech-world.js",
          "firstperson/fp-minimap.js", "firstperson/fp-field.js", "firstperson/fp-sheet.js", "firstperson/fp-onboard.js", "firstperson/fp-timeline.js",
-         "firstperson/fp-actions.js", "firstperson/fp-society.js", "firstperson/fp-tools.js", "firstperson/fp-player.js",
+         "firstperson/fp-actions.js", "firstperson/fp-society.js", "firstperson/fp-export.js", "firstperson/fp-tools.js", "firstperson/fp-player.js",
          "firstperson/fp-stage-kit.js", "firstperson/fp-stage.js", "firstperson/fp-stage-cafe.js",
          "firstperson/fp-recycle-items.js", "firstperson/fp-stage-recycle.js", "firstperson/fp-stage-council.js",
          "firstperson/fp-main.js"]

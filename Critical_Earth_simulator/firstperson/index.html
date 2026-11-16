@@ -279,10 +279,18 @@
     <div class="field-actions">
       <button id="fieldTransectBtn" class="btn btn--rec" type="button">횡단 조사 시작</button>
       <button id="fieldCoastBtn" class="btn btn--rec" type="button">해안선 평행 조사</button>
-      <button id="fieldCsvBtn" class="btn btn--rec" type="button"><span data-icon="download"></span>CSV 내보내기</button>
+    </div>
+    <!-- 4차 G1: 학습지 내보내기(firstperson/fp-export.js). 엑셀 = 시트 7장(측정 기록 · 지점별 요약 · 나의 행동 · 미래 비교 · 과제 답 · 미니게임 · 우리 사회),
+         CSV = ① 측정 기록만. 지우기는 확인 대화를 거친다 -->
+    <h3 class="sh-h">학습지로 내보내기</h3>
+    <div class="field-actions">
+      <button id="fieldXlsxBtn" class="btn btn--rec is-on" type="button"><span data-icon="download"></span>엑셀로 내보내기</button>
+      <button id="fieldCsvBtn" class="btn btn--rec" type="button"><span data-icon="download"></span>CSV로 내보내기</button>
       <button id="fieldClearBtn" class="btn btn--rec" type="button"><span data-icon="trash"></span>기록 지우기</button>
     </div>
-    <p class="field-note">CSV는 엑셀에서 바로 열립니다(한글 깨짐 방지 BOM 포함). 학습지와 맞춘 .xlsx 내보내기는 준비 중입니다.</p>
+    <p class="field-note">엑셀 파일에는 측정 기록 · 지점별 요약 · 나의 행동 · 미래 비교 · 과제 답 · 미니게임 · 우리 사회 시트가 들어 있습니다. 숫자 칸은 숫자라 바로 평균·그래프를 낼 수 있어요.
+      CSV는 측정 기록만 담습니다(엑셀에서 한글이 깨지지 않게 BOM 포함). 기록은 이 브라우저에 저장되어 새로 고쳐도 남습니다.</p>
+    <p class="field-note" id="fieldCapNote" hidden><b>저장할 수 있는 기록(2,000줄)이 찼어요.</b> 엑셀로 내보낸 뒤 [기록 지우기]로 비우세요 — 그 전까지의 새 기록은 새로 고치면 사라집니다.</p>
   </section>
 
   <!-- [나의 행동]: 4차 F2 행동 카드(firstperson/fp-actions.js 가 #actRoot 를 그린다) — ① 나의 탄소 · ② 모두의 선택.
@@ -311,6 +319,8 @@
 <script src="/js/source-tip.js"></script>
 <!-- 4차 D3: 학습지 공용 저장소(DOM 없음) — 조감 학습지와 같은 localStorage['worksheet.v1'] 를 쓴다 -->
 <script src="/js/worksheet-store.js"></script>
+<!-- 4차 G1: 엑셀 쓰기·내려받기(buildXlsx·downloadBlob) — 조감과 같은 파일(마스터 §6-2). 외부 라이브러리 없음 -->
+<script src="/js/xlsx-lite.js"></script>
 <script src="/js/earth-system.js"></script>
 <!-- 4차 C1: 1인칭 값 계산은 fp-model.js 한 곳. 도시 규모(cumFossilMax)·산호·유빙을 조감과 같은 식으로 쓰려고 earth-visual 을 같이 부른다 -->
 <script src="/js/earth-visual.js"></script>
@@ -334,6 +344,8 @@
 <script src="fp-actions.js"></script>
 <!-- 4차 T4: 학습지 [우리 사회] 탭(목표 비교·조감 연결) — fp-actions 뒤 -->
 <script src="fp-society.js"></script>
+<!-- 4차 G1: 학습지 내보내기(.xlsx 시트 7장 · .csv) — 읽는 순간에는 정의만, 버튼은 FPField.init 이 단다 -->
+<script src="fp-export.js"></script>
 <script src="fp-tools.js"></script>
 <script src="fp-player.js"></script>
 <!-- 4차 M1: 미니게임 무대 — 소품 도구(fp-stage-kit) → 무대 관리자(fp-stage). 무대 파일(카페·분리배출장·회의실)은 이 뒤에 -->

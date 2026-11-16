@@ -250,17 +250,20 @@ const FPActions = (() => {
         score: Number(x.score) || 0, retryOk: !!x.retryOk, spawned: !!x.spawned })) };
   }
   // G1 미니게임 시트(⑥)가 그대로 쓰는 표 두 개 — 머리줄 + 줄. 날짜는 ISO 그대로(시트에서 형식을 정한다)
-  function minigameTable(log, prepName) {
+  //   4차 G1: G 지시서 ⑥ 열의 '빠진 준비'·'이유'를 맨 뒤에 붙였다(앞 열 순서는 M4 그대로). whyOf(품목 id, 지역) = 품목 파일의 이유 한 줄
+  function minigameTable(log, prepName, whyOf) {
     const L = log && typeof log === 'object' ? log : {}, pn = p => (prepName ? prepName(p) : p);
     const cafe = (L.cafe || []).map(e => [e.at, e.drinkLabel, e.cupLabel, e.perWeek == null ? '' : e.perWeek]);
     const recycle = [];
     for (const e of L.recycle || []) for (const it of e.items || []) {
       recycle.push([e.at, e.round, it.name, it.chosenName, it.binName, it.prep.map(pn).join(' · '), it.done.map(pn).join(' · '), it.score,
-        it.tries.length > 1 ? it.triesNames.slice(1).join(' → ') + (it.retryOk ? ' (맞음)' : '') : '', it.spawned ? '딸린 품목' : '', e.accuracy, e.region]);
+        it.tries.length > 1 ? it.triesNames.slice(1).join(' → ') + (it.retryOk ? ' (맞음)' : '') : '', it.spawned ? '딸린 품목' : '', e.accuracy, e.region,
+        (it.missing || []).map(pn).join(' · '), whyOf ? whyOf(it.id, e.region) || '' : '']);
     }
     return {
       cafe: { head: ['날짜', '음료', '컵', '주당 잔 수'], rows: cafe },
-      recycle: { head: ['날짜', '판', '품목', '내가 고른 곳', '정답', '해야 할 준비', '한 준비', '점수(첫 시도)', '다시 넣기', '비고', '그 판 정확도', '지역 기준'], rows: recycle },
+      recycle: { head: ['날짜', '판', '품목', '내가 고른 곳', '정답', '해야 할 준비', '한 준비', '점수(첫 시도)', '다시 넣기', '비고', '그 판 정확도', '지역 기준',
+        '빠진 준비', '이유'], rows: recycle },
     };
   }
   // 입구 ① 카페(fp-stage-cafe.js 결과 카드): 기록 한 줄 + 텀블러를 골랐으면 '나의 행동' 텀블러가 켜진다(D13)

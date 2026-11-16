@@ -508,10 +508,12 @@ for (const p of PATHS) {
   check('E3 지점별 평균은 (연도, 갈래, 구역, 지점, 항목)으로 묶는다 — 다른 해·다른 갈래 값끼리 평균하지 않음',
     sm.length === 4 && g(2026, 'now').n === 2 && Math.abs(g(2026, 'now').mean - 15.1) < 1e-9 && g(2100, 'base').n === 2 && Math.abs(g(2100, 'base').mean - 17.2) < 1e-9
     && g(1850, 'past').n === 1 && g(2100, 'mine').n === 1, sm.map(r => `${r.year} ${r.branchKo} n${r.n} ${r.mean.toFixed(2)}`).join(' · '));
-  const csv = F.toCSV().replace(/^﻿/, '').split('\r\n');
-  const head = csv[0].split(',');
-  check('E3 CSV 맨 뒤 열 = 연도 · 갈래 · 경로 (앞 19열 순서 그대로, 열 정리는 G1)', head.slice(-3).join() === '연도,갈래,경로' && head.length === 22 && head[0] === '번호'
-    && csv[3].split(',').slice(-3).join() === '2100,기준 미래,ssp245' && csv.slice(1).every(l => l.split(',').length === 22), csv[3].split(',').slice(-3).join(' · '));
+  // 4차 G1: 예전 야장 CSV(19열 + 연도·갈래·경로)는 FPExport(fp-export.js)의 ① 측정 기록으로 바뀌었다 — 열 검사는 tools/test_export.js.
+  //   여기서는 기록 줄이 저장소(fp.records)를 오가도 E3 묶음이 그대로인지만 본다
+  const back = F.rows.map(F.toRecord).map(F.fromRecord);
+  check('E3·G1 기록 줄 → 저장(fp.records) → 되살림: 연도 · 갈래 · 경로 · 값 · 좌표 그대로', back.length === F.rows.length
+    && back.every((b, i) => b.year === F.rows[i].year && b.branch === F.rows[i].branch && b.branchKo === F.rows[i].branchKo && b.path === F.rows[i].path
+      && b.value === F.rows[i].value && Math.abs(b.x - F.rows[i].x) < 1e-9 && b.spotKo === F.rows[i].spotKo));
   // 기록 한 줄에 붙는 값 (record → FPScenario.recordTag)
   const fc = read('firstperson/fp-field.js'), mn = read('firstperson/fp-main.js');
   check('E3 기록 한 줄에 year · branch(과거/현재/기준 미래/나의 미래) · path(경로 키)', /year: tag\.year, branch: tag\.branch, branchKo: tag\.branchKo, path: tag\.path/.test(fc)

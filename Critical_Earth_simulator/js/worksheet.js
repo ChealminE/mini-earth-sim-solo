@@ -230,9 +230,10 @@ const Worksheet = (() => {
     $('recFpCount').textContent = rows.length;
     $('recFpLog').innerHTML = rows.map(r => `<tr><td>${esc(r.title)}</td><td>${esc(r.link)}</td><td>${esc(PRESET_KO[r.scenario] || r.scenario || '')}</td>
       <td>${Object.entries(r.obs || {}).filter(([, v]) => String(v).trim()).map(([y, v]) => `<b>${esc(y)}</b> ${esc(v)}`).join('<br>')}</td><td>${esc(r.diff || '')}</td></tr>`).join('');
-    // 단일 HTML 파일(file://)에서는 브라우저에 따라 저장소가 화면마다 갈린다 → 1인칭 기록이 안 보이면 야장 CSV를 쓰라고 알린다
+    // 단일 HTML 파일(file://)에서는 브라우저에 따라 저장소가 화면마다 갈린다 → 1인칭 기록이 안 보이면 1인칭 학습지의 엑셀 내보내기를 쓰라고 알린다
+    //   (4차 G1: 야장 CSV 는 1인칭 학습지 [기록] 탭의 엑셀·CSV 내보내기로 바뀌었다 — 엑셀에 과제 답·측정 기록이 함께 들어 있다)
     $('recFpNote').hidden = !(singleFile && !rows.length);
-    $('recFpNote').textContent = '단일 파일에서 1인칭 기록이 보이지 않으면 1인칭 야장(F)의 CSV로 내보내 주세요.';
+    $('recFpNote').textContent = '단일 파일에서 1인칭 기록이 보이지 않으면 1인칭 학습지 [기록]의 엑셀로 내보내 주세요.';
   }
   const singleFile = location.protocol === 'about:' || location.protocol === 'file:';
   $('wsTabRecord').addEventListener('click', renderFp);

@@ -10,8 +10,8 @@
 //   조감 모드는 전 지구 평균값 하나뿐이라 도시 열섬도, 나무 밑 CO2 저하도 보여줄 수 없다.
 //   그 공간 변이를 숫자로 붙잡아 가져 나갈 수 있게 하는 것이 이 파일의 목적이다.
 //
-// CSV는 조감 모드 '실시간 실험' 탭과 같은 모양으로 뽑는다. 학생이 아두이노 실측과
-// 1인칭 조사 결과를 같은 표에 놓고 비교할 수 있어야 하기 때문이다.
+// 4차 G1: 측정 기록은 학습지 공용 저장소 fp.records 에 한 측정 = 한 줄로 쌓는다(새로 고쳐도 남는다, 최대 RECORD_MAX 줄).
+// 내보내기(.xlsx 시트 7장 · .csv 측정 기록만)는 firstperson/fp-export.js(FPExport)가 맡는다 — 예전 19열 야장 CSV(시각·바람·게임 시간 등)는 지웠다.
 //
 // 4차 D3: 야장 패널(#fieldPanel)은 오른쪽 학습지 패널(firstperson/fp-sheet.js)의 [과제]·[기록] 탭으로 옮겼다.
 // 이 파일은 내용(기록·통계·횡단 조사·과제 카드)만 그리고, 열고 닫기·탭은 FPSheet 가 맡는다.
@@ -19,7 +19,9 @@
 // ============================================================================
 
 const FPField = {
-  rows: [],          // {n, year, branch, branchKo, path, kind, label, spot, zone, value, unit, x, z, co2, hour, iso} — year·branch·path 는 4차 E3
+  // {n, iso, year, branch, branchKo, path, society, scale, city, kind, kindKo, spot, spotKo, zone, seaClass, nearCoral, value, unit,
+  //  x, z(세계 유닛), transect(m), co2, sw, waterTemp} — year·branch·path 는 4차 E3, society·scale·city·transect 는 G1
+  rows: [],
   transect: null,    // 진행 중인 횡단 조사
   _doneTasks: new Set(),
 };
@@ -48,6 +50,50 @@ const SW_CH = [
   { key: 'temp',  ko: '해수분석 수온(°C)',          unit: '°C',      dec: 2 },
 ];
 
+// ── 저장할 기록 한 줄 (4차 G1, 학습지 공용 저장소 fp.records) ──────────────────────
+// fp.records[i] = { n, time, year, branch, society, scale, city, path, zone, spot, spotKo, seaClass, nearCoral,
+//                   tool, value, unit, x, z(실척 m), transect(m | null), co2, channels(해수 분석기 네 값 | null), waterTemp }
+// 한 측정 = 한 줄로 둔다. 해수 분석기의 네 값(용존CO₂·DIC·Ω·수온)은 channels 에 같이 넣고, 학습지 표·CSV 로 내보낼 때
+// 채널마다 한 줄로 펼친다(FPExport.lines) — 저장을 채널 줄로 하면 과제 판정·미니맵이 쓰는 '한 측정' 묶음을 다시 맞춰야 해서.
+// 2,000줄 상한: localStorage 약 5 MB 안에서 한 줄 약 0.3 KB → 0.6 MB. 넘으면 저장하지 않고 안내한다(자동 삭제 없음).
+const RECORD_MAX = 2000;
+const FIELD_BRANCH_KO = { past: '과거', now: '현재', base: '기준 미래', mine: '나의 미래' };   // fp-main BRANCH_KO 와 같은 이름(저장값에서 되살릴 때)
+const recRound1 = v => (Number.isFinite(v) ? Math.round(v * 10) / 10 : null);
+// 기록 path → 사회의 선택 · 참여 규모 · 우리 도시(%). 기준 미래 = '선택', 나의 미래 = 'mine:선택:규모:행동', 우리 도시 참여 = 끝 ':cityNN'(fp-main recordTag)
+//   과거·현재는 사회의 선택과 무관한 하나의 역사(D6)라 사회의 선택·참여 규모를 비운다(우리 도시만 현재에 있을 수 있다)
+function pathParts(branch, path) {
+  const p = String(path || ''), cm = /:city(\d+)$/.exec(p), parts = p.replace(/:city\d+$/, '').split(':');
+  const city = cm ? Number(cm[1]) : 0;
+  if (branch === 'mine') return { society: parts[1] || '', scale: parts[2] || '', city };
+  if (branch === 'base') return { society: parts[0] || '', scale: '', city };
+  return { society: '', scale: '', city };
+}
+// 메모리의 기록 줄(row) → 저장 줄. 순수(node 검사용). 값은 계측기에 뜬 값 그대로(이미 분해능으로 맞춰져 있다)
+function toRecord(r) {
+  return {
+    n: r.n, time: r.iso, year: r.year, branch: r.branch, society: r.society || '', scale: r.scale || '', city: r.city || 0, path: r.path || '',
+    zone: r.zone || '', spot: r.spot || '', spotKo: r.spotKo || '', seaClass: r.seaClass || null, nearCoral: !!r.nearCoral,
+    tool: r.kind, value: r.value, unit: r.unit, x: recRound1(r.x * 50), z: recRound1(r.z * 50), transect: r.transect == null ? null : recRound1(r.transect),
+    co2: recRound1(r.co2), channels: r.sw ? { ...r.sw } : null, waterTemp: r.waterTemp == null ? null : r.waterTemp,
+  };
+}
+// 저장 줄 → 메모리의 기록 줄. 저장값이 낡거나 깨졌으면 null(그 줄은 버린다)
+function fromRecord(d) {
+  if (!d || typeof d !== 'object' || !KIND_KO[d.tool] || !Number.isFinite(d.value)) return null;
+  return {
+    n: d.n, iso: d.time || '', year: d.year, branch: d.branch, branchKo: FIELD_BRANCH_KO[d.branch] || '', path: d.path || '',
+    society: d.society || '', scale: d.scale || '', city: d.city || 0,
+    kind: d.tool, kindKo: KIND_KO[d.tool], spot: d.spot || '', spotKo: d.spotKo || '', zone: d.zone || '',
+    seaClass: d.seaClass || null, nearCoral: !!d.nearCoral, value: d.value, unit: d.unit,
+    x: (Number(d.x) || 0) / 50, z: (Number(d.z) || 0) / 50, transect: d.transect == null ? null : d.transect,
+    co2: d.co2, sw: d.channels && typeof d.channels === 'object' ? { ...d.channels } : null, waterTemp: d.waterTemp == null ? null : d.waterTemp,
+  };
+}
+FPField.RECORD_MAX = RECORD_MAX;
+FPField.toRecord = toRecord;
+FPField.fromRecord = fromRecord;
+FPField.pathParts = pathParts;
+
 // ── 기록 ────────────────────────────────────────────────────────────────────
 // FPTools가 측정을 '확정'했을 때만 부른다(수렴 중인 값은 기록하지 않는다).
 FPField.record = function (tool, value, reading) {
@@ -63,9 +109,12 @@ FPField.record = function (tool, value, reading) {
   // 확정 순간의 연도 = 겨눈 순간의 연도다
   const tag = typeof FPScenario !== 'undefined' && FPScenario.recordTag ? FPScenario.recordTag()
     : { year: FPModel.NOW_YEAR, branch: 'now', branchKo: '현재', path: FPModel.BASE_PRESET };
+  // 4차 G1: 횡단 조사 중이면 '그 순간의' 시작점 거리를 기록에 남긴다(예전 CSV 는 내보낼 때의 횡단 조사로 다시 재서, 조사를 끝내면 빈칸이 됐다)
+  const T = this.transect;
   const row = {
     n: this.rows.length + 1,
     year: tag.year, branch: tag.branch, branchKo: tag.branchKo, path: tag.path,
+    ...pathParts(tag.branch, tag.path),   // 사회의 선택 · 참여 규모 · 우리 도시(%) — 학습지 표의 칸(G1)
     kind: tool.kind,
     kindKo: KIND_KO[tool.kind],
     spot: reading.spot || '',
@@ -76,23 +125,23 @@ FPField.record = function (tool, value, reading) {
     value,
     unit: spec,
     x, z,
-    co2: FPWorld.co2,
-    // ── 해수 상태·바람·게임 시간 (CSV 뒤쪽 열) ──
+    transect: T ? Math.hypot(x - T.x0, z - T.z0) * 50 : null,
+    co2: FPWorld.co2,                                       // 그해 전 지구 CO₂ — 미니맵 'CO₂ 평균 대비' 색점이 쓴다
     sw: reading.values ? { ...reading.values } : null,     // 해수 분석기 측정값 (용존CO2·DIC·Ω·수온)
     waterTemp: reading.waterTemp != null ? reading.waterTemp                 // pH미터 병기 수온
              : (reading.values ? reading.values.temp
              : (tool.kind === 'temp' && isSea ? value : null)),               // 온도계로 잰 해수
-    pco2Sw: FPModel.seaPCO2(fpSample()),      // 그해 엔진 해수 pCO2 (바다 전체 한 값, 4차 C4)
-    wind: '무풍',                             // 4차 B3: 해륙풍을 뺐다. 열은 G에서 정리 — 그때까지 값만 고정
-    gameTime: null,                           // 4차 C4: 게임 시간(FPAir)을 지웠다 — 열은 G에서 정리할 때까지 빈칸
-    hour: FPWorld.hour,
+    // 4차 G1: 해수 pCO₂(학생이 재는 값이 아님)·바람('무풍' 고정, B3)·게임 시간(빈칸, C4)·시각(12 고정, D2) 칸은 뺐다
     iso: new Date().toISOString(),
   };
   this.rows.push(row);
   if (this.transect) this.addTransectPoint(row);
+  // 4차 G1: 저장소에 한 줄. 상한(RECORD_MAX)이 차면 저장하지 않고 안내만 한다(자동 삭제 없음 — 3차 C4 증거 상한과 같은 방식)
+  const saved = FieldStore.addRecord(toRecord(row));
   // 4차 D2: HUD 에서 측정값을 뺐으므로, 확정된 값은 이 짧은 알림으로 한 번 보여 준다(예: '도심 대기 CO₂ 449 ppm · 기록 #12').
   // 과제 완료 알림이 이걸 덮어써야 하므로 checkTasks 보다 먼저 띄운다.
-  this.toast(`${row.spotKo} ${recordText(row)} · 기록 #${row.n}`, 2600);
+  if (saved) this.toast(`${row.spotKo} ${recordText(row)} · 기록 #${row.n}`, 2600);
+  else this.toast(`기록 #${row.n} — 저장할 수 있는 기록 ${RECORD_MAX.toLocaleString('ko-KR')}줄이 찼어요. [엑셀로 내보내기] 뒤 [기록 지우기]로 비우세요(이 뒤의 기록은 새로 고치면 사라져요).`, 6500);
   this.checkTasks();
   this.refresh();
   this.flash();
@@ -100,6 +149,7 @@ FPField.record = function (tool, value, reading) {
 
 FPField.clear = function () {
   this.rows.length = 0;
+  FieldStore.clearRecords();
   this.transect = null;
   this._doneTasks.clear();
   // 진행 중이던 측정이 나중에 확정돼서 '지운 뒤'에 한 줄 끼어드는 일을 막는다
@@ -181,6 +231,23 @@ const scenarioTag = () => (/^ssp/.test(FPScenario.choice) ? FPScenario.choice : 
 // fp.tasks[id] = { id, title, link, obs: {연도: 글}, diff, scenario, time } — 조감 [기록] 탭 renderFp 가 이 모양을 읽는다(마스터 §6-4)
 const FieldStore = {
   read: () => WorksheetStore.readFp(),
+  // 4차 G1: 측정 기록(fp.records). 저장소가 막혀도 WorksheetStore 가 메모리로 받아 준다 — 여기서는 예외만 삼킨다(마스터 §6-4)
+  addRecord(rec) {
+    let ok = true;
+    try {
+      WorksheetStore.updateFp(fp => {
+        if (fp.records.length >= RECORD_MAX) { ok = false; return; }
+        fp.records.push(rec);
+      });
+    } catch (e) { /* 이번 화면 동안만(FPField.rows) */ }
+    return ok;
+  },
+  clearRecords() {
+    try { WorksheetStore.updateFp(fp => { fp.records = []; }); } catch (e) { /* 메모리만 비운다 */ }
+  },
+  loadRecords() {
+    try { return (this.read().records || []).map(fromRecord).filter(Boolean); } catch (e) { return []; }
+  },
   setTask(id, patch) {
     const t = FIELD_TASKS.find(x => x.id === id);
     WorksheetStore.updateFp(fp => {
@@ -615,55 +682,22 @@ FPField.endTransect = function () {
   this.refresh();
 };
 
-// ── CSV ─────────────────────────────────────────────────────────────────────
-// 조감 모드 '실시간 실험' 탭이 내보내는 CSV와 같은 자리에 같은 뜻의 열을 둔다.
-// BOM을 붙이는 이유: 안 붙이면 엑셀이 한글 헤더를 깨서 연다.
-FPField.toCSV = function () {
-  // 앞 12열은 예전 그대로(순서·이름 불변). 해수 상태·바람·게임 시간은 그 뒤에 붙인다.
-  // 해당 없는 칸은 비워 둔다(예: 온도계 기록의 co2_aq).
-  const head = ['번호', '측정항목', '측정지점', '구역', '측정값', '단위',
-                'X(m)', 'Z(m)', '시작점거리(m)', '설정CO2(ppm)', '시각(h)', '기록시각',
-                'water_temp(°C)', 'co2_aq(µmol/kg)', 'dic(µmol/kg)', 'omega',
-                'pco2_sw(ppm)', 'wind', 'game_time(h)',
-                // 4차 E3: 연도·갈래·경로 — 앞 열 순서를 바꾸지 않으려고 맨 뒤에 붙인다(열 정리는 G1)
-                '연도', '갈래', '경로'];
-  const f = (v, d) => (v == null || !isFinite(v) ? '' : v.toFixed(d));
-  const T = this.transect;
-  const lines = [head.join(',')];
-  for (const r of this.rows) {
-    const d = T ? (Math.hypot(r.x - T.x0, r.z - T.z0) * 50).toFixed(1) : '';
-    lines.push([
-      r.n, r.kindKo, r.spotKo, r.zone, r.value.toFixed(r.unit === 'ppm' ? 0 : 2), r.unit,
-      (r.x * 50).toFixed(1), (r.z * 50).toFixed(1), d, r.co2,
-      r.hour == null ? '' : r.hour.toFixed(2), r.iso,
-      f(r.waterTemp, 1), f(r.sw && r.sw.co2aq, 1), f(r.sw && r.sw.dic, 0), f(r.sw && r.sw.omega, 2),
-      f(r.pco2Sw, 1), r.wind || '', f(r.gameTime, 2),
-      r.year == null ? '' : r.year, r.branchKo || '', r.path || '',
-    ].join(','));
-  }
-  return '﻿' + lines.join('\r\n');
-};
-FPField.download = function () {
-  if (!this.rows.length) return;
-  const blob = new Blob([this.toCSV()], { type: 'text/csv;charset=utf-8' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  const d = new Date();
-  const p = n => String(n).padStart(2, '0');
-  a.download = `미니지구_야외조사_${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}.csv`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-};
-
 // ── 화면 ────────────────────────────────────────────────────────────────────
 FPField.init = function () {
   // 4차 D3: 내용이 그려질 자리는 학습지 패널(#sheet) — 열고 닫기·탭 전환은 FPSheet(fp-sheet.js)
   this.el = document.getElementById('sheet');
   this.badge = document.getElementById('fieldBadge');
-  document.getElementById('fieldCsvBtn').addEventListener('click', () => this.download());
-  document.getElementById('fieldClearBtn').addEventListener('click', () => this.clear());
+  // 4차 G1: 지난 기록을 저장소에서 되살린다(새로 고쳐도 [기록]·과제 진행도·미니맵 점이 그대로). 이미 끝난 과제는 다시 알리지 않는다
+  this.rows.push(...FieldStore.loadRecords());
+  for (const p of this.taskProgress()) if (p.done) this._doneTasks.add(p.task.id);
+  // 내보내기는 FPExport(fp-export.js). 지우기는 되돌릴 수 없으므로 확인을 받는다
+  document.getElementById('fieldXlsxBtn').addEventListener('click', () => FPExport.xlsx());
+  document.getElementById('fieldCsvBtn').addEventListener('click', () => FPExport.csv());
+  document.getElementById('fieldClearBtn').addEventListener('click', () => {
+    if (!this.rows.length) return;
+    if (!confirm(`측정 기록 ${this.rows.length}건을 모두 지울까요? 지운 기록은 되돌릴 수 없어요 — 먼저 엑셀로 내보내 두세요.`)) return;
+    this.clear();
+  });
   document.getElementById('fieldTransectBtn').addEventListener('click', () => {
     if (this.transect) this.endTransect(); else this.startTransect();
   });
@@ -731,6 +765,9 @@ FPField.refresh = function () {
   if (!this.el) return;
   const cnt = document.getElementById('fieldCount');
   if (cnt) cnt.textContent = this.rows.length;
+  // 4차 G1: 저장 상한이 찼으면 내보내기 줄 아래에 안내(자동 삭제는 하지 않는다)
+  const cap = document.getElementById('fieldCapNote');
+  if (cap) cap.hidden = this.rows.length < RECORD_MAX;
   this.updateBadge();
   this.renderTasks();
   const tb = document.getElementById('fieldTBody');
