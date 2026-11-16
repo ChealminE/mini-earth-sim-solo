@@ -280,13 +280,16 @@ function bindInput(P, canvas) {
     // 학습지 현장 과제의 글 칸·목록 상자에 글을 쓰는 중이면 단축키를 쓰지 않는다(3차 E4, 마스터 §6-5).
     // 한글 자판에서 E = ㄷ, F = ㄹ 이라 이 검사가 없으면 글을 쓰다 학습지가 닫혔다
     if (e.target && e.target.closest && e.target.closest('input[type="text"], textarea, select')) return;
+    // 4차 D4: 첫 진입 안내가 열려 있으면 단축키를 쓰지 않는다(안내 버튼을 Space·Enter 로 누를 수 있게 — fp-onboard.js)
+    if (typeof FPOnboard !== 'undefined' && FPOnboard.isOpen) return;
     // e.repeat 가드: 키를 누르고 있으면 keydown이 연속으로 들어와 창이 깜빡인다
     if (e.code === 'KeyF') { if (!e.repeat) FPSheet.toggle(); e.preventDefault(); return; }
     if (P.uiOpen) return;                      // 학습지가 열려 있으면 게임 조작 차단 (Tab·화살표는 패널 안 초점 이동에 쓴다)
     P.keys[e.code] = true;
     if (e.code === 'KeyM' && !e.repeat) FPMinimap.toggle();
     if (e.code === 'KeyR') P.respawn();
-    if (e.code === 'KeyH') document.getElementById('helpPanel').classList.toggle('hidden');
+    // 4차 D4: H 도움말 패널을 학습지 [과제] 맨 아래 '조작법' 절로 옮겼다 — H 는 그 절을 연다
+    if (e.code === 'KeyH' && !e.repeat) { FPSheet.showHelp(); e.preventDefault(); return; }
     if (e.code === 'Space') e.preventDefault();   // 스페이스로 페이지가 스크롤되는 것 방지
     // 숫자키 1~4로 단축바 선택 (칸 수는 fp-tools.js HOTBAR_N)
     if (e.code.startsWith('Digit')) {

@@ -22,12 +22,44 @@
     <h2>미니 지구 · 1인칭 탐험</h2>
     <p>화면을 클릭하면 전체화면으로 전환되고 마우스로 시점을 조작합니다.</p>
     <p class="sub"><b>ESC</b> 를 누르면 마우스가 풀립니다.</p>
-    <p class="sub"><b>F</b> 를 누르면 오른쪽 <b>학습지</b>의 [과제]에서 무엇을 조사할지 볼 수 있습니다. (<b>H</b> 조작법)</p>
+    <p class="sub"><b>F</b> 를 누르면 오른쪽 <b>학습지</b>의 [과제]에서 무엇을 조사할지 볼 수 있습니다. (<b>H</b> 조작법 · 키보드·마우스 전용)</p>
     <span class="btn btn--nav is-on start-btn">클릭해서 시작</span>
   </div>
   <!-- 4차 D3: 학습지를 닫은 뒤에는 짧은 안내만. 브라우저는 클릭에서만 포인터 잠금을 다시 걸어 준다(마스터 §6-6) -->
   <div class="resume-box">
     <span class="btn btn--nav is-on start-btn">3D를 클릭해 계속</span>
+  </div>
+</div>
+
+<!-- 4차 D4: 첫 진입 안내 3장(이동 → 측정 → 시간·행동). 건너뛸 수 있고, 본 뒤에는 학습지 공용 저장소 fp.ui.onboarded 로
+     다시 띄우지 않는다(학습지 [과제] '조작법'의 [첫 안내 다시 보기]). firstperson/fp-onboard.js -->
+<div id="onboard" role="dialog" aria-modal="true" aria-labelledby="obTitle" hidden>
+  <div class="ob-box">
+    <p class="ob-step" id="obStep">1 / 3</p>
+    <section class="ob-card" data-ob="0">
+      <h2 id="obTitle">1. 걸어 다니기</h2>
+      <p><span class="key">W</span><span class="key">A</span><span class="key">S</span><span class="key">D</span> 로 걷고 마우스로 둘러봅니다.
+        <span class="key">Shift</span> 달리기 · <span class="key">Space</span> 점프 · 바다에서는 헤엄칩니다.</p>
+      <p>3D 화면을 클릭하면 마우스가 화면에 고정되고, <span class="key">Esc</span> 를 누르면 풀립니다.</p>
+      <p class="ob-sub">키보드·마우스 전용입니다. 태블릿 터치는 지원하지 않습니다.</p>
+    </section>
+    <section class="ob-card" data-ob="1" hidden>
+      <h2>2. 재기</h2>
+      <p><span class="key">1</span>~<span class="key">4</span> 로 도구(온도계 · pH미터 · CO₂센서 · 해수분석기)를 들고, 잴 곳을 겨눠 <b>좌클릭</b>합니다.</p>
+      <p>표시창 아래 막대가 다 차야 값이 확정되고 학습지 [기록]에 저장됩니다. 계측기에는 오차가 있으니 같은 곳을 여러 번 재세요.</p>
+      <p><span class="key">F</span> 를 누르면 오른쪽에 <b>학습지</b>가 열립니다 — 무엇을 조사할지는 [과제] 탭에 있습니다.</p>
+    </section>
+    <section class="ob-card" data-ob="2" hidden>
+      <h2>3. 시간과 행동</h2>
+      <p>같은 자리를 <b>다른 해</b>에서 재 보세요. 연도와 배출 경로는 학습지 [과제] 탭 아래 '연도 · 배출 경로'에서 바꿉니다.</p>
+      <p>도시의 카페·분리배출장·정류장에서 하는 탄소중립 행동(<span class="key">E</span>)과 그 행동이 만든 미래는 학습지 [나의 행동]에 쌓입니다. (준비 중)</p>
+      <p class="ob-sub">조작법은 언제든 <span class="key">H</span> 또는 학습지 [과제] 맨 아래 '조작법'에서 다시 볼 수 있습니다.</p>
+    </section>
+    <div class="ob-actions">
+      <button class="btn btn--nav btn--sm" type="button" id="obSkip">건너뛰기</button>
+      <button class="btn btn--nav" type="button" id="obPrev"><span data-icon="back"></span>이전</button>
+      <button class="btn btn--nav is-on" type="button" id="obNext">다음</button>
+    </div>
   </div>
 </div>
 
@@ -38,48 +70,18 @@
   <!-- 연도 배지: 'O년 · 과거/현재/기준 미래'. 나의 미래·우리 사회의 미래 문구는 E·F 가 FPScenario.badge 를 바꿔 채운다 -->
   <div class="hud-row"><span class="hud-year" id="hudYear">2023년 · 과거</span></div>
   <div class="hud-row"><span class="hud-lbl">도구</span><b id="hudTool">온도계</b></div>
-  <!-- 늘 보이는 짧은 키 안내는 D4 에서 화면 아래 한 줄로 옮긴다 — 그때까지 여기 둔다 -->
-  <div class="hud-keys"><span class="key">H</span>조작법 <span class="key">F</span>학습지 <span class="key">M</span>지도 <span class="key">1~4</span>도구</div>
 </div>
 
-<!-- 기본은 숨김: 펼쳐두면 우하단 도구의 표시창을 가려서 측정값을 못 읽는다 (H로 토글) -->
-<div id="helpPanel" class="hidden">
-  <h3>조작법 <span class="key">H</span> 로 열고 닫기</h3>
-  <table>
-    <tr><td><span class="key">W</span><span class="key">A</span><span class="key">S</span><span class="key">D</span></td><td>이동</td></tr>
-    <tr><td>마우스 이동</td><td>시점 회전 (전체화면·마우스 고정 상태)</td></tr>
-    <tr><td><span class="key">ESC</span></td><td>마우스 고정 해제</td></tr>
-    <tr><td><span class="key">Shift</span></td><td>달리기</td></tr>
-    <tr><td><span class="key">Space</span></td><td>점프 / 물에서 헤엄쳐 오르기</td></tr>
-    <tr><td><span class="key">R</span></td><td>출발 지점으로 되돌아가기</td></tr>
-    <tr><td><span class="key">F</span></td><td>학습지 열기/닫기 — 오른쪽 40 % (과제·기록·연도와 배출 경로). 열린 상태에서는 <span class="key">Esc</span> 로도 닫힘</td></tr>
-    <tr><td><span class="key">M</span></td><td>미니맵 크기 (보통 → 크게 → 끄기)</td></tr>
-    <tr><td><span class="key">1</span>~<span class="key">4</span></td><td>단축바에서 도구 선택</td></tr>
-    <tr><td>좌클릭</td><td>든 도구로 바라보는 지점 측정</td></tr>
-  </table>
-  <!-- 4차 C2(마스터 D2·D9): 지면 3종(해변 모래·녹지 지면·도시 지면)을 뺐고 값은 그해 연평균이다 -->
-  <!-- 4차 D1: ⓘ = 조감과 같은 출처 상자(js/source-tip.js). 키는 C6 등록부(js/sources.js) — check_sources.js 가 누락을 막는다 -->
-  <p class="note"><b>1 온도계</b> — 어디든 측정됩니다. 바다는 <b>해수</b>, 유빙은 <b>빙하 표면</b>, 그 밖(땅·하늘)을 겨누면
-    그 구역의 해양/녹지/도심 <b>대기</b>를 잽니다. 값은 모두 <b>그해 연평균</b>(하루 평균)입니다<button class="src-i" type="button" data-src="fp_land_amp" aria-label="출처 보기: 1인칭 육지 기온 증폭 (녹지·도심 대기)" aria-expanded="false">ⓘ</button><button class="src-i" type="button" data-src="fp_ocean_amp" aria-label="출처 보기: 1인칭 해양 기온 증폭 (해양 대기·빙하 표면)" aria-expanded="false">ⓘ</button> — 화면이 낮이어도 한낮 기온이 아닙니다.
-    도심 대기가 녹지보다 따뜻하고(도시 열섬)<button class="src-i" type="button" data-src="fp_uhi" aria-label="출처 보기: 1인칭 도심 열섬 (도심 − 녹지 기온차)" aria-expanded="false">ⓘ</button>, 빙하가 가장 찹니다.<button class="src-i" type="button" data-src="fp_ice_surface" aria-label="출처 보기: 1인칭 빙하 표면 온도 (연출)" aria-expanded="false">ⓘ</button>
-    <b>유빙 주변 바다는 녹은 물 때문에 차갑습니다(냉수대).</b><button class="src-i" type="button" data-src="fp_cold_pool" aria-label="출처 보기: 1인칭 유빙 곁 냉수대 (연출)" aria-expanded="false">ⓘ</button> 유빙에서 멀어지며 수온을 재 보세요.</p>
-  <p class="note"><b>2 pH미터</b> — 바다에서만. 겨눈 지점의 해수 상태로 계산하고 표시창에 <b>수온을 함께</b> 띄웁니다.
-    같은 CO₂·같은 수온이면 조감 모드 '미래 예측' 탭과 정확히 같은 값입니다.<button class="src-i" type="button" data-src="model_ph" aria-label="출처 보기: 해수 pH (모형 계산)" aria-expanded="false">ⓘ</button>
-    수온은 pH를 거의 못 바꿉니다(냉수대와 개방 해역 차이 0.02 정도) — 온도 효과는 4번으로 보세요.</p>
-  <p class="note"><b>4 해수분석기</b> — 바다에서만. <b>용존 CO₂ · DIC(용존 무기탄소) · Ω(아라고나이트 포화도) · 수온</b>을
-    한 번에 잽니다.<button class="src-i" type="button" data-src="model_omega" aria-label="출처 보기: 아라고나이트 포화도 Ω (모형 계산)" aria-expanded="false">ⓘ</button> 차가운 물은 CO₂를 더 많이 녹이고(헨리 법칙) Ω가 낮습니다.
-    <b>Ω가 1 밑이면 빨간색</b> — 산호·조개 껍데기가 녹는 물입니다.<button class="src-i" type="button" data-src="shell_omega" aria-label="출처 보기: 조개 껍데기 — 아라고나이트 포화도 Ω" aria-expanded="false">ⓘ</button></p>
-  <!-- 4차 C3: 구역 CO₂ 문헌값 — 해양 = 배경(문헌값 2-4), 도심 증가분 = 서울 관측 20~27 ppm(2-3) -->
-  <p class="note"><b>3 CO₂센서</b> — 해양 · 녹지 · 도심에서 값이 다릅니다. 바다 위 공기는 <b>전 지구 평균과 같고</b><button class="src-i" type="button" data-src="co2_noaa_gl" aria-label="출처 보기: 대기 CO₂ 지구 평균 (관측)" aria-expanded="false">ⓘ</button>,
-    도심은 자동차·난방 배출 때문에 더 높습니다(서울 관측: 도시 증가분 약 20~27 ppm)<button class="src-i" type="button" data-src="fp_urban_co2" aria-label="출처 보기: 1인칭 도심 대기 CO₂ (도시 증가분)" aria-expanded="false">ⓘ</button>.
-    <b>나무 근처</b>는 광합성 때문에 낮게 나옵니다(이 값은 연출 — 정량 문헌을 찾는 중)<button class="src-i" type="button" data-src="fp_tree_co2" aria-label="출처 보기: 1인칭 나무 밑 CO₂ (연출)" aria-expanded="false">ⓘ</button>. (수중에서는 측정 불가)</p>
-  <p class="note"><b>계측기에는 오차가 있습니다.</b> 좌클릭하면 값이 바로 뜨지 않고 실제 센서처럼
-    수렴합니다(막대가 다 차야 확정). 같은 자리를 다시 재도 값이 조금씩 다르니, 여러 번 재서
-    평균을 내세요. 평균과 표준편차는 <b>학습지(F)</b> [기록] 탭이 자동으로 계산합니다.</p>
-  <p class="note"><b>학습지 (F)</b> — 측정할 때마다 [기록] 탭에 자동 기록됩니다. 지점별 평균·표준편차,
-    횡단 조사 그래프, CSV 내보내기가 있습니다. 연도·배출 경로는 [과제] 탭 맨 아래에서 바꿉니다.</p>
-  <p class="note">눈높이 기준 1유닛 = 약 50m로 환산했습니다. 나무는 약 10m, 가장 높은 건물은 약 24m(8층)로 보입니다.</p>
-  <p class="note">서쪽(왼쪽) 해안 절벽에서 바다로 뛰어내리면 헤엄칠 수 있습니다.</p>
+<!-- 4차 D4: 화면 아래 한 줄, 늘 보이는 짧은 키 안내. 학습지가 열리면 숨긴다(CSS body.sheet-open).
+     예전 H 조작법 패널(#helpPanel)은 학습지 [과제] 탭 맨 아래 '조작법' 절로 옮겼다 — 패널 안이라 ⓘ 도 눌린다 -->
+<!-- 짧게 둔다: 1280 px 에서 왼쪽 아래 미니맵과 겹치지 않는 폭(약 560 px). 달리기·점프·출발점은 H 조작법에 -->
+<div id="keyLine" aria-hidden="true">
+  <span><span class="key">W</span><span class="key">A</span><span class="key">S</span><span class="key">D</span>이동</span>
+  <span>클릭 측정</span>
+  <span><span class="key">1~4</span>도구</span>
+  <span><span class="key">F</span>학습지</span>
+  <span><span class="key">M</span>지도</span>
+  <span><span class="key">H</span>조작법</span>
 </div>
 
 <!-- 단축바 4칸 (숫자키 1~4, 4차 B4) -->
@@ -145,6 +147,43 @@
     <p class="sh-note">바다(수온·pH·Ω)도 조감 모드와 <b>같은 모형의 그해 값</b>입니다.<button class="src-i" type="button" data-src="model_sst" aria-label="출처 보기: 표층 해수온 (모형 계산)" aria-expanded="false">ⓘ</button><button class="src-i" type="button" data-src="model_ph" aria-label="출처 보기: 해수 pH (모형 계산)" aria-expanded="false">ⓘ</button> 바다는 대기 CO₂를 몇 해에 걸쳐
       늦게 따라가므로, 해수 pCO₂는 대기와 조금 다릅니다(배출이 늘 때는 대기보다 낮고, 크게 줄면 거꾸로 높아집니다).</p>
     <p class="sh-links"><a class="btn btn--nav btn--sm" href="/"><span data-icon="globe"></span>전체 조감 모드로</a></p>
+
+    <!-- 4차 D4: 조작법(예전 H 패널). 모든 단축키는 e.code 로 받는다 — 한글 자판에서도 같은 키, 글 칸에 쓰는 중이면 무시(마스터 §6-5) -->
+    <h3 class="sh-h" id="shHelp">조작법 <span class="sub">키보드·마우스 전용 — 태블릿 터치는 지원하지 않습니다</span></h3>
+    <table class="key-table">
+      <tr><td><span class="key">W</span><span class="key">A</span><span class="key">S</span><span class="key">D</span> · <span class="key">Shift</span> · <span class="key">Space</span></td><td>이동 · 달리기 · 점프 / 물에서 헤엄쳐 오르기</td></tr>
+      <tr><td>마우스 · 좌클릭</td><td>시점 · 든 도구로 바라보는 지점 측정</td></tr>
+      <tr><td><span class="key">1</span>~<span class="key">4</span></td><td>도구 (온도계 · pH미터 · CO₂센서 · 해수분석기)</td></tr>
+      <tr><td><span class="key">E</span></td><td>가까운 행동 지점·카페·분리배출장·시청과 상호작용 (준비 중)</td></tr>
+      <tr><td><span class="key">F</span></td><td>학습지 열기/닫기 (열린 상태에서는 <span class="key">Esc</span> 도)</td></tr>
+      <tr><td><span class="key">[</span> · <span class="key">]</span></td><td>타임라인 정거장 이전/다음 (준비 중)</td></tr>
+      <tr><td><span class="key">M</span> · <span class="key">R</span></td><td>미니맵 크기 · 출발점으로</td></tr>
+      <tr><td><span class="key">H</span></td><td>이 조작법 열기</td></tr>
+      <tr><td><span class="key">Esc</span> (탐험 중)</td><td>마우스 고정 풀기 — 다시 잠그려면 3D 화면을 클릭</td></tr>
+    </table>
+    <p class="sh-links"><button class="btn btn--nav btn--sm" type="button" id="onboardAgain"><span data-icon="list"></span>첫 안내 다시 보기</button></p>
+    <h3 class="sh-h">도구</h3>
+  <!-- 4차 C2(마스터 D2·D9): 지면 3종(해변 모래·녹지 지면·도시 지면)을 뺐고 값은 그해 연평균이다 -->
+  <!-- 4차 D1: ⓘ = 조감과 같은 출처 상자(js/source-tip.js). 키는 C6 등록부(js/sources.js) — check_sources.js 가 누락을 막는다 -->
+  <p class="sh-note"><b>1 온도계</b> — 어디든 측정됩니다. 바다는 <b>해수</b>, 유빙은 <b>빙하 표면</b>, 그 밖(땅·하늘)을 겨누면
+    그 구역의 해양/녹지/도심 <b>대기</b>를 잽니다. 값은 모두 <b>그해 연평균</b>(하루 평균)입니다<button class="src-i" type="button" data-src="fp_land_amp" aria-label="출처 보기: 1인칭 육지 기온 증폭 (녹지·도심 대기)" aria-expanded="false">ⓘ</button><button class="src-i" type="button" data-src="fp_ocean_amp" aria-label="출처 보기: 1인칭 해양 기온 증폭 (해양 대기·빙하 표면)" aria-expanded="false">ⓘ</button> — 화면이 낮이어도 한낮 기온이 아닙니다.
+    도심 대기가 녹지보다 따뜻하고(도시 열섬)<button class="src-i" type="button" data-src="fp_uhi" aria-label="출처 보기: 1인칭 도심 열섬 (도심 − 녹지 기온차)" aria-expanded="false">ⓘ</button>, 빙하가 가장 찹니다.<button class="src-i" type="button" data-src="fp_ice_surface" aria-label="출처 보기: 1인칭 빙하 표면 온도 (연출)" aria-expanded="false">ⓘ</button>
+    <b>유빙 주변 바다는 녹은 물 때문에 차갑습니다(냉수대).</b><button class="src-i" type="button" data-src="fp_cold_pool" aria-label="출처 보기: 1인칭 유빙 곁 냉수대 (연출)" aria-expanded="false">ⓘ</button> 유빙에서 멀어지며 수온을 재 보세요.</p>
+  <p class="sh-note"><b>2 pH미터</b> — 바다에서만. 겨눈 지점의 해수 상태로 계산하고 표시창에 <b>수온을 함께</b> 띄웁니다.
+    같은 CO₂·같은 수온이면 조감 모드 '미래 예측' 탭과 정확히 같은 값입니다.<button class="src-i" type="button" data-src="model_ph" aria-label="출처 보기: 해수 pH (모형 계산)" aria-expanded="false">ⓘ</button>
+    수온은 pH를 거의 못 바꿉니다(냉수대와 개방 해역 차이 0.02 정도) — 온도 효과는 4번으로 보세요.</p>
+  <p class="sh-note"><b>4 해수분석기</b> — 바다에서만. <b>용존 CO₂ · DIC(용존 무기탄소) · Ω(아라고나이트 포화도) · 수온</b>을
+    한 번에 잽니다.<button class="src-i" type="button" data-src="model_omega" aria-label="출처 보기: 아라고나이트 포화도 Ω (모형 계산)" aria-expanded="false">ⓘ</button> 차가운 물은 CO₂를 더 많이 녹이고(헨리 법칙) Ω가 낮습니다.
+    <b>Ω가 1 밑이면 빨간색</b> — 산호·조개 껍데기가 녹는 물입니다.<button class="src-i" type="button" data-src="shell_omega" aria-label="출처 보기: 조개 껍데기 — 아라고나이트 포화도 Ω" aria-expanded="false">ⓘ</button></p>
+  <!-- 4차 C3: 구역 CO₂ 문헌값 — 해양 = 배경(문헌값 2-4), 도심 증가분 = 서울 관측 20~27 ppm(2-3) -->
+  <p class="sh-note"><b>3 CO₂센서</b> — 해양 · 녹지 · 도심에서 값이 다릅니다. 바다 위 공기는 <b>전 지구 평균과 같고</b><button class="src-i" type="button" data-src="co2_noaa_gl" aria-label="출처 보기: 대기 CO₂ 지구 평균 (관측)" aria-expanded="false">ⓘ</button>,
+    도심은 자동차·난방 배출 때문에 더 높습니다(서울 관측: 도시 증가분 약 20~27 ppm)<button class="src-i" type="button" data-src="fp_urban_co2" aria-label="출처 보기: 1인칭 도심 대기 CO₂ (도시 증가분)" aria-expanded="false">ⓘ</button>.
+    <b>나무 근처</b>는 광합성 때문에 낮게 나옵니다(이 값은 연출 — 정량 문헌을 찾는 중)<button class="src-i" type="button" data-src="fp_tree_co2" aria-label="출처 보기: 1인칭 나무 밑 CO₂ (연출)" aria-expanded="false">ⓘ</button>. (수중에서는 측정 불가)</p>
+  <p class="sh-note"><b>계측기에는 오차가 있습니다.</b> 좌클릭하면 값이 바로 뜨지 않고 실제 센서처럼
+    수렴합니다(막대가 다 차야 확정). 같은 자리를 다시 재도 값이 조금씩 다르니, 여러 번 재서
+    평균을 내세요. 평균과 표준편차는 <b>학습지(F)</b> [기록] 탭이 자동으로 계산합니다.</p>
+  <p class="sh-note">눈높이 기준 1유닛 = 약 50m로 환산했습니다. 나무는 약 10m, 가장 높은 건물은 약 24m(8층)로 보입니다.</p>
+  <p class="sh-note">서쪽(왼쪽) 해안 절벽에서 바다로 뛰어내리면 헤엄칠 수 있습니다.</p>
   </section>
 
   <!-- [기록]: 최근 측정 · 지점별 평균/표준편차 · 횡단 조사 그래프. 내보내기(.xlsx·.csv)는 G 가 채운다 -->
@@ -211,6 +250,8 @@
 <script src="fp-field.js"></script>
 <!-- 4차 D3: 학습지 패널 껍데기(열고 닫기·탭). FPPlayer 는 함수 안에서만 읽으므로 fp-player 보다 앞이어도 된다 -->
 <script src="fp-sheet.js"></script>
+<!-- 4차 D4: 첫 진입 안내 3장 -->
+<script src="fp-onboard.js"></script>
 <script src="fp-tools.js"></script>
 <script src="fp-player.js"></script>
 <script src="fp-main.js"></script>

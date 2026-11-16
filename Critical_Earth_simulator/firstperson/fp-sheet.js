@@ -70,6 +70,12 @@ const FPSheet = (() => {
   }
 
   const toggle = name => (isOpen ? close() : open(name));
+  // 4차 D4: H = 학습지 [과제] 맨 아래 '조작법' 절(예전 H 도움말 패널)을 연다
+  function showHelp() {
+    open('tasks');
+    const h = $('shHelp');
+    if (h) h.scrollIntoView({ block: 'start' });
+  }
 
   function init() {
     el = $('sheet');
@@ -105,5 +111,5 @@ const FPSheet = (() => {
     }
   }
 
-  return { init, open, close, toggle, show, get isOpen() { return isOpen; }, get tab() { return tab; } };
+  return { init, open, close, toggle, show, showHelp, get isOpen() { return isOpen; }, get tab() { return tab; } };
 })();

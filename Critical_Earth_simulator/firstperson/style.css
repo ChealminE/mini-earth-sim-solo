@@ -16,7 +16,7 @@ html, body {
 canvas#gl { position: fixed; inset: 0; width: 100%; height: 100%; display: block; cursor: pointer; }
 
 /* ── 3D 위 종이 패널 (공통 바탕) ─────────────────────────────────────────── */
-#hud, #helpPanel, #hotbar, #fieldBadge, #toast, .start-box, .resume-box {
+#hud, #keyLine, #hotbar, #fieldBadge, #toast, .start-box, .resume-box, .ob-box {
   background: color-mix(in srgb, var(--paper-2) var(--fp-panel-mix), transparent);
   border: 1px solid var(--rule);
   color: var(--ink);
@@ -97,27 +97,19 @@ canvas#gl { position: fixed; inset: 0; width: 100%; height: 100%; display: block
   color: var(--ctl-time); background: var(--ctl-time-bg); border: 1.5px solid var(--ctl-time);
 }
 #hud .hud-year[data-era="future"] { color: var(--on-fill); background: var(--ctl-time-on); }
-#hud .hud-keys { color: var(--ink-2); font-size: var(--fs-2); border-top: 1px solid var(--rule); padding-top: 6px; }
-#hud .hud-keys .key { margin-left: 0; }
 
-/* ── 조작법 (H) ── */
-#helpPanel {
-  position: fixed; top: 14px; right: 14px; z-index: 8;
-  font-size: var(--fs-2); line-height: 1.55;
-  padding: var(--sp-3) var(--sp-4); border-radius: var(--radius);
-  width: min(380px, calc(100vw - 28px)); max-height: calc(100vh - 28px); overflow-y: auto; box-sizing: border-box;
+/* ── 늘 보이는 키 안내 (4차 D4): 화면 맨 아래 한 줄. 단축바는 그 위로 올렸다. 학습지가 열리면 숨긴다 ── */
+#keyLine {
+  position: fixed; left: 50%; bottom: 8px; transform: translateX(-50%); z-index: 5;
+  display: flex; flex-wrap: nowrap; gap: var(--sp-3); align-items: center;
+  padding: 3px var(--sp-3); border-radius: 999px; white-space: nowrap;
+  font-size: var(--fs-1); color: var(--ink-2); pointer-events: none;
 }
-#helpPanel.hidden { display: none; }
-#helpPanel h3 { margin: 0 0 var(--sp-2); font-size: var(--fs-3); font-weight: 700; }
-#helpPanel table { border-collapse: collapse; width: 100%; }
-#helpPanel td { padding: 3px 0; vertical-align: top; }
-#helpPanel td:first-child { white-space: nowrap; padding-right: var(--sp-3); color: var(--ink-2); }
-#helpPanel .note { color: var(--ink-2); font-size: var(--fs-1); margin: var(--sp-2) 0 0; }
-#helpPanel .note b { color: var(--ink); }
+#keyLine .key { margin: 0 3px 0 0; }
 
 /* ── 단축바 (화면 아래 가운데). 칸 = .btn.btn--nav.btn--stack, 든 도구 = .is-on ── */
 #hotbar {
-  position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
+  position: fixed; bottom: 46px;   /* 4차 D4: 맨 아래 키 안내(#keyLine) 위로 */ left: 50%; transform: translateX(-50%);
   display: flex; gap: var(--sp-1); padding: var(--sp-1);
   border-radius: var(--radius);
   pointer-events: auto;
@@ -290,4 +282,26 @@ select.select--scen { --c: var(--ctl-scen); --c-bg: var(--ctl-scen-bg); }
 body.sheet-open canvas#gl, body.sheet-open #waterOverlay { width: 60%; right: auto; }
 body.sheet-open #crosshair { left: 30%; }
 body.sheet-open #toast { left: 30%; }
-body.sheet-open #hotbar, body.sheet-open #helpPanel, body.sheet-open #fieldBadge { display: none; }
+body.sheet-open #hotbar, body.sheet-open #keyLine, body.sheet-open #fieldBadge { display: none; }
+
+/* ── 학습지 [과제] '조작법' 절 (4차 D4, 예전 H 패널) ── */
+.key-table { border-collapse: collapse; width: 100%; font-size: var(--fs-2); }
+.key-table td { padding: 4px 0; vertical-align: top; border-bottom: 1px solid var(--paper-3); }
+.key-table td:first-child { white-space: nowrap; padding-right: var(--sp-3); color: var(--ink-2); }
+
+/* ── 첫 진입 안내 3장 (4차 D4, firstperson/fp-onboard.js) — 시작 안내(z 50)보다 위 ── */
+#onboard {
+  position: fixed; inset: 0; z-index: 70;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--fp-scrim);
+}
+#onboard[hidden] { display: none; }
+/* 불투명 — 95 % 패널이면 뒤의 '클릭해서 시작' 상자 글자가 비쳐 겹쳐 읽힌다 */
+.ob-box { background: var(--paper-2); width: min(92vw, 560px); box-sizing: border-box; padding: var(--sp-5) 28px var(--sp-4); border-radius: 14px; }
+.ob-step { margin: 0 0 var(--sp-1); font-size: var(--fs-1); font-weight: 700; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.ob-card h2 { margin: 0 0 var(--sp-3); font-family: var(--font-title); font-size: var(--fs-5); font-weight: 700; }
+.ob-card p { margin: 0 0 var(--sp-2); font-size: var(--fs-3); line-height: 1.65; color: var(--ink); }
+.ob-card .ob-sub { font-size: var(--fs-2); color: var(--ink-2); }
+.ob-card[hidden] { display: none; }
+.ob-actions { display: flex; gap: var(--sp-2); align-items: center; margin-top: var(--sp-4); }
+.ob-actions #obSkip { margin-right: auto; }

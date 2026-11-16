@@ -377,6 +377,20 @@ for (const p of PATHS) {
   check('D3 렌더러는 캔버스 칸 크기를 따른다 (setSize(…, false) + ResizeObserver)', /setSize\(w, h, false\)/.test(read('firstperson/fp-main.js')) && /ResizeObserver/.test(read('firstperson/fp-main.js')));
 }
 
+// ── D4 조작 정리 · 첫 진입 안내 (정적 검사) ──────────────────────────────────────
+{
+  const html = read('firstperson/index.html'), pl = read('firstperson/fp-player.js'), ob = read('firstperson/fp-onboard.js'), css = read('firstperson/style.css');
+  const sheetHtml = (html.match(/<aside id="sheet"[\s\S]*?<\/aside>/) || [''])[0];
+  check('D4 H 조작법 패널을 학습지 [과제] 조작법 절로 (#helpPanel 없음, #shHelp 이 학습지 안)', !/id="helpPanel"/.test(html) && /id="shHelp"/.test(sheetHtml));
+  check('D4 도구 설명의 ⓘ 가 학습지 안에 있다 (눌림)', (sheetHtml.match(/class="src-i"/g) || []).length >= 15, `${(sheetHtml.match(/class="src-i"/g) || []).length}개`);
+  check('D4 늘 보이는 키 안내 #keyLine, 학습지가 열리면 숨김', /id="keyLine"/.test(html) && /body\.sheet-open[^{]*#keyLine[^{]*\{[^}]*display: none/.test(css));
+  check('D4 첫 진입 안내 3장 · 건너뛰기 · fp.ui.onboarded 로 다시 안 띄움 · 다시 보기', (html.match(/class="ob-card"/g) || []).length === 3
+    && /id="obSkip"/.test(html) && /onboarded = true/.test(ob) && /ui\.onboarded/.test(ob) && /id="onboardAgain"/.test(html));
+  check('D4 "태블릿 터치는 지원하지 않습니다" (첫 안내·조작법·README)', (html.match(/태블릿 터치는 지원하지 않습니다/g) || []).length >= 2 && /태블릿 터치는 지원하지 않습니다/.test(read('README.md')));
+  // 단축키는 e.code 로만(한글 자판 E=ㄷ·F=ㄹ, 마스터 §6-5), 글 칸에 쓰는 중이면 무시, Tab 은 단축키로 쓰지 않는다
+  check('D4 단축키 e.code · 글 칸 무시 · Tab 단축키 없음', !/e\.key === '[a-zA-Z]'/.test(pl) && /closest\('input\[type="text"\], textarea, select'\)/.test(pl) && !/'Tab'/.test(pl + read('firstperson/fp-sheet.js')));
+}
+
 // ── 표 (세이브포인트에 붙인다) ───────────────────────────────────────────────
 console.log('\n      경로     연도   CO₂ppm   T°C    sst°C   pH      Ω      화석GtC  누적최대GtC');
 for (const p of PATHS) {
