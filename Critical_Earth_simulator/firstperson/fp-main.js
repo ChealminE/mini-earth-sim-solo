@@ -266,6 +266,16 @@ FPScenario.onChoice = () => { FPActions.render(); applyScenarioYear(); };   // �
 syncMine();
 // 4차 M1: 무대(미니게임) 관리자 — 렌더러는 하나라 세계의 renderer·장면을 넘긴다(들어갈 때 값 저장 → 나올 때 복원, 마스터 §6-14)
 FPStage.init({ renderer, camera, scene: FPWorld.scene, canvas: glCanvas, fit });
+// 4차 M4: 학습지 [나의 행동]의 [카페에서 해 보기]·[분리배출장에서 해 보기] → 미니맵에 그 장소 + 내 위치에서 화살표(순간이동 없음)
+FPActions.minigameHook = id => {
+  const stage = { tumbler: 'cafe', recycle: 'recycle' }[id];
+  if (!stage) return;
+  FPMinimap.setTarget(stage);
+  const q = FPStage.places().find(p => p.stage === stage), name = q ? q.title : stage;
+  const now = FPScenario.year === FPModel.NOW_YEAR;
+  FPField.toast(now ? `미니맵에 ${name} 위치를 표시했어요 — 화살표를 따라가 보세요 (F 로 학습지 닫기)`
+    : `미니맵에 ${name} 위치를 표시했어요 — 들어가려면 현재(${FPModel.NOW_YEAR})로 가야 해요`, 3600);
+};
 FPOnboard.init(); // 4차 D4: 첫 진입 안내 3장(본 적 없으면 바로 띄운다). Icons.fill 앞이라 안내 속 아이콘도 채워진다
 // 4차 D1: 정적 마크업의 <span data-icon=…> 을 조감과 같은 SVG 아이콘으로 채운다(이모지는 기기마다 모양이 달라서 안 씀)
 Icons.fill();

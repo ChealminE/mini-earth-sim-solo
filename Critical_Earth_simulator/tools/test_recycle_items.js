@@ -167,7 +167,8 @@ check('등록부: rec_kwa·rec_seoul 원문(verified), rec_portal 2차(unverifie
   check('키보드: 숫자 1~9(e.code) · 수거함 Tab+Enter(pick) · 화살표로 돌려 보기', /\(\?:Digit\|Numpad\)\(\[1-9\]\)/.test(src) && /userData\.pick = \{ label: `\$\{i \+ 1\} \$\{info\.name\}`/.test(src) && /ArrowLeft/.test(src));
   check('끌어서 넣기: 수거함 위면 뚜껑이 살짝(0.35), 넣을 때 활짝 · 끈 뒤 click 이 또 누르지 않게', /over\.lidTo = 0\.35/.test(src) && /bin\.lidTo = 1\.25/.test(src) && /noClickUntil = performance\.now\(\) \+ 250/.test(src));
   check('움직임 줄이기: 시간표 0.1초 (kit 이동은 kit 이 0.1초로)', /const D = s => \(ctx\.reducedMotion \? Math\.min\(s, 0\.1\) : s\)/.test(src));
-  check('M4 연결 자리: lastResult · onRound (setMinigameResult 는 M4)', /get lastResult\(\)/.test(src) && /onRound: fn =>/.test(src) && !/setMinigameResult/.test(src));
+  check('M4 연결: lastResult · onRound, 판이 끝나면 FPActions.recordRecycle (사진 자세에서는 안 부름)', /get lastResult\(\)/.test(src) && /onRound: fn =>/.test(src)
+    && /roundListeners\.push\(r => \{ if \(typeof FPActions !== 'undefined' && FPActions\.recordRecycle\) FPActions\.recordRecycle\(r\); \}\)/.test(src) && /if \(!ctx\.shotMode\) for \(const fn of listeners\)/.test(src));
   check('세계 쪽: 입구 addDoor(현재만) · 2000년 도시 규모부터 · 지붕은 transmission 아님', /FPStage\.addDoor\(\{\s*id: 'recycle'/.test(src) && /FPScenario\.year === NOW\(\) \? true : `현재\(\$\{NOW\(\)\}\)로 가야 들어갈 수 있어요`/.test(src)
     && /cityState\.level >= LEVEL_2000/.test(src) && !/transmission/.test(src.slice(src.indexOf('function world'), src.indexOf('PRINT = {'))));
   {

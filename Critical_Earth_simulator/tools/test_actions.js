@@ -375,6 +375,37 @@ check('④ 행동 없음 → 배출 함수가 기준과 모든 해에 같다', (
     && AC.localCut({ ids: ['bike'] }, 1) === 0.42 && AC.localCut({ ids: ['flight'] }, 1) === 0);
   check('F4 도심 측정이 localCut 을 받는다 (fp-tools measureCO2 → FPActions.localCutFor)', /opt\.localCut = FPActions\.localCutFor\(FPScenario\.year, FPScenario\.branch\)/.test(tools)
     && /localCutFor = \(y, branch\) => \(y === NOW \|\| \(y > NOW && branch === 'mine'\)/.test(read('firstperson/fp-actions.js')));
+
+  // ── M4: 미니게임 기록 → 행동 계산 · G1 시트 (firstperson/fp-actions.js) ──
+  {
+    const e1 = FA.cafeEntry({ at: 'A', drink: 'latte', drinkLabel: '카페라테', cup: 'pet', cupLabel: '일회용 컵', perWeek: null });
+    let L = FA.appendLog({}, 'cafe', e1);
+    for (let i = 0; i < FA.LOG_MAX + 5; i++) L = FA.appendLog(L, 'cafe', FA.cafeEntry({ at: 't' + i, drink: 'americano', cup: 'tumbler', perWeek: 3 }));
+    check('M4 기록: 종류마다 최근 LOG_MAX 줄만 · 원래 묶음을 고치지 않음', L.cafe.length === FA.LOG_MAX && L.cafe[0].at === 't5' && FA.appendLog(L, 'recycle', {}).cafe === L.cafe);
+    const r = { at: 'B', accuracy: 0.7, kg: 61.6, region: 'seoul', rows: [
+      { id: 'water_pet', name: '생수 페트병', chosen: 'pet', tries: ['pet'], bin: 'pet', prep: ['empty', 'label'], done: ['empty'], missing: ['label'], score: 0.5, spawned: false },
+      { id: 'soy_pet', name: '간장 페트병', chosen: 'pet', tries: ['pet', 'plastic'], bin: 'plastic', prep: ['empty'], done: [], missing: [], score: 0, retryOk: true, spawned: false },
+      { id: 'pet_label', name: '라벨', chosen: 'vinyl', tries: ['vinyl'], bin: 'vinyl', prep: [], done: [], missing: [], score: 1, spawned: true }] };
+    const e2 = FA.recycleEntry(r, 3, id => ({ pet: '투명 페트병', plastic: '플라스틱', vinyl: '비닐' }[id]));
+    check('M4 분리배출 한 판 기록: 판 번호 · 정확도 · kg · 지역 · 품목 줄(이름 · 내가 고른 곳 · 정답 · 준비 · 점수 · 다시 넣기 · 딸린 품목)', e2.round === 3 && e2.accuracy === 0.7 && e2.kg === 61.6
+      && e2.region === 'seoul' && e2.items.length === 3 && e2.items[1].chosenName === '투명 페트병' && e2.items[1].binName === '플라스틱' && e2.items[1].retryOk && e2.items[2].spawned);
+    const T = FA.minigameTable({ cafe: [e1], recycle: [e2] }, p => ({ empty: '비우기', label: '라벨 떼기' }[p] || p));
+    check('M4 G1 시트 표: 카페 = 날짜·음료·컵·주당 잔 수, 분리배출 = 판마다 품목별 줄 (TASK M §4)', T.cafe.head.join() === '날짜,음료,컵,주당 잔 수' && T.cafe.rows[0].join('|') === 'A|카페라테|일회용 컵|'
+      && T.recycle.rows.length === 3 && T.recycle.rows[0][2] === '생수 페트병' && T.recycle.rows[0][5] === '비우기 · 라벨 떼기' && T.recycle.rows[0][7] === 0.5
+      && T.recycle.rows[1][8] === '플라스틱 (맞음)' && T.recycle.rows[2][9] === '딸린 품목' && T.recycle.head.length === T.recycle.rows[0].length);
+    // 분리배출 결과 → 행동 계산: 최근 판 정확도 × 88 kg (setMinigameResult 가 넣는 모양 그대로)
+    const stM = { chosen: ['recycle', 'tumbler'], minigames: { tumbler: { done: true, cup: 'tumbler' }, recycle: { done: true, accuracy: e2.accuracy, kg: e2.kg, round: 3 } } };
+    check('M4 분리배출 kg = 88 × 최근 판 정확도 = 끝 화면 kg, 텀블러는 카페 결과로 켜짐 (D13)', Math.abs(FA.cardKg('recycle', stM, false) - 61.6) < 1e-9
+      && Math.abs(AC.personalKg(FA.chosenOf(stM, false)) - (61.6 + 3.5)) < 1e-9 && FA.canToggle('tumbler', stM, false));
+    const src = read('firstperson/fp-actions.js');
+    check('M4 입구: recordCafe(텀블러면 setMinigameResult) · recordRecycle(setMinigameResult recycle 정확도) · 기록은 minigameLog(save 가 덮지 않는 키)',
+      /if \(e\.cup === 'tumbler'\) setMinigameResult\('tumbler'/.test(src) && /setMinigameResult\('recycle', \{ at: e\.at, accuracy: e\.accuracy/.test(src)
+      && /a\.minigameLog = fn\(a\.minigameLog\)/.test(src) && !/fp\.actions\.minigameLog/.test(src.slice(src.indexOf('function save()'), src.indexOf('function changed()'))));
+    check('M4 연결: 카페 결과 카드 → recordCafe · 주당 잔 수 → patchMinigameLog, 분리배출 onRound → recordRecycle, 카드 [해 보기] → minigameHook(미니맵 목표)',
+      /FPActions\.recordCafe\(/.test(read('firstperson/fp-stage-cafe.js')) && /FPActions\.patchMinigameLog\('cafe'/.test(read('firstperson/fp-stage-cafe.js'))
+      && /FPActions\.recordRecycle\(r\)/.test(read('firstperson/fp-stage-recycle.js')) && /FPActions\.minigameHook = id =>/.test(read('firstperson/fp-main.js'))
+      && /FPMinimap\.setTarget\(stage\)/.test(read('firstperson/fp-main.js')) && /FPStage\.places/.test(read('firstperson/fp-minimap.js')));
+  }
 }
 
 console.log(fails ? `\n실패 ${fails}건` : '\n전부 통과');

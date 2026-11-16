@@ -16,7 +16,8 @@
 // 품목·정답·이유는 firstperson/fp-recycle-items.js(RecycleItems — 선생님이 고치는 파일). 모양은 이 파일 MODELS(이름 = 품목의 model).
 // 숫자: 분리배출 88 kg · 대중교통 285.4 kg · 장거리 비행 1,000 kg 은 ActionsCore 값 그대로. 정확도 → kg 은 RecycleItems.kgFor(등록부 recycle_accuracy, 연출).
 // 결과 연결: 카페에서 들고 나온 일회용 컵(fp.actions.carry 'takeout_cup')이 있으면 첫 품목으로 쓰고 carry 에서 지운다.
-//   '나의 행동'·학습지 기록 연결(FPActions.setMinigameResult('recycle', …) · minigameHook)은 M4 — 여기서는 판 결과를 lastResult 와 onRound 로 내보낸다.
+//   판 결과는 lastResult · onRound 로 내보내고, 등록할 때 onRound 에 FPActions.recordRecycle 을 건다(M4) — 기록 한 줄(minigameLog.recycle)
+//   + '나의 행동' 분리배출 = 88 kg × 이 판 정확도(D13 '체험해야 켜짐'). 사진 자세에서는 부르지 않는다.
 // 사진 자세(M §3-6): wide · bench · label(라벨 벗기는 중 0.35초 고정) · throw(포물선 중간) · summary(끝 화면). /firstperson/?stage=recycle&shot=wide
 // 효과음 없음(D12). 외부 파일 0(D11). 실존 브랜드·지자체 로고 없음(M §0-2) — 포장 인쇄는 품목 종류 낱말과 단순 무늬만.
 // 모듈을 읽을 때는 등록만 한다(DOM·THREE 는 build·world 안에서만 — 마스터 §6-10).
@@ -1143,6 +1144,7 @@ const FPStageRecycle = (() => {
         <h2 id="rcCardTitle">분리배출 결과</h2>
         <p class="rc-lead">정확도 <b>${Math.round(r.accuracy * 100)}%</b> <span class="cc-sub">(첫 시도 점수 합 ÷ ${RI.ROUND_SIZE}${main < RI.ROUND_SIZE ? ` — 아직 ${RI.ROUND_SIZE - main}개 남음` : ''})</span>
           → 1년에 CO₂ 약 <b>${kgTxt(r.kg)} kg</b> 줄이는 셈 <span class="cc-sub">(${kgTxt(RI.kgPerYear())} kg × 정확도)</span>${srcButton('recycle_accuracy')}${srcButton('act_recycle')}</p>
+        ${ctx.shotMode ? '' : '<p class="rc-saved">학습지 [나의 행동] 분리배출 카드에 이 판 정확도를 반영하고 기록에 남겼어요.</p>'}
         <p class="cc-sub">제대로 분리배출되지 못한 재활용품은 선별 과정에서 잔재물로 분류돼 결국 소각·매립돼요. 그래서 정확도만큼만 셉니다.</p>
         <div class="rc-tools"><button class="btn btn--view btn--sm" type="button" data-filter aria-pressed="${st.filterWrong}">틀린 것만 보기 (${wrong})</button>
           ${r.region !== 'common' ? `<span class="cc-sub">${esc(RI.REGION_LABEL[r.region])} 적용</span>` : ''}</div>
@@ -1356,6 +1358,8 @@ const FPStageRecycle = (() => {
   const api = { TITLE, SPOT, FIXED_ROUND, MODEL_HAS, MODEL_NAMES, canDo, cantText, compareRows, live: null,
     onRound: fn => { roundListeners.push(fn); },                       // 판 결과 { accuracy, kg, region, rows, at } (사진 자세에서는 안 부름)
     get lastResult() { return api.live ? api.live.lastResult : null; } };
+  // M4: 판이 끝나면 '나의 행동'·학습지 기록으로(FPActions 는 이 파일보다 먼저 읽힌다)
+  roundListeners.push(r => { if (typeof FPActions !== 'undefined' && FPActions.recordRecycle) FPActions.recordRecycle(r); });
   if (typeof FPStage !== 'undefined') {
     let W = null;
     FPStage.register('recycle', {

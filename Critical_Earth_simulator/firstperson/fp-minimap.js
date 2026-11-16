@@ -63,6 +63,22 @@ FPMinimap.init = function () {
   this.applyMode();
 };
 
+// 4차 M4: 미니게임 장소 목표(학습지 [나의 행동]의 [카페에서 해 보기]·[분리배출장에서 해 보기] → fp-main 의 FPActions.minigameHook).
+//   stage = 'cafe' | 'recycle' | null. 지도 아래 HTML 줄(#mmTarget)에 '목표: 초록잔 카페'를 적는다 — 캔버스 안 작은 글자는 쓰지 않는다(13 px 규칙)
+const MM_PLACE = { cafe: '#e0a066', recycle: '#6fd08a' };
+FPMinimap.target = null;
+FPMinimap.setTarget = function (stage) {
+  this.target = stage || null;
+  if (this.target && this.mode === 0) { this.mode = 1; this.applyMode(); }
+  const el = document.getElementById('mmTarget');
+  if (el) {
+    const q = this.target && typeof FPStage !== 'undefined' && FPStage.places ? FPStage.places().find(p => p.stage === this.target) : null;
+    el.hidden = !q;
+    if (q) el.textContent = `목표: ${q.title} — 지도의 화살표를 따라가요`;
+  }
+  this._t = 0;
+};
+
 FPMinimap.toggle = function () {
   this.mode = (this.mode + 1) % 3;
   this.applyMode();
@@ -200,6 +216,41 @@ FPMinimap.draw = function () {
       c.stroke();
       c.setLineDash([]);
     }
+  }
+
+  // 4차 M4: 미니게임 장소(카페·분리배출장) — 모양 + 색으로 구분(카페 = 둥근 점, 분리배출장 = 세모). 그해 보이는 곳만.
+  //   [카페에서 해 보기] 등으로 목표를 고르면 목표 둘레에 고리가 깜박이고 내 위치에서 목표로 화살표를 긋는다(순간이동은 하지 않는다).
+  const places = typeof FPStage !== 'undefined' && FPStage.places ? FPStage.places() : [];
+  const tgt = this.target ? places.find(q => q.stage === this.target) : null;
+  for (const q of places) {
+    if (!q.shown && q !== tgt) continue;
+    const x = X(q.x), y = Y(q.z), r = this.mode === 2 ? 4.5 : 3.6;
+    c.fillStyle = MM_PLACE[q.stage] || '#e8d25a';
+    c.strokeStyle = 'rgba(255,255,255,.9)';
+    c.lineWidth = 1.2;
+    c.beginPath();
+    if (q.stage === 'recycle') { c.moveTo(x, y - r * 1.2); c.lineTo(x + r * 1.1, y + r * 0.8); c.lineTo(x - r * 1.1, y + r * 0.8); c.closePath(); }
+    else c.arc(x, y, r, 0, Math.PI * 2);
+    c.fill(); c.stroke();
+  }
+  if (tgt) {
+    const tx = X(tgt.x), ty = Y(tgt.z), fx = X(FPPlayer.pos.x), fy = Y(FPPlayer.pos.z);
+    const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 250);
+    c.strokeStyle = `rgba(255,214,120,${0.55 + 0.45 * pulse})`;
+    c.lineWidth = 2;
+    c.beginPath(); c.arc(tx, ty, 7 + pulse * 3, 0, Math.PI * 2); c.stroke();
+    const dx = tx - fx, dy = ty - fy, d = Math.hypot(dx, dy);
+    if (d > 14) {
+      const ux = dx / d, uy = dy / d, ex = tx - ux * 10, ey = ty - uy * 10, sx = fx + ux * 6, sy = fy + uy * 6;
+      c.strokeStyle = 'rgba(255,214,120,.95)';
+      c.setLineDash([4, 3]);
+      c.beginPath(); c.moveTo(sx, sy); c.lineTo(ex, ey); c.stroke();
+      c.setLineDash([]);
+      c.fillStyle = 'rgba(255,214,120,.95)';
+      c.beginPath(); c.moveTo(ex + ux * 5, ey + uy * 5); c.lineTo(ex - uy * 4, ey + ux * 4); c.lineTo(ex + uy * 4, ey - ux * 4); c.closePath(); c.fill();
+    }
+    // 도착(입구 반경 안)하거나 그 무대에 들어가면 목표를 지운다
+    if (Math.hypot(tgt.x - FPPlayer.pos.x, tgt.z - FPPlayer.pos.z) < 0.06) this.setTarget(null);
   }
 
   // 플레이어: 시야 부채꼴 + 점

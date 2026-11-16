@@ -270,7 +270,7 @@ const near = (a, b, e = 1e-6) => Math.abs(a - b) <= e;
       && SOURCES.tumbler_breakeven && SOURCES.tumbler_breakeven.status === 'unverified' && /srcButton\('tumbler_breakeven'\)/.test(src));
     check('결과 카드 ⓘ: act_tumbler · cafe_cup_pile · 막대마다 행동 출처', /srcButton\('act_tumbler'\)/.test(src) && /srcButton\('cafe_cup_pile'\)/.test(src) && /sb\(r\.src\)/.test(src));
     check('크기 비교를 건너뛸 수 없게: [가게 나가기] 처음엔 disabled, 1.5초 뒤 활성 (M §0-1)', /data-leave disabled/.test(raw) && /leave\.disabled = false; \}, 1500\)/.test(src));
-    check('텀블러 → FPActions.setMinigameResult(\'tumbler\') (D13), 일회용 컵 → 분리배출 첫 품목 takeout_cup', /setMinigameResult\('tumbler', result\)/.test(src) && /'takeout_cup'/.test(src));
+    check('결과 → FPActions.recordCafe(기록 + 텀블러면 setMinigameResult(\'tumbler\'), D13, M4), 일회용 컵 → 분리배출 첫 품목 takeout_cup', /FPActions\.recordCafe\(\{ \.\.\.result/.test(src) && /'takeout_cup'/.test(src));
     check('들어가기는 현재(NOW_YEAR)만, 다른 해엔 \'현재(…)로 가야 들어갈 수 있어요\' (M §0-3)', /FPScenario\.year === NOW\(\) \? true : `현재\(\$\{NOW\(\)\}\)로 가야 들어갈 수 있어요`/.test(src));
     check('정면은 2000년 도시 규모부터 (cityLevel 2000 기준)', /FPModel\.sample\(2000, FPModel\.pathRun\(FPModel\.BASE_PRESET\)\)/.test(src) && /city\.level >= LEVEL_2000/.test(src));
     {

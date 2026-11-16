@@ -21,7 +21,7 @@
 // 숫자(M §2-4): 텀블러 1년 3.5 kg · 대중교통 285.4 kg · 장거리 왕복 비행 1,000 kg 은 ActionsCore(js/actions-core.js) 값 그대로.
 //   '본전 약 220번'·'실제 평균 20여 회'는 문헌값 1-7(2차 — 등록부 tumbler_breakeven, unverified → ⓘ에 '확인 중' 경고).
 //   1년 컵 더미는 개수만(주당 잔 수 × 52) — 잔당 배출 문헌값이 없어 kg 로 바꾸지 않는다(문헌값 1-7, 4부-11, 등록부 cafe_cup_pile).
-// 결과 연결: 텀블러를 고르면 FPActions.setMinigameResult('tumbler', …)(D13 '체험해야 켜짐'). 행동 계산·학습지 기록은 M4.
+// 결과 연결(M4): FPActions.recordCafe — 기록 한 줄(minigameLog.cafe) + 텀블러를 고르면 setMinigameResult('tumbler', …)(D13 '체험해야 켜짐').
 //   일회용 컵을 고르면 '들고 나온 쓰레기'로 fp.actions.carry 에 'takeout_cup' 을 남긴다 — M3 분리배출 첫 품목.
 // 사진 자세(M §2-5): wide · counter · machine · pour(추출 1.2초 고정) · result(결과 카드 + 컵 더미 104개). /firstperson/?stage=cafe&shot=wide
 // 효과음 없음(D12). 외부 파일 0(D11). 실존 브랜드·로고·대표색 흉내 없음(M §0-2): 간판은 가상 이름 + 잔과 잎 그림, 색은 테라코타·크림·올리브.
@@ -924,7 +924,8 @@ const FPStageCafe = (() => {
       const result = { drink: st.drink, cup: st.cup, perWeek: null, at: new Date().toISOString() };
       // 결과 연결(M4 가 행동 계산·학습지 기록을 잇는다). 텀블러 = '나의 행동' 텀블러 켜짐(D13). 일회용 컵 = 분리배출 첫 품목
       if (!ctx.shotMode) {
-        if (st.cup === 'tumbler' && typeof FPActions !== 'undefined') FPActions.setMinigameResult('tumbler', result);
+        // 4차 M4: 기록 한 줄(fp.actions.minigameLog.cafe — G1 시트) + 텀블러면 '나의 행동' 텀블러 켜짐(FPActions.setMinigameResult('tumbler', …), D13)
+        if (typeof FPActions !== 'undefined') FPActions.recordCafe({ ...result, drinkLabel: DRINKS[st.drink].label, cupLabel: CUPS[st.cup].label });
         if (st.cup === 'pet') {
           try { WorksheetStore.updateFp(fp => { const a = fp.actions || (fp.actions = {}); a.carry = [...new Set([...(Array.isArray(a.carry) ? a.carry : []), 'takeout_cup'])]; }); } catch (e) { /* 메모리 */ }
         }
@@ -962,6 +963,8 @@ const FPStageCafe = (() => {
         if (st.result) st.result.perWeek = st.perWeek;
         setPile(pileCount(st.perWeek));
       });
+      // 손을 뗐을 때 한 번만 기록을 고친다(input 마다 쓰면 끌 때 저장이 수십 번)
+      range.addEventListener('change', () => { if (!ctx.shotMode && st.result && typeof FPActions !== 'undefined') FPActions.patchMinigameLog('cafe', st.result.at, { perWeek: st.perWeek }); });
       const leave = cardEl.querySelector('[data-leave]');
       leave.addEventListener('click', () => FPStage.exit());
       // 크기 비교를 건너뛸 수 없게 — 닫기는 1.5초 뒤에(M §0-1)

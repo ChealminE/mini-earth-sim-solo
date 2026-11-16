@@ -16,6 +16,9 @@
 //   - 텀블러·분리배출은 미니게임 결과로만 켜진다(마스터 D13). 그 전에는 "아직 해 보지 않았어요 [카페에서 해 보기]".
 //     교사용 주소 ?free=1 이면 카드에서 바로 켤 수 있다. M4 가 setMinigameResult(id, 결과) 로 채운다.
 //   - 저장: 학습지 공용 저장소 fp.actions = { chosen: [...], scale, minigames: { tumbler, recycle } } (js/worksheet-store.js).
+//     4차 M4: 미니게임 기록은 fp.actions.minigameLog = { cafe: [...], recycle: [...] } (판마다 한 줄, 최근 LOG_MAX 개).
+//     minigames 는 '켜짐 + 최근 결과'(행동 계산이 읽는다), minigameLog 는 '해 본 기록 전부'(G1 미니게임 시트가 minigameTable 로 읽는다).
+//     기록은 recordCafe(카페 결과 카드) · recordRecycle(분리배출 끝 화면) 두 입구로만 들어온다.
 //     fp.actions.society 는 F3 몫이라 건드리지 않는다(updateFp 가 다른 키를 그대로 둔다).
 //
 // 세계 속 지점 (축척: 1유닛 = 50 m, 함정 13 — 주석의 크기는 실척 m)
@@ -121,7 +124,8 @@ const FPActions = (() => {
 
   // 숫자 글: 한국어 자릿수(만·억). 반올림 자리는 크기에 맞춰 — 작은 값이 0 으로 사라지지 않게
   const nf = (v, d = 0) => Number(v).toLocaleString('ko-KR', { maximumFractionDigits: d, minimumFractionDigits: 0 });
-  const fmtKg = v => nf(v, v < 1000 ? 1 : 0);   // 285.4 · 61.6 처럼 안내서 자리 그대로(정수면 소수점 없이)
+  const fmtKg = v => nf(v, v < 1000 ? 1 : 0);
+  const dayOf = at => { try { return new Date(at).toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' }); } catch (e) { return ''; } };   // 285.4 · 61.6 처럼 안내서 자리 그대로(정수면 소수점 없이)
   function fmtPeople(n) {
     if (n >= 1e8) return `${nf(n / 1e8, 1)}억 명`;
     if (n >= 1e4) return `${nf(n / 1e4, 0)}만 명`;
@@ -215,6 +219,76 @@ const FPActions = (() => {
     return true;
   }
 
+  // ── 미니게임 기록 (4차 M4) ────────────────────────────────────────────────
+  // 왜 minigames 와 따로 두나: minigames 는 FPActions 가 들고 있다가 save() 때 통째로 쓰는 '상태'다. 기록(판마다 품목 10줄)을
+  //   거기 넣으면 카드를 누를 때마다 큰 묶음을 다시 쓰고, 다른 곳에서 고친 기록을 옛 사본으로 덮을 수 있다. 기록은 updateFp 로
+  //   그 키만 고친다(save() 는 minigameLog 를 건드리지 않는다). 항목마다 화면 이름(라벨)도 같이 남긴다 — G1 시트가 다른 모듈 없이 읽게.
+  const LOG_MAX = 40;
+  function appendLog(log, kind, entry) {
+    const L = log && typeof log === 'object' && !Array.isArray(log) ? { ...log } : {};
+    const list = Array.isArray(L[kind]) ? L[kind].slice() : [];
+    list.push(entry);
+    L[kind] = list.slice(-LOG_MAX);
+    return L;
+  }
+  const readLog = () => { try { const a = WorksheetStore.readFp().actions || {}; return a.minigameLog && typeof a.minigameLog === 'object' ? a.minigameLog : {}; } catch (e) { return memLog; } };
+  let memLog = {};   // 저장소가 막혔을 때 이번 화면에서만
+  function writeLog(fn) {
+    memLog = fn(memLog);
+    try { WorksheetStore.updateFp(fp => { const a = fp.actions && typeof fp.actions === 'object' && !Array.isArray(fp.actions) ? fp.actions : (fp.actions = {}); a.minigameLog = fn(a.minigameLog); }); } catch (e) { /* 메모리에만 */ }
+  }
+  const lastLog = kind => { const l = readLog()[kind]; return Array.isArray(l) && l.length ? l[l.length - 1] : null; };
+  // 카페 한 번 = 한 줄 { at, drink, drinkLabel, cup, cupLabel, perWeek(슬라이더를 움직였으면) }
+  const cafeEntry = r => ({ at: r.at || new Date().toISOString(), drink: r.drink, drinkLabel: r.drinkLabel || r.drink, cup: r.cup, cupLabel: r.cupLabel || r.cup,
+    perWeek: Number.isFinite(Number(r.perWeek)) && r.perWeek !== null ? Number(r.perWeek) : null });
+  // 분리배출 한 판 = 한 줄 { at, round(몇 번째 판), accuracy, kg, region, items: [품목 한 줄 …] }
+  function recycleEntry(r, round, binName) {
+    const bn = id => (binName ? binName(id) : id);
+    return { at: r.at || new Date().toISOString(), round, accuracy: clamp01(r.accuracy), kg: Number(r.kg) || 0, region: r.region || 'common',
+      items: (r.rows || []).map(x => ({ id: x.id, name: x.name, chosen: x.chosen, chosenName: bn(x.chosen), tries: (x.tries || []).slice(), triesNames: (x.tries || []).map(bn),
+        bin: x.bin, binName: bn(x.bin), prep: (x.prep || []).slice(), done: (x.done || []).slice(), missing: (x.missing || []).slice(),
+        score: Number(x.score) || 0, retryOk: !!x.retryOk, spawned: !!x.spawned })) };
+  }
+  // G1 미니게임 시트(⑥)가 그대로 쓰는 표 두 개 — 머리줄 + 줄. 날짜는 ISO 그대로(시트에서 형식을 정한다)
+  function minigameTable(log, prepName) {
+    const L = log && typeof log === 'object' ? log : {}, pn = p => (prepName ? prepName(p) : p);
+    const cafe = (L.cafe || []).map(e => [e.at, e.drinkLabel, e.cupLabel, e.perWeek == null ? '' : e.perWeek]);
+    const recycle = [];
+    for (const e of L.recycle || []) for (const it of e.items || []) {
+      recycle.push([e.at, e.round, it.name, it.chosenName, it.binName, it.prep.map(pn).join(' · '), it.done.map(pn).join(' · '), it.score,
+        it.tries.length > 1 ? it.triesNames.slice(1).join(' → ') + (it.retryOk ? ' (맞음)' : '') : '', it.spawned ? '딸린 품목' : '', e.accuracy, e.region]);
+    }
+    return {
+      cafe: { head: ['날짜', '음료', '컵', '주당 잔 수'], rows: cafe },
+      recycle: { head: ['날짜', '판', '품목', '내가 고른 곳', '정답', '해야 할 준비', '한 준비', '점수(첫 시도)', '다시 넣기', '비고', '그 판 정확도', '지역 기준'], rows: recycle },
+    };
+  }
+  // 입구 ① 카페(fp-stage-cafe.js 결과 카드): 기록 한 줄 + 텀블러를 골랐으면 '나의 행동' 텀블러가 켜진다(D13)
+  function recordCafe(r = {}) {
+    const e = cafeEntry(r);
+    writeLog(L => appendLog(L, 'cafe', e));
+    if (e.cup === 'tumbler') setMinigameResult('tumbler', { at: e.at, drink: e.drink, cup: e.cup });
+    else render();
+    return e;
+  }
+  // 카페 결과 카드에서 주당 잔 수를 고치면 그 줄만 고친다(at 으로 찾는다)
+  function patchMinigameLog(kind, at, patch) {
+    writeLog(L => {
+      const out = L && typeof L === 'object' ? { ...L } : {};
+      out[kind] = (out[kind] || []).map(e => (e.at === at ? { ...e, ...patch } : e));
+      return out;
+    });
+  }
+  // 입구 ② 분리배출(fp-stage-recycle.js 끝 화면 → FPStageRecycle.onRound): 기록 한 줄 + 분리배출 = 88 × 이 판 정확도(D13 켜짐)
+  function recordRecycle(r = {}) {
+    const prev = lastLog('recycle');
+    const binName = id => (typeof RecycleItems !== 'undefined' && RecycleItems.BIN_INFO[id] ? RecycleItems.BIN_INFO[id].name : id);
+    const e = recycleEntry(r, (prev && prev.round ? prev.round : 0) + 1, binName);
+    writeLog(L => appendLog(L, 'recycle', e));
+    setMinigameResult('recycle', { at: e.at, accuracy: e.accuracy, kg: e.kg, region: e.region, round: e.round });
+    return e;
+  }
+
   // ── 학습지 [나의 행동] 탭 ─────────────────────────────────────────────────
   const $ = id => document.getElementById(id);
   let root = null;
@@ -232,7 +306,16 @@ const FPActions = (() => {
     }
     const toggleBtn = wait ? '' : `<button class="btn btn--scen btn--sm ac-toggle${on ? ' is-on' : ''}" type="button" data-toggle="${a.id}"`
       + ` aria-pressed="${on}"${isNow() ? '' : ' disabled'}>${on ? '하기로 했어요' : '할래요'}</button>`;
-    const waitLine = wait ? `<p class="ac-wait">아직 해 보지 않았어요 <button class="btn btn--nav btn--sm" type="button" data-try="${a.id}">${MINIGAME[a.id].tryLabel}</button></p>` : '';
+    const tryBtn = label => `<button class="btn btn--nav btn--sm" type="button" data-try="${a.id}">${label}</button>`;
+    let waitLine = '';
+    if (MINIGAME[a.id]) {
+      // 4차 M4: 체험 전 = '아직 해 보지 않았어요' + [해 보기](미니맵에 위치·화살표). 체험 뒤 = 최근 기록 한 줄 + [다시 해 보기]
+      const last = lastLog(a.id === 'tumbler' ? 'cafe' : 'recycle'), when = last ? dayOf(last.at) : '';
+      if (wait && a.id === 'tumbler' && last) waitLine = `<p class="ac-wait">카페에서 ${esc(last.cupLabel)}을(를) 골랐어요 — 텀블러로 받아 보면 켜져요 ${tryBtn(MINIGAME[a.id].tryLabel)}</p>`;
+      else if (wait) waitLine = `<p class="ac-wait">아직 해 보지 않았어요 ${tryBtn(MINIGAME[a.id].tryLabel)}</p>`;
+      else if (last && a.id === 'tumbler') waitLine = `<p class="ac-wait ac-last">최근 카페 ${esc(when)} · ${esc(last.drinkLabel)} · ${esc(last.cupLabel)} ${tryBtn('카페에서 다시 해 보기')}</p>`;
+      else if (last) waitLine = `<p class="ac-wait ac-last">최근 판(${last.round}번째) ${esc(when)} · 정확도 ${nf(last.accuracy * 100)} % ${tryBtn('분리배출장에서 다시 해 보기')}</p>`;
+    }
     return `<article class="act-card${on ? ' is-on' : ''}${wait ? ' is-wait' : ''}" id="actCard-${a.id}" data-act="${a.id}" tabindex="-1" aria-label="${esc(a.label)}">
       <div class="ac-head"><span class="ac-name">${esc(a.label)}</span>${srcButton(a.src)}${toggleBtn}</div>
       <div class="ac-bar" role="img" aria-label="1년에 ${fmtKg(kg)} kg — 가장 큰 행동(${nf(MAX_KG)} kg)의 ${nf(pct, 1)} %"><i style="width:${pct.toFixed(2)}%"></i></div>
@@ -719,6 +802,8 @@ const FPActions = (() => {
     chosen, get scale() { return st.scale; }, get city() { return st.city; }, get free() { return free; }, has,
     detectN, CITY_STEPS, CMP_ROWS, setCity, localCutNow, localCutFor,
     setAction, toggle, setScale, setMinigameResult, onChange: fn => { listeners.push(fn); },
+    // 4차 M4 미니게임 기록 (순수: appendLog · cafeEntry · recycleEntry · minigameTable, 화면: recordCafe · recordRecycle · patchMinigameLog · readLog)
+    LOG_MAX, appendLog, cafeEntry, recycleEntry, minigameTable, recordCafe, recordRecycle, patchMinigameLog, readLog, lastLog,
     minigameHook: null, councilHook: null, SOCIETY_DESC,
     // 화면
     init, build, update, interact, onYear, openFor, render,
