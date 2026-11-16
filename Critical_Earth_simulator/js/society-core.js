@@ -151,6 +151,8 @@ const SocietyCore = (() => {
     };
   }
   const leversFrom = (cards, mode) => design(cards, mode).levers;
+  // 4차 T2: 회의실 슬라이더 끝값 = design() 이 자르는 범위와 같은 규칙(capOf 한 곳) — 화면이 따로 계산하면 둘이 어긋난다
+  const sliderRange = (id, cards) => capOf(techById[id], unlocked(cards)[id]);
 
   // ── 2-4. 비교 경로 — "전 세계가 한국 NDC와 같은 비율로 줄인다면?" ──────────
   // 2023년 실제 화석 배출 → 2035년 = 2018년 화석 배출 × (1 − 감축률) 직선 → 2050년 0 직선(2050 탄소중립을 따른다고 가정)
@@ -282,6 +284,6 @@ const SocietyCore = (() => {
   return {
     TECH_CARDS, POLICY_CARDS, LEVELS_SRC, UNLOCK_NOTE, UNLOCK_SRC, NOTES, NDC_KR, CHOICES, GUIDE,
     issues: ISSUES,
-    unlocked, design, leversFrom, ndcEmissions, pickRun,
+    unlocked, design, leversFrom, sliderRange, ndcEmissions, pickRun,
   };
 })();

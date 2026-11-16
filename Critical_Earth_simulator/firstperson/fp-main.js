@@ -36,6 +36,10 @@ const FPScenario = (() => {
   function designedLevers() {
     try { return fullLevers(WorksheetStore.readFp().society.levers); } catch (e) { return null; }
   }
+  // 4차 T2: 포집 합(ccs)을 CCUS·DAC 로 나누는 비율 — 회의실 카드 값(2050 목표). 세계 속 CCUS 설비는 이것이 있어야 보인다(FPModel.society 4번째 인자)
+  function designedCapture() {
+    try { const c = WorksheetStore.readFp().society.capture; return c && typeof c === 'object' ? c : null; } catch (e) { return null; }
+  }
 
   // ── 사회의 선택 (4차 F3, 마스터 D18) ─────────────────────────────────────
   // 선택지 = SocietyCore.CHOICES(현재 정책 · 파리협약 2 °C · 1.5 °C 탄소중립 · 국가 목표(NDC)를 전 세계가 따른다면 · 우리가 설계한 사회)
@@ -99,7 +103,7 @@ const FPScenario = (() => {
   S.sample = () => FPModel.sample(S.year, S.runOf(S.branch, S.year));
   S.ppm = () => S.sample().ppm;
   // 그해 사회 모습(전기차 비율 등) — 조감과 같은 규칙(FPModel.society). 직접 설계면 레버 값. 현재까지는 기준 경로의 사회(D6)
-  S.society = s => FPModel.shownSociety(s, S.preset, levers);
+  S.society = s => FPModel.shownSociety(s, S.preset, levers, choice === 'custom' ? designedCapture() : null);
   // 4차 E2: 해를 인자로 받는다 — 전환 덮개(0.4초) 동안 S.year 는 아직 떠나는 해라서. 현재까지는 하나의 역사(D6)
   S.label = (y = S.year) => (y <= EarthSystem.LAST_HIST_YEAR ? `${y}년 (실제 배출)`
     : y <= FPModel.NOW_YEAR ? `${y}년 (하나의 역사)` : `${S.shortName()} ${y}년`);
@@ -112,6 +116,15 @@ const FPScenario = (() => {
     S.dropMine();
     if (id !== 'aerial') WorksheetStore.updateFp(fp => { fp.actions.society = id; });
     if (typeof S.onChoice === 'function') S.onChoice(id);
+    return true;
+  };
+  // 4차 T2: 회의실에서 설계를 확정하면 — 이미 '우리가 설계한 사회'를 골라 둔 상태면 setChoice 가 같은 id 라 아무것도 안 하므로
+  //   저장된 새 레버를 다시 읽어 경로·나의 미래를 버린다. 아직 다른 선택이면 setChoice('custom')(현재에서만 — 회의실은 현재에서만 열린다)
+  S.useDesign = () => {
+    if (choice !== 'custom') return S.setChoice('custom');
+    levers = leversOf('custom');
+    S.dropMine();
+    if (typeof S.onChoice === 'function') S.onChoice(choice);
     return true;
   };
   return S;
@@ -275,6 +288,13 @@ FPActions.minigameHook = id => {
   const now = FPScenario.year === FPModel.NOW_YEAR;
   FPField.toast(now ? `미니맵에 ${name} 위치를 표시했어요 — 화살표를 따라가 보세요 (F 로 학습지 닫기)`
     : `미니맵에 ${name} 위치를 표시했어요 — 들어가려면 현재(${FPModel.NOW_YEAR})로 가야 해요`, 3600);
+};
+// 4차 T2: 학습지 [나의 행동]의 [회의실로 가기] → 미니맵에 시청 표시 + 화살표(순간이동 없음, 미니게임과 같은 규칙)
+FPActions.councilHook = () => {
+  FPMinimap.setTarget('council');
+  const now = FPScenario.year === FPModel.NOW_YEAR;
+  FPField.toast(now ? '미니맵에 시청(기후 정책 회의실) 위치를 표시했어요 — 화살표를 따라가 보세요 (F 로 학습지 닫기)'
+    : `미니맵에 시청 위치를 표시했어요 — 들어가려면 현재(${FPModel.NOW_YEAR})로 가야 해요`, 3600);
 };
 FPOnboard.init(); // 4차 D4: 첫 진입 안내 3장(본 적 없으면 바로 띄운다). Icons.fill 앞이라 안내 속 아이콘도 채워진다
 // 4차 D1: 정적 마크업의 <span data-icon=…> 을 조감과 같은 SVG 아이콘으로 채운다(이모지는 기기마다 모양이 달라서 안 씀)

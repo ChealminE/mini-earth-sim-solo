@@ -191,9 +191,9 @@ check('등록부: rec_kwa·rec_seoul 원문(verified), rec_portal 2차(unverifie
   const html = read('firstperson/index.html');
   const srcs = [...html.matchAll(/<script[^>]+src="([^"]+)"/g)].map(m => m[1]);
   const iC = srcs.indexOf('fp-stage-cafe.js'), iI = srcs.indexOf('fp-recycle-items.js'), iR = srcs.indexOf('fp-stage-recycle.js'), iM = srcs.indexOf('fp-main.js');
-  check('index.html: fp-stage-cafe → fp-recycle-items → fp-stage-recycle → fp-main', iC >= 0 && iI === iC + 1 && iR === iI + 1 && iM === iR + 1, `${iC} ${iI} ${iR} ${iM}`);
+  check('index.html: fp-stage-cafe → fp-recycle-items → fp-stage-recycle → fp-main', iC >= 0 && iI === iC + 1 && iR === iI + 1 && (iM === iR + 1 || (srcs[iR + 1] === 'fp-stage-council.js' && iM === iR + 2)), `${iC} ${iI} ${iR} ${iM}`);   // 4차 T2: 회의실 무대가 분리배출장 뒤·fp-main 앞에 올 수 있다
   const b = (read('tools/build_single_html.py').match(/FP_JS = \[([\s\S]*?)\]/) || [, ''])[1];
-  check('빌더 FP_JS 같은 순서', /"firstperson\/fp-stage-cafe\.js",\s*"firstperson\/fp-recycle-items\.js", "firstperson\/fp-stage-recycle\.js", "firstperson\/fp-main\.js"/.test(b));
+  check('빌더 FP_JS 같은 순서', /"firstperson\/fp-stage-cafe\.js",\s*"firstperson\/fp-recycle-items\.js", "firstperson\/fp-stage-recycle\.js",\s*("firstperson\/fp-stage-council\.js",\s*)?"firstperson\/fp-main\.js"/.test(b));
   check('학습지 [과제] 분리배출 지역 기준(공통 · 서울) 단추', html.includes('data-recycle-region="common"') && html.includes('data-recycle-region="seoul"'));
   check('CSS: 분리배출 겹침(.rc-panel · .rc-feed 맞음/반점/틀림 · .rc-card)', ['.rc-panel', '.rc-feed.is-ok', '.rc-feed.is-half', '.rc-feed.is-bad', '.rc-card', '.rc-table'].every(s => read('firstperson/style.css').includes(s)));
   check('check_sources 가 품목 파일의 src 목록을 훑음', /ITEMS_FILE/.test(read('tools/check_sources.js')));

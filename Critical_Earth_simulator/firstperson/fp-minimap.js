@@ -65,7 +65,7 @@ FPMinimap.init = function () {
 
 // 4차 M4: 미니게임 장소 목표(학습지 [나의 행동]의 [카페에서 해 보기]·[분리배출장에서 해 보기] → fp-main 의 FPActions.minigameHook).
 //   stage = 'cafe' | 'recycle' | null. 지도 아래 HTML 줄(#mmTarget)에 '목표: 초록잔 카페'를 적는다 — 캔버스 안 작은 글자는 쓰지 않는다(13 px 규칙)
-const MM_PLACE = { cafe: '#e0a066', recycle: '#6fd08a' };
+const MM_PLACE = { cafe: '#e0a066', recycle: '#6fd08a', council: '#9db8ea' };   // 4차 T2: 시청(회의실)
 FPMinimap.target = null;
 FPMinimap.setTarget = function (stage) {
   this.target = stage || null;

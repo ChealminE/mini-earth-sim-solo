@@ -223,7 +223,7 @@ const near = (a, b, e = 1e-6) => Math.abs(a - b) <= e;
     const iP = srcs.indexOf('fp-player.js'), iK = srcs.indexOf('fp-stage-kit.js'), iS = srcs.indexOf('fp-stage.js'), iM = srcs.indexOf('fp-main.js');
     check('index.html 로드 순서: fp-player → fp-stage-kit → fp-stage → fp-main', iP >= 0 && iP < iK && iK < iS && iS < iM, `${iP} ${iK} ${iS} ${iM}`);
     const b = (read('tools/build_single_html.py').match(/FP_JS = \[([\s\S]*?)\]/) || [, ''])[1];
-    check('빌더 FP_JS 도 같은 순서 (M2 카페 · M3 분리배출 품목 → 무대는 fp-stage 뒤)', /fp-player\.js",\s*"firstperson\/fp-stage-kit\.js", "firstperson\/fp-stage\.js", "firstperson\/fp-stage-cafe\.js",\s*"firstperson\/fp-recycle-items\.js", "firstperson\/fp-stage-recycle\.js", "firstperson\/fp-main\.js"/.test(b)
+    check('빌더 FP_JS 도 같은 순서 (M2 카페 · M3 분리배출 품목 → 무대는 fp-stage 뒤)', /fp-player\.js",\s*"firstperson\/fp-stage-kit\.js", "firstperson\/fp-stage\.js", "firstperson\/fp-stage-cafe\.js",\s*"firstperson\/fp-recycle-items\.js", "firstperson\/fp-stage-recycle\.js", "firstperson\/fp-stage-council\.js",\s*"firstperson\/fp-main\.js"/.test(b)
       && srcs.indexOf('fp-stage-cafe.js') === iS + 1);
     const main = code('firstperson/fp-main.js');
     const iFrame = main.indexOf('if (FPStage.active()) { FPStage.frame(dt); return; }'), iUpd = main.indexOf('FPPlayer.update(dt, t)');
@@ -301,6 +301,65 @@ const near = (a, b, e = 1e-6) => Math.abs(a - b) <= e;
       check('kit.bake: 메시 5개(재질 2종) → 2개, keep 은 그대로, 정점 색 유지', r.meshes === 5 && r.merged === 2 && merged.length === 2 && g.children.includes(keep)
         && merged.some(m => m.geometry.attributes.color));
     }
+  }
+
+  // ── 8. T2 기후 정책 회의실 (firstperson/fp-stage-council.js) ────────────────
+  {
+    const c3 = vm.createContext({ console: { log() {}, warn() {}, error: console.error }, Math, Promise, setTimeout });
+    for (const f of ['vendor/three.min.js', 'js/earth-model.js', 'js/earth-data.js', 'js/earth-system.js', 'js/earth-visual.js', 'js/society-core.js', 'js/actions-core.js',
+      'firstperson/fp-model.js', 'firstperson/fp-stage-kit.js', 'firstperson/fp-stage.js', 'firstperson/fp-stage-council.js']) vm.runInContext(read(f), c3, { filename: f });
+    const CC = vm.runInContext('FPStageCouncil', c3), S3 = vm.runInContext('FPStage', c3), SC = vm.runInContext('SocietyCore', c3), FM = vm.runInContext('FPModel', c3);
+    const src = code('firstperson/fp-stage-council.js'), raw = read('firstperson/fp-stage-council.js');
+    check('T2 회의실 무대 등록 · 이름 \'기후 정책 회의실\'', S3.registered.includes('council') && CC.TITLE === '기후 정책 회의실');
+    check('사진 자세 5개: wide · table · table_max · screen · issue (T §3-4)', ['wide', 'table', 'table_max', 'screen', 'issue'].every(k => new RegExp(`\\b${k}: \\{ \\.\\.\\.VIEW\\.`).test(src)));
+    {
+      const defs = (read('firstperson/fp-world.js').match(/const bldDefs = \[([\s\S]*?)\n  \];/) || [, ''])[1].match(/\[[^\[\]]+\]/g).map(t => JSON.parse(t));
+      const hall = defs.find(d => d[0] === CC.HALL.bx && d[1] === CC.HALL.bz), hs = defs.map(d => d[3]).sort((a, b) => a - b);
+      const s2000 = FM.sample(2000, FM.pathRun('ssp245')), n2000 = FM.cityState(s2000, FM.society(s2000, 'ssp245'), defs.length).buildings;
+      check('시청 건물: 카페와 다른 건물 · 2000년 도시 규모에 이미 서 있음(낮은 것부터) (T §3-1)', hall && hall[3] !== Math.min(...hs) && hs.indexOf(hall[3]) < n2000 && hall[2] === CC.HALL.w,
+        hall ? `높이 ${hall[3]} = ${hs.indexOf(hall[3]) + 1}번째 · 2000년 ${n2000}채` : '없음');
+    }
+    check('들어가기는 현재만 · 정면은 2000년 도시 규모부터', /FPScenario\.year === NOW\(\) \? true : `현재\(\$\{NOW\(\)\}\)로 가야 들어갈 수 있어요`/.test(src) && /cityState\.level >= LEVEL_2000/.test(src));
+    {
+      const near1 = (a, b) => Math.abs(a - b) / Math.abs(b) <= 0.01;
+      const none = CC.summary({}), renew = CC.summary({ renew: 0.8, grid: true });   // 80 % = 3단계 → 전력망 열쇠(D16)
+      check('설계 결과 = 엔진(문헌값 6-3 ±1 %): 카드 없음 2100년 601 ppm · 2.47 °C, 재생 80 % 2.11 °C', near1(none.ppm2100, 601) && near1(none.T2100, 2.47) && near1(renew.T2100, 2.11),
+        `${none.ppm2100.toFixed(0)} ppm · ${none.T2100.toFixed(2)} · ${renew.T2100.toFixed(2)}`);
+      const open = Object.fromEntries(SC.POLICY_CARDS.map(p => [p.id, true]));
+      const singles = SC.TECH_CARDS.map(t => [t.id, CC.summary({ ...open, [t.id]: t.levels[2] }).T2100]);
+      check('화면 문구 \'카드 하나만 3단계로 써서는 2 °C 아래로 내려가지 않아요\' = 엔진 결과와 같음', singles.every(([, T]) => T >= 2) && /카드 하나만 3단계로 써서는 2100년 기온 편차가 2 °C 아래로 내려가지 않아요/.test(raw),
+        singles.map(([id, T]) => `${id} ${T.toFixed(2)}`).join(' · '));
+      const sm = CC.summary({ renew: 0.8, ccus: 1.5, dac: 0.3, forest: -1, carbon_price: true, grid: true }), ds = CC.dioramaState(sm);
+      const ts = FM.techState(sm.s50, FM.society(sm.s50, 'custom', sm.d.levers, sm.capture));
+      check('디오라마 = 세계 속 기후테크와 같은 함수(FPModel.techState, 2050년) — 풍력·태양광·포집·SMR·충전기 수 같음, 나무 = 기본 × (1 + treePlus)',
+        ['turbines', 'solarFrac', 'ccusUnits', 'dacUnits', 'smrUnits', 'chargers'].every(k => ds[k] === ts[k]) && ds.trees === CC.TREE_BASE + Math.round(CC.TREE_BASE * ts.treePlus) && ds.ccusUnits > 0,
+        `풍력 ${ds.turbines} · CCUS ${ds.ccusUnits} · DAC ${ds.dacUnits} · 나무 ${ds.trees}`);
+    }
+    {
+      const ren = SC.TECH_CARDS.find(t => t.id === 'renew');
+      const a = CC.nextPress(ren, false, null, 3, false), b = CC.nextPress(ren, true, 0.55, 3, false), c = CC.nextPress(ren, true, 0.55, 2, false),
+        d = CC.nextPress(ren, true, 0.55, 2, true), e = CC.nextPress(ren, true, 0.8, 3, false);
+      check('누르기: 안 놓음 → 1단계 · 2 → 3 · 잠김(D16)이면 알림 → 다시 누르면 빼기 · 3 → 빼기',
+        a.level === 1 && b.level === 3 && c.action === 'locked' && d.action === 'remove' && e.action === 'remove');
+      check('슬라이더 끝값 = SocietyCore.sliderRange(열쇠 없으면 2단계 값까지)', JSON.stringify(SC.sliderRange('renew', {})) === '[0,0.55]' && JSON.stringify(SC.sliderRange('renew', { grid: true })) === '[0,1]'
+        && /SC\.sliderRange\(c\.id, state\.cards\)/.test(src));
+    }
+    {
+      // 문구 점검(T §7-4): 화면 글(주석 뺀 따옴표 안)에 한쪽만 좋게·단정·'포집하면 배출해도'·무력감·과장 0건
+      const strs = (src.match(/'[^'\n]*'|`[^`]*`/g) || []).join('\n');
+      const BANNED = [/완벽한/, /반드시/, /무조건/, /최고의|가장 좋은|유일한 (해결|방법)/, /위험하다/, /포집하면.{0,15}배출|배출해도\s*(된|돼|괜찮)/, /소용없|의미 없/, /지구를 구|해결된다|해결돼요|해결됩니다/];
+      const hits = BANNED.filter(re => re.test(strs)).map(String);
+      check('문구 점검: 회의실 화면 글 금지 표현 0건 (T §7-4)', hits.length === 0, hits.join(', '));
+      check('쟁점 판 = SocietyCore.issues 그대로(찬성·우려 두 쪽), 포집 카드에 기술 만능 경계 문구(NOTES.capture)', /is\.pro/.test(src) && /is\.con/.test(src) && /SC\.NOTES\.capture/.test(src));
+    }
+    check('사진 자세·shot 모드는 저장하지 않음, 레버는 확정할 때만 저장(fp.society.levers·capture)', /if \(!state\.applying && !ctx\.shotMode\) saveDraft\(\)/.test(src) && /if \(ctx\.shotMode \|\| !SUM\) return;/.test(src)
+      && /so\.levers = \{ \.\.\.SUM\.d\.levers \}/.test(src) && /so\.capture = /.test(src));
+    {
+      const fm = code('firstperson/fp-main.js');
+      check('fp-main: 우리가 설계한 사회 → 포집 비율(capture) 넘김 · 확정 뒤 다시 읽기(useDesign) · [회의실로 가기] 훅', /shownSociety\(s, S\.preset, levers, choice === 'custom' \? designedCapture\(\) : null\)/.test(fm)
+        && /S\.useDesign = /.test(fm) && /FPActions\.councilHook = /.test(fm));
+    }
+    check('효과음 없음 · 투명 재질(transmission·유리·PET) 0 — 장면을 한 번 더 그리는 투명 패스 없음(함정 15·드로우콜 ≤ 120)', !/\bAudio\b|AudioContext/.test(src) && !/kit\.mat\.(glass|clearPET)|transmission/.test(src));
   }
 
   console.log(fails ? `\n${fails}개 실패` : '\n전부 통과');

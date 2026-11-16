@@ -531,7 +531,9 @@ const FPStage = (() => {
     // 4차 M4: 미니맵이 입구 자리(카페·분리배출장)를 그린다 — 세계 좌표 x·z, 지금 보이는지(shown), 무대 이름(title)
     places: () => doors.map(d => ({ id: d.id, stage: d.stage, title: defs[d.stage] ? defs[d.stage].title || d.id : d.id, x: d.pos.x, z: d.pos.z,
       shown: d.visible ? !!d.visible() : true })),
-    get doorFocus() { return doorFocus ? doorFocus.id : null; }, setQuality, init, boot, frame, resize, shotQuery,
+    get doorFocus() { return doorFocus ? doorFocus.id : null; },
+    // 4차 T2: Tab 초점이 가 있는 물체(회의실이 숫자키 1·2·3 으로 그 카드의 단계를 정한다). 읽기만
+    get focused() { return focus; }, setQuality, init, boot, frame, resize, shotQuery,
     shot: setShot, askExit,
     pixelRatio: () => prFor(quality),
     get busy() { return !!busy; },
