@@ -34,6 +34,7 @@ const FPSheet = (() => {
     }
     // 숨어 있던 캔버스는 폭이 0 이라 그리지 못했다 → 보일 때 다시 그린다
     if (name === 'records' && typeof FPField !== 'undefined') FPField.drawTransect();
+    if (name === 'society' && typeof FPSociety !== 'undefined') FPSociety.render();   // 4차 T4: 회의실에서 확정한 설계를 다시 읽는다
     WorksheetStore.updateFp(fp => { fp.ui.tab = name; });
   }
 

@@ -350,8 +350,8 @@ check('④ 행동 없음 → 배출 함수가 기준과 모든 해에 같다', (
   // 로드 순서: fp-timeline 뒤, fp-tools 앞 — HTML 과 빌더 목록이 같은가
   const fpHtml = read('firstperson/index.html'), bld = read('tools/build_single_html.py');
   check('F2 로드 순서: fp-timeline → fp-actions → fp-tools (HTML · 빌더 FP_JS)',
-    /fp-timeline\.js"><\/script>\s*(<!--[^]*?-->\s*)?<script src="fp-actions\.js"><\/script>\s*<script src="fp-tools\.js">/.test(fpHtml)
-    && /"firstperson\/fp-timeline\.js",\s*"firstperson\/fp-actions\.js", "firstperson\/fp-tools\.js"/.test(bld));
+    /fp-timeline\.js"><\/script>\s*(<!--[^]*?-->\s*)?<script src="fp-actions\.js"><\/script>\s*(<!--[^]*?-->\s*<script src="fp-society\.js"><\/script>\s*)?<script src="fp-tools\.js">/.test(fpHtml)   // 4차 T4: [우리 사회] 탭이 fp-actions 바로 뒤에 올 수 있다
+    && /"firstperson\/fp-timeline\.js",\s*"firstperson\/fp-actions\.js", ("firstperson\/fp-society\.js", )?"firstperson\/fp-tools\.js"/.test(bld));
   check('F2 E 키는 e.code 로 받는다(한글 자판 ㄷ, 함정 5)', /e\.code === 'KeyE'/.test(read('firstperson/fp-player.js')));
   // F3: 사회의 선택 SSP 세 설명은 조감 미래 예측 PRESET_DESC 와 같은 글(F §3 '같은 이름·PRESET_DESC 문구')
   const tf = read('js/tab-future.js');

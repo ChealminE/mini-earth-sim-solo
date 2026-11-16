@@ -284,9 +284,9 @@
     <div id="actRoot"><p class="sheet-empty">행동 카드를 불러오는 중입니다.</p></div>
   </section>
 
-  <!-- [우리 사회]: T5(사회의 선택)가 채운다 -->
+  <!-- [우리 사회]: 4차 T4 목표 비교·나와 사회·조감 연결(firstperson/fp-society.js 가 #socRoot 를 그린다). 설계 요약·쟁점 메모·과제는 T5 -->
   <section class="sheet-panel" role="tabpanel" id="shPanelSociety" aria-labelledby="shTabSociety" tabindex="0" hidden>
-    <p class="sheet-empty">시청 '기후 정책 회의실'에서 정책·기후테크 카드로 2050년 사회를 설계하면 여기에 담깁니다. (준비 중)</p>
+    <div id="socRoot"><p class="sheet-empty">우리 사회 비교를 불러오는 중입니다.</p></div>
   </section>
 </aside>
 
@@ -325,6 +325,8 @@
 <script src="fp-timeline.js"></script>
 <!-- 4차 F2: 행동 카드 + 세계 속 행동 지점. FPSheet·FPField·FPScenario 는 함수 안에서만 읽는다 -->
 <script src="fp-actions.js"></script>
+<!-- 4차 T4: 학습지 [우리 사회] 탭(목표 비교·조감 연결) — fp-actions 뒤 -->
+<script src="fp-society.js"></script>
 <script src="fp-tools.js"></script>
 <script src="fp-player.js"></script>
 <!-- 4차 M1: 미니게임 무대 — 소품 도구(fp-stage-kit) → 무대 관리자(fp-stage). 무대 파일(카페·분리배출장·회의실)은 이 뒤에 -->

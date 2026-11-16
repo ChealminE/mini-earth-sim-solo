@@ -391,20 +391,23 @@ const FPActions = (() => {
     const mine = FPModel.sample(y, FPScenario.mineRun());
     const p245 = FPModel.sample(y, FPModel.pathRun('ssp245')), p119 = FPModel.sample(y, FPModel.pathRun('ssp119'));
     const yb = [2050, 2100].map(v => `<button class="btn btn--time btn--sm${v === y ? ' is-on' : ''}" type="button" data-cmp="${v}" aria-pressed="${v === y}">${v}년</button>`).join('');
+    // 4차 T4: 회의실에서 확정한 '우리 사회'가 있으면 그 차이(우리 사회 − 현재 정책, 같은 해)를 나란히 — FPSociety.societyDelta 와 같은 함수
+    const ours = typeof FPSociety !== 'undefined' ? FPSociety.savedLevers() : null;
     const rows = CMP_ROWS.map(r => {
       const d = mine[r.key] - base[r.key], dn = detectN(d, r.sigma);
       const how = !c.ids.length ? '' : dn.distinct ? `${r.tool}로 약 ${nf(dn.n)}번씩 재야 구분` : '계측기로는 구분할 수 없는 차이예요';
       return `<tr><th scope="row">${r.label}${r.unit ? ` <span class="ac-sub">${r.unit}</span>` : ''}</th>
         <td class="num">${base[r.key].toFixed(r.dec)}</td><td class="num">${mine[r.key].toFixed(r.dec)}</td>
         <td class="num">${c.ids.length ? fmtSigned(d, r.ddec) : '—'}${how ? `<span class="ac-how">${how}</span>` : ''}</td>
-        <td class="num">${fmtSigned(p119[r.key] - p245[r.key], r.ddec)}</td></tr>`;
+        <td class="num">${fmtSigned(p119[r.key] - p245[r.key], r.ddec)}</td>${ours ? `<td class="num">${fmtSigned(FPSociety.societyDelta(y, ours, r.key), r.ddec)}</td>` : ''}</tr>`;
     }).join('');
     return `<h3 class="sh-h">미래 비교 <span class="sub">${esc(FPScenario.shortName())} · 참여 규모 ${esc(AC.SCALES.find(x => x.id === st.scale).label)}</span></h3>
       <div class="act-scales" role="group" aria-label="비교할 해">${yb}</div>
       <table class="field-table act-cmp">
-        <thead><tr><th>${y}년</th><th>기준 미래</th><th>나의 미래</th><th>차이 (나의 행동)</th><th>사회의 선택 차이*</th></tr></thead>
+        <thead><tr><th>${y}년</th><th>기준 미래</th><th>나의 미래</th><th>차이 (나의 행동)</th><th>사회의 선택 차이*</th>${ours ? '<th>우리 사회 차이**</th>' : ''}</tr></thead>
         <tbody>${rows}</tbody></table>
       <p class="sh-note">${c.ids.length ? '' : '행동을 고르면 \'나의 미래\'와 차이가 채워집니다. '}* 사회의 선택 차이 = 현재 정책 → 1.5 °C 탄소중립 경로(같은 해). 나의 행동 차이와 나란히 견줘 보세요.${srcButton('scen_ssp119')}
+        ${ours ? `** 우리 사회 차이 = 현재 정책 → 회의실에서 확정한 우리 사회(같은 해).${srcButton('society_card_levels')}` : ''}
         '재서 구분'은 두 갈래를 같은 횟수씩 재서 평균을 견줄 때의 어림입니다.${srcButton('fp_detect_n')} 세계의 모습(건물·굴뚝)은 행동만으로는 눈에 띄게 바뀌지 않습니다 — 큰 변화는 사회의 선택에서 나옵니다.</p>`;
   }
 

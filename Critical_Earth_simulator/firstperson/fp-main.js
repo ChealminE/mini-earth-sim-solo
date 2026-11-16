@@ -267,6 +267,7 @@ applyScenarioYear();
 FPField.init();
 FPSheet.init();   // 4차 D3: 오른쪽 학습지 패널(열고 닫기·탭). 내용은 위 FPField 가 이미 그려 두었다
 FPActions.init(); // 4차 F2: 학습지 [나의 행동] 카드(저장값 읽기 → 그리기). Icons.fill 앞이라 카드 속 아이콘도 채워진다
+FPSociety.init(); // 4차 T4: 학습지 [우리 사회] 탭 — 목표 비교·나와 사회·조감 연결(FPActions.onChange 를 쓰므로 그 뒤)
 // 4차 F3: 행동·참여 규모가 바뀌면 '나의 미래' 실행을 버리고, 행동이 하나라도 있을 때만 갈래 [나의 미래]를 연다.
 //   행동은 현재에서만 바뀌므로(잠금) 미래에서 갈래가 갑자기 바뀌는 일은 없다 — 그래도 나의 미래에 있으면 세계를 다시 맞춘다
 function syncMine() {
@@ -275,7 +276,7 @@ function syncMine() {
   if (FPScenario.branch === 'mine') applyScenarioYear();
 }
 FPActions.onChange(syncMine);
-FPScenario.onChoice = () => { FPActions.render(); applyScenarioYear(); };   // 사회의 선택 → 카드 다시 그리기·타임라인 글
+FPScenario.onChoice = () => { FPActions.render(); FPSociety.render(); applyScenarioYear(); };   // 사회의 선택 → 카드·[우리 사회] 표(4차 T4 — 회의실 확정 useDesign 도 이 길) 다시 그리기·타임라인 글
 syncMine();
 // 4차 M1: 무대(미니게임) 관리자 — 렌더러는 하나라 세계의 renderer·장면을 넘긴다(들어갈 때 값 저장 → 나올 때 복원, 마스터 §6-14)
 FPStage.init({ renderer, camera, scene: FPWorld.scene, canvas: glCanvas, fit });

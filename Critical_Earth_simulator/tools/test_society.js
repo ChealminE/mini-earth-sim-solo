@@ -462,5 +462,40 @@ check('선택지 5개: 현재 정책 · 파리협약 2 °C · 1.5 °C 탄소중�
   check('T3 등록부 fp_tech_visual (assumption)', SOURCES.fp_tech_visual && SOURCES.fp_tech_visual.kind === 'assumption');
 }
 
+// ── T4 목표 비교 · 나와 사회 · 조감 연결 (firstperson/fp-society.js, js/tab-future.js) ──────────
+{
+  vm.runInContext(read('firstperson/fp-society.js'), ctx, { filename: 'fp-society.js' });
+  const FS = vm.runInContext('FPSociety', ctx);
+  const near = (a, b, tol) => Math.abs(a - b) <= tol;
+  const mid = { renew: 0.55, nuclear: 0.15, ev: 0.5, ccus: 0.5, dac: 0.3, industry: 0.4, forest: 0 };
+  const L = SC.leversFrom(mid);
+  const rows = FS.table(2100, L), T = rows.find(r => r.key === 'T'), P = rows.find(r => r.key === 'ppm');
+  check('T4 표: 열 = 기준 사회(현재 정책) · 우리 사회 · NDC 비교 · 1.5 °C, 행 = CO₂ → 기온 편차 → 해수온 → pH',
+    FS.PATHS.map(p => p.id).join() === 'ssp245,custom,ndc,ssp119' && rows.map(r => r.key).join() === 'ppm,T,sst,pH');
+  check('T4 표 값 = 엔진(문헌값 6-3 ±1 %): 2100년 현재 정책 548 ppm·2.26 °C · 1.5 °C 357·1.00 · NDC 53 % 372·1.09',
+    near(P.vals.ssp245, 548, 5.5) && near(T.vals.ssp245, 2.26, 0.023) && near(P.vals.ssp119, 357, 3.6) && near(T.vals.ssp119, 1.0, 0.01)
+    && near(P.vals.ndc, 372, 3.7) && near(T.vals.ndc, 1.09, 0.011), `${P.vals.ssp245.toFixed(0)}/${T.vals.ssp245.toFixed(2)} · ${P.vals.ssp119.toFixed(0)}/${T.vals.ssp119.toFixed(2)} · ${P.vals.ndc.toFixed(0)}/${T.vals.ndc.toFixed(2)}`);
+  check('T4 우리 사회 열 = 1인칭 그 미래의 값(FPModel.pathRun custom 같은 해), 설계 없으면 비움',
+    T.vals.custom === FM.sample(2100, FM.pathRun('custom', L)).T && FS.table(2050, null).every(r => r.vals.custom === null));
+  // 문헌값 1-5 의 '여섯 가지 모두'는 걷기 31.5 kg(학교편)을 넣은 합이라 ACTIONS(자전거 147 kg)와 다르다 → 한 줄짜리 비행으로 맞춘다
+  const me1 = FS.mineDelta(2100, { ids: ['flight'], recycleAccuracy: 1 });
+  check('T4 나의 행동(대한민국 전체) = 문헌값 1-5: 장거리 왕복 비행 1회 2100년 −0.0017 °C', near(me1, -0.0017, 0.00006), me1.toFixed(5));
+  const me = FS.mineDelta(2100, { ids: AC.ACTIONS.map(a => a.id), recycleAccuracy: 1 }), soc = FS.societyDelta(2100, L);
+  check('T4 우리 사회(설계 예 중간) − 기준 사회 = 엔진 차이, 사회의 선택이 수백 배 이상(문헌값 6-3 읽는 법)', soc < 0 && soc / me > 100
+    && soc === FM.sample(2100, FM.pathRun('custom', L)).T - FM.sample(2100, FM.pathRun('ssp245')).T, `${soc.toFixed(3)} °C · ${(soc / me).toFixed(0)}배`);
+  check('T4 행동이 없으면 나의 행동 줄은 비움(숫자를 만들지 않음)', FS.mineDelta(2100, { ids: [] }) === null && FS.societyDelta(2100, null) === null);
+  const q = new URLSearchParams(FS.aerialQuery(L)), back = JSON.parse(q.get('levers'));
+  check('T4 조감 주소 = /dashboard?tab=future&preset=custom&levers=… (레버 일곱 칸 그대로 되돌아옴)', q.get('tab') === 'future' && q.get('preset') === 'custom'
+    && Object.keys(ES.LEVER_NOW).every(k => back[k] === L[k]) && FS.aerialHref(L).startsWith('/dashboard?tab=future&preset=custom&levers='));
+  const tf = read('js/tab-future.js');
+  check('T4 조감 tab-future.js 는 주소 levers 읽기만 더함(window.__AERIAL_QUERY__ || location.search · 엔진 범위로 자름 · 세 비중 합 1)',
+    /function leversFromQuery\(\)/.test(tf) && /window\.__AERIAL_QUERY__ \|\| location\.search/.test(tf) && /ES\.LEVER_RANGE\[k\]/.test(tf)
+    && /if \(L\) \{ FUT\.preset = 'custom'; FUT\.levers = L;/.test(tf));
+  const bd = read('tools/build_single_html.py');
+  check('T4 단일 HTML: 1인칭 [data-aerial-go] → 껍데기가 조감을 열고 쿼리를 __AERIAL_QUERY__ 로', /closest\('\[data-aerial-go\]'\)/.test(bd) && /w\.__AERIAL_QUERY__ = tab\.slice/.test(bd));
+  const fa = read('firstperson/fp-actions.js');
+  check('T4 F4 미래 비교 카드에 \'우리 사회 차이\' 열(같은 함수 FPSociety.societyDelta)', /FPSociety\.societyDelta\(y, ours, r\.key\)/.test(fa));
+}
+
 console.log(fails ? `\n실패 ${fails}건` : '\n전부 통과');
 process.exit(fails ? 1 : 0);

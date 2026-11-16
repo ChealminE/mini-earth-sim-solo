@@ -954,6 +954,29 @@ function activateFutureTab() {
   apply3D(sceneNature, sampleAt(FUT.nature, FUT.year));
 }
 
+// ── 주소의 직접 설계 레버 (4차 T4 — 마스터 §4 가 허용한 조감 변경 하나) ──
+// 1인칭 학습지 [우리 사회]의 [조감에서 그래프로 보기]가 ?tab=future&preset=custom&levers={…} 로 연다(단일 HTML 은 껍데기가
+// window.__AERIAL_QUERY__ 로 넘긴다). 같은 엔진·같은 레버라 같은 해의 값이 1인칭 표와 같다.
+// 낯선 주소에 대비해 칸마다 숫자인지 보고 엔진 범위로 자르며, 빠진 칸은 지금 값, 전력 세 비중의 합이 1이 아니면 통째로 버린다.
+function leversFromQuery() {
+  const q = new URLSearchParams(window.__AERIAL_QUERY__ || location.search);
+  if (q.get('preset') !== 'custom' || !q.get('levers')) return null;
+  let o = null;
+  try { o = JSON.parse(q.get('levers')); } catch (e) { return null; }
+  if (!o || typeof o !== 'object') return null;
+  const L = { ...ES.LEVER_NOW };
+  for (const k of Object.keys(L)) {
+    const v = Number(o[k]);
+    if (o[k] == null || !Number.isFinite(v)) continue;
+    const r = ES.LEVER_RANGE[k] || [0, 1];   // 전력 세 비중은 0~1
+    L[k] = Math.min(Math.max(r[0], r[1]), Math.max(Math.min(r[0], r[1]), v));
+  }
+  return Math.abs(L.fossilShare + L.nuclearShare + L.renewShare - 1) < 1e-6 ? L : null;
+}
+{
+  const L = leversFromQuery();
+  if (L) { FUT.preset = 'custom'; FUT.levers = L; leversToInputs(L); showLeverValues(); }
+}
 computeNature();
 setPreset(FUT.preset);   // 궤적 계산 + 버튼 표시
 

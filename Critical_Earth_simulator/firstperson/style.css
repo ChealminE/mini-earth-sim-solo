@@ -720,3 +720,8 @@ body.sheet-open .cs-hint { left: 30%; }
 .cs-actions { display: flex; gap: var(--sp-2); justify-content: flex-end; flex-wrap: wrap; position: sticky; bottom: 0; margin: var(--sp-2) calc(-1 * var(--sp-4)) 0;
   padding: var(--sp-2) var(--sp-4); background: var(--paper-2); border-top: 1px solid var(--rule); }
 .cs-actions .btn { min-height: 40px; }
+
+/* 4차 T4: 학습지 [우리 사회] 목표 비교 표(firstperson/fp-society.js) — F4 미래 비교 표(.act-cmp)와 같은 모양, '우리 사회' 열만 강조 */
+.soc-cmp thead th .ac-sub { display: block; font-weight: 500; }
+.soc-cmp td.is-ours { font-weight: 700; color: var(--ctl-scen); background: var(--ctl-scen-bg); }
+.soc-scale b { color: var(--ink); }

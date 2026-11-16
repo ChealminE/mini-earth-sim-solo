@@ -144,7 +144,7 @@ FP_JS = ["js/earth-model.js", "js/earth-data.js", "js/sources.js", "js/theme.js"
          "js/source-tip.js", "js/worksheet-store.js", "js/earth-system.js", "js/earth-visual.js",
          "js/society-core.js", "js/actions-core.js", "firstperson/fp-model.js", "firstperson/fp-world.js", "firstperson/fp-tech-world.js",
          "firstperson/fp-minimap.js", "firstperson/fp-field.js", "firstperson/fp-sheet.js", "firstperson/fp-onboard.js", "firstperson/fp-timeline.js",
-         "firstperson/fp-actions.js", "firstperson/fp-tools.js", "firstperson/fp-player.js",
+         "firstperson/fp-actions.js", "firstperson/fp-society.js", "firstperson/fp-tools.js", "firstperson/fp-player.js",
          "firstperson/fp-stage-kit.js", "firstperson/fp-stage.js", "firstperson/fp-stage-cafe.js",
          "firstperson/fp-recycle-items.js", "firstperson/fp-stage-recycle.js", "firstperson/fp-stage-council.js",
          "firstperson/fp-main.js"]
@@ -298,6 +298,8 @@ window.__boot__ = function (w, mode, tab) {
 
   // 1인칭 시작 값(배출 경로·연도). srcdoc 문서에는 주소 쿼리가 없어서 전역으로 넘긴다 (firstperson/fp-main.js FPScenario)
   if (mode === 'fp') w.__FP_QUERY__ = tab || '';
+  // 4차 T4: 조감도 'future?preset=custom&levers=…' 처럼 쿼리를 받으면 앞은 탭, 뒤는 주소 쿼리 대신(js/tab-future.js 가 읽는다)
+  if (mode === 'aerial' && tab && tab.indexOf('?') >= 0) { w.__AERIAL_QUERY__ = tab.slice(tab.indexOf('?')); tab = tab.slice(0, tab.indexOf('?')); }
   runIn(w, SHIM_STORAGE);
   runIn(w, A.lib.three);
   if (mode === 'aerial') runIn(w, A.lib.chart);
@@ -330,6 +332,14 @@ window.__boot__ = function (w, mode, tab) {
   } else {
     // 1인칭에는 "처음으로" 링크가 없다. 포인터락이 풀려 있을 때만 껍데기 버튼을 보여 준다.
     document.getElementById('back').classList.add('on');
+    // 4차 T4: 학습지 [우리 사회]의 [조감에서 그래프로 보기] — 서버에서는 /dashboard?tab=future&preset=custom&levers=… 로 가고,
+    //   파일 하나에서는 껍데기가 조감을 열며 같은 값을 넘긴다(링크는 학습지가 다시 그리므로 문서에서 받는다)
+    d.addEventListener('click', function (e) {
+      var a = e.target.closest && e.target.closest('[data-aerial-go]');
+      if (!a) return;
+      e.preventDefault();
+      open_('aerial', a.getAttribute('data-aerial-go'));
+    });
     w.document.addEventListener('pointerlockchange', function () {
       var locked = !!w.document.pointerLockElement;
       document.getElementById('back').classList.toggle('on', !locked);
