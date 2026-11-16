@@ -490,6 +490,38 @@ for (const p of PATHS) {
     nowM ? nowM[1] : '없음');
 }
 
+// ── E3 기록에 연도 · 갈래 ──────────────────────────────────────────────────────
+{
+  // fp-field.js 를 DOM 없이 불러 묶음(summary)·CSV 만 본다 — 맨 위 코드는 상수·함수 정의뿐이다
+  const c4 = vm.createContext({ FPModel: FM, console, Math, Map, Set, Object, Number, String, JSON, Array, isFinite });
+  vm.runInContext(read('firstperson/fp-field.js'), c4, { filename: 'fp-field.js' });
+  const F = vm.runInContext('FPField', c4), TASKS = vm.runInContext('FIELD_TASKS', c4);
+  const row = (n, year, branch, branchKo, path, value) => ({ n, year, branch, branchKo, path, kind: 'temp', kindKo: '온도', spot: 'airCity', spotKo: '도심 대기', zone: 'city',
+    value, unit: '°C', x: 1, z: 2, co2: 0, sw: null, waterTemp: null, pco2Sw: 400, wind: '무풍', gameTime: null, hour: null, iso: 't' });
+  F.rows = [row(1, 2026, 'now', '현재', 'ssp245', 15), row(2, 2026, 'now', '현재', 'ssp245', 15.2),
+    row(3, 2100, 'base', '기준 미래', 'ssp245', 17), row(4, 2100, 'base', '기준 미래', 'ssp245', 17.4), row(5, 1850, 'past', '과거', 'ssp245', 13),
+    row(6, 2100, 'mine', '나의 미래', 'mine', 16)];
+  const sm = F.summary();
+  const g = (y, b) => sm.find(r => r.year === y && r.branch === b);
+  check('E3 지점별 평균은 (연도, 갈래, 구역, 지점, 항목)으로 묶는다 — 다른 해·다른 갈래 값끼리 평균하지 않음',
+    sm.length === 4 && g(2026, 'now').n === 2 && Math.abs(g(2026, 'now').mean - 15.1) < 1e-9 && g(2100, 'base').n === 2 && Math.abs(g(2100, 'base').mean - 17.2) < 1e-9
+    && g(1850, 'past').n === 1 && g(2100, 'mine').n === 1, sm.map(r => `${r.year} ${r.branchKo} n${r.n} ${r.mean.toFixed(2)}`).join(' · '));
+  const csv = F.toCSV().replace(/^﻿/, '').split('\r\n');
+  const head = csv[0].split(',');
+  check('E3 CSV 맨 뒤 열 = 연도 · 갈래 · 경로 (앞 19열 순서 그대로, 열 정리는 G1)', head.slice(-3).join() === '연도,갈래,경로' && head.length === 22 && head[0] === '번호'
+    && csv[3].split(',').slice(-3).join() === '2100,기준 미래,ssp245' && csv.slice(1).every(l => l.split(',').length === 22), csv[3].split(',').slice(-3).join(' · '));
+  // 기록 한 줄에 붙는 값 (record → FPScenario.recordTag)
+  const fc = read('firstperson/fp-field.js'), mn = read('firstperson/fp-main.js');
+  check('E3 기록 한 줄에 year · branch(과거/현재/기준 미래/나의 미래) · path(경로 키)', /year: tag\.year, branch: tag\.branch, branchKo: tag\.branchKo, path: tag\.path/.test(fc)
+    && /FPScenario\.recordTag = \(\) =>/.test(mn) && /past: '과거', now: '현재', base: '기준 미래', mine: '나의 미래'/.test(mn));
+  check('E3 현재까지의 기록 경로 = 기준 경로(D6), 미래 = 고른 경로 · 나의 미래 = mine', /era !== 'future' \? FPModel\.BASE_PRESET : \(branch === 'mine' \? 'mine' : FPScenario\.preset\)/.test(mn));
+  check('E3 표에 연도·갈래 칸 (지점별 반복측정 · 최근 측정)', (read('firstperson/index.html').match(/<th>연도·갈래<\/th>/g) || []).length === 2);
+  // 현장 과제 ③~⑤ 의 두 연도와 [O년으로 가기]
+  check('E3 현장 과제 연도 [NOW_YEAR, 2100] (예전 [2023, 2100])', TASKS.length === 3 && TASKS.every(t => t.years.join() === [FM.NOW_YEAR, 2100].join()), TASKS.map(t => t.years.join('·')).join(' / '));
+  check('E3 [O년으로 가기] = goTo(y, \'base\')', /FPScenario\.goTo\(y, 'base'\)/.test(fc) && !/FPScenario\.goYear\(/.test(fc.replace(/\/\/.*$/gm, '')));
+  check('E3 과제 글에 옛 「연도 · 배출 경로」 안내 없음 (타임라인으로)', !/연도 · 배출 경로/.test(fc));
+}
+
 // ── 표 (세이브포인트에 붙인다) ───────────────────────────────────────────────
 console.log('\n      경로     연도   CO₂ppm   T°C    sst°C   pH      Ω      화석GtC  누적최대GtC');
 for (const p of PATHS) {

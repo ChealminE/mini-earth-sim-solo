@@ -102,6 +102,16 @@ FPScenario.timelineInfo = (y = FPScenario.year, br = FPScenario.branch) => {
     : (br === 'mine' ? '나의 미래' : `기준 미래 · ${FPScenario.PRESETS[FPScenario.preset]}`);
   return { era, eraText: ERA_TEXT[era], branchName };
 };
+// 4차 E3: 측정 기록 한 줄에 붙이는 연도·갈래·경로 (fp-field.js record). 갈래는 학생 말로 넷 — 과거 / 현재 / 기준 미래 / 나의 미래.
+// path = 그 값이 나온 경로 실행의 키: 현재까지는 하나의 역사라 늘 기준 경로(FPModel.BASE_PRESET, D6), 그 뒤는 고른 경로(나의 미래면 'mine').
+// F3 의 '사회의 선택'이 경로를 바꾸면 같은 해·같은 갈래라도 path 가 달라 평균이 섞이지 않는다(fp-field summary 묶음 키)
+const BRANCH_KO = { past: '과거', now: '현재', base: '기준 미래', mine: '나의 미래' };
+FPScenario.recordTag = () => {
+  const y = FPScenario.year, era = eraOf(y);
+  const branch = era === 'future' ? FPScenario.branch : era;
+  const path = era !== 'future' ? FPModel.BASE_PRESET : (branch === 'mine' ? 'mine' : FPScenario.preset);
+  return { year: y, branch, branchKo: BRANCH_KO[branch], path };
+};
 // 전환 덮개 가운데 글: '2100년 · 기준 미래'
 const branchLabel = (y, br) => (y > FPModel.NOW_YEAR ? (br === 'mine' ? '나의 미래' : '기준 미래') : ERA_TEXT[eraOf(y)]);
 function applyScenarioYear() {

@@ -211,14 +211,14 @@
 
   <!-- [기록]: 최근 측정 · 지점별 평균/표준편차 · 횡단 조사 그래프. 내보내기(.xlsx·.csv)는 G 가 채운다 -->
   <section class="sheet-panel" role="tabpanel" id="shPanelRecords" aria-labelledby="shTabRecords" tabindex="0" hidden>
-    <h3 class="sh-h">지점별 반복측정 <span class="sub">계측기에는 재현성 오차가 있어 한 번 잰 값은 못 믿습니다</span></h3>
+    <h3 class="sh-h">지점별 반복측정 <span class="sub">계측기에는 재현성 오차가 있어 한 번 잰 값은 못 믿습니다 — 평균은 같은 해·같은 갈래끼리만 냅니다</span></h3>
     <table class="field-table">
-      <thead><tr><th>항목</th><th>지점</th><th>n</th><th>평균</th><th>표준편차</th></tr></thead>
+      <thead><tr><th>연도·갈래</th><th>항목</th><th>지점</th><th>n</th><th>평균</th><th>표준편차</th></tr></thead>
       <tbody id="fieldSummary"></tbody>
     </table>
     <h3 class="sh-h">최근 측정</h3>
     <table class="field-table">
-      <thead><tr><th>#</th><th>항목</th><th>지점</th><th>값</th><th>X, Z (m)</th></tr></thead>
+      <thead><tr><th>#</th><th>연도·갈래</th><th>항목</th><th>지점</th><th>값</th><th>X, Z (m)</th></tr></thead>
       <tbody id="fieldTBody"></tbody>
     </table>
     <h3 class="sh-h">횡단 조사 <span class="sub">해안 → 녹지 → 도심을 일직선으로 걸으며 재면 도시 열섬이 그래프 한 장에 나옵니다</span></h3>

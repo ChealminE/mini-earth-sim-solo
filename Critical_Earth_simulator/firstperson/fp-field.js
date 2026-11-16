@@ -19,7 +19,7 @@
 // ============================================================================
 
 const FPField = {
-  rows: [],          // {n, kind, label, spot, zone, value, unit, x, z, co2, hour, iso}
+  rows: [],          // {n, year, branch, branchKo, path, kind, label, spot, zone, value, unit, x, z, co2, hour, iso} — year·branch·path 는 4차 E3
   transect: null,    // 진행 중인 횡단 조사
   _doneTasks: new Set(),
 };
@@ -59,8 +59,13 @@ FPField.record = function (tool, value, reading) {
   // 바다를 잰 기록(온도계·pH미터·해수 분석기)은 어느 바다인지까지 적는다
   const isSea = reading.spot === 'sea' && tool.kind !== 'co2';
   const seaClass = isSea ? seaZoneClass(x, z) : null;
+  // 4차 E3: 어느 해·어느 갈래·어느 경로에서 잰 값인지(fp-main FPScenario.recordTag). 측정 중에 연도가 바뀌면 E2 가 그 측정을 취소하므로
+  // 확정 순간의 연도 = 겨눈 순간의 연도다
+  const tag = typeof FPScenario !== 'undefined' && FPScenario.recordTag ? FPScenario.recordTag()
+    : { year: FPModel.NOW_YEAR, branch: 'now', branchKo: '현재', path: FPModel.BASE_PRESET };
   const row = {
     n: this.rows.length + 1,
+    year: tag.year, branch: tag.branch, branchKo: tag.branchKo, path: tag.path,
     kind: tool.kind,
     kindKo: KIND_KO[tool.kind],
     spot: reading.spot || '',
@@ -134,7 +139,7 @@ const INQUIRY = [
     concept: '열 스트레스와 산성화의 구분 (오개념 교정)',
     goal: '따뜻한 곳 산호와 차가운 곳 산호가 서로 다른 이유로 아프다는 것을 구분한다.',
     how: '산호 바로 곁(3 m 이내) 바다를 4번 해수분석기로 — 개방 해역 산호 3회, 냉수대 산호 3회 재시오.',
-    think: '학습지 [과제] 맨 아래 「연도 · 배출 경로」에서 연도를 2100년 이후로 옮겨 CO₂를 높여 보세요. 하얗게 바랜 산호(백화)와 회갈색으로 쪼그라든 산호(석회화 저해)는 각각 어디에 있나? 원인은 수온인가 Ω인가?',
+    think: '화면 위 타임라인에서 연도를 2100년 이후로 옮겨 CO₂를 높여 보세요. 하얗게 바랜 산호(백화)와 회갈색으로 쪼그라든 산호(석회화 저해)는 각각 어디에 있나? 원인은 수온인가 Ω인가?',
     subs: [
       { label: '개방 해역 산호', goal: 3, test: r => r.kind === 'sea' && r.nearCoral && r.seaClass === 'open' },
       { label: '냉수대 산호', goal: 3, test: r => r.kind === 'sea' && r.nearCoral && r.seaClass !== 'open' },
@@ -148,16 +153,21 @@ const INQUIRY = [
 // 1인칭 세계가 실제로 바꾸는 것만 묻는다: 산호 백화(수온)·냉수대 골격 용해(Ω)·빙하 곁 온도. 1인칭에는 조개가 없고
 // 유빙 크기는 고정이다(4차 B3) — 그래서 ⑥은 냉수대 산호 골격으로, ⑦은 빙하 곁 온도로 본다.
 // 답은 localStorage['worksheet.v1'].fp.tasks 에 둔다(조감 학습지 공용 저장소와 같은 키 — js/worksheet.js).
+// 4차 E3: 두 연도 = [현재(NOW_YEAR 2026), 2100] — 예전 [2023, 2100]. 2023 은 '마지막 실제 배출 해'지 학생의 '지금'이 아니다(마스터 D6).
+//   저장된 예전 2023년 관찰 글(fp.tasks[id].obs[2023])은 지우지도 옮기지도 않는다 — 2023년 세계를 보고 쓴 글이라 2026 칸에 옮기면
+//   다른 해의 관찰이 된다. 조감 [기록] 탭(worksheet.js renderFp)은 obs 의 모든 해를 그대로 보여 주므로 거기엔 남아 보인다.
+//   [O년으로 가기] = goTo(y, 'base') — 관찰은 기준 미래에서 한다(나의 미래 비교는 F 의 [나의 행동]).
+const FIELD_YEARS = [FPModel.NOW_YEAR, 2100];
 const FIELD_TASKS = [
-  { id: 'coral', link: 'C3', title: '③ 산호 — 해수온', concept: '해수온 상승 · 산호 백화', years: [2023, 2100],
+  { id: 'coral', link: 'C3', title: '③ 산호 — 해수온', concept: '해수온 상승 · 산호 백화', years: FIELD_YEARS,
     goal: '같은 산호를 지금과 2100년에 보고 색이 어떻게 달라지는지 비교한다.',
-    how: '아래 「연도 · 배출 경로」에서 배출 경로를 고르고, [O년으로 가기]로 연도를 바꿔 개방 해역 산호를 가까이서 보시오. 4번 해수분석기로 수온도 재 보세요.',
+    how: '[O년으로 가기](또는 화면 위 타임라인)로 연도를 바꿔 개방 해역 산호를 가까이서 보시오. 4번 해수분석기로 수온도 재 보세요.',
     think: '산호가 하얗게 바래는(백화) 까닭은 무엇일까? 배출 경로를 바꾸면 2100년의 산호는 어떻게 다를까?' },
-  { id: 'shell', link: 'C3', title: '④ 껍데기·골격 — pH · Ω', concept: '해양 산성화 · 아라고나이트 포화도', years: [2023, 2100],
+  { id: 'shell', link: 'C3', title: '④ 껍데기·골격 — pH · Ω', concept: '해양 산성화 · 아라고나이트 포화도', years: FIELD_YEARS,
     goal: '유빙 옆 차가운 바다(냉수대) 산호의 탄산칼슘 골격을 지금과 2100년에 보고 비교한다. (조개 껍데기와 같은 재료)',
     how: '유빙 바로 옆 냉수대로 가서 [O년으로 가기]로 연도를 바꿔 보시오. 2번 pH미터와 4번 해수분석기(Ω)로 재 보세요.',
     think: 'Ω가 1보다 작아지면 껍데기·골격에 무슨 일이 생길까? 차가운 바다가 먼저 위험한 까닭은?' },
-  { id: 'glacier', link: 'C2', title: '⑤ 빙하 — 기온', concept: '기온 상승 · 빙하', years: [2023, 2100],
+  { id: 'glacier', link: 'C2', title: '⑤ 빙하 — 기온', concept: '기온 상승 · 빙하', years: FIELD_YEARS,
     goal: '빙하(유빙) 곁의 온도를 지금과 2100년에 재고 비교한다.',
     // 4차 C4: 유빙 크기가 그해 기온을 따르게 됐다(glacierFrac, 조감 빙하와 같은 연출) — '크기는 안 바뀐다'는 괄호를 바꿨다.
     how: '유빙 곁에서 1번 온도계로 빙하 표면과 해양 대기 온도를 재시오. [O년으로 가기]로 연도를 바꿔 다시 재세요. (유빙 크기도 그해 기온을 따라 바뀝니다 — 크기는 연출, 온도는 측정값입니다)',
@@ -228,7 +238,8 @@ FPField.bindFieldTasks = function () {
   box.addEventListener('focusout', () => setTimeout(() => { if (!box.contains(document.activeElement)) this.renderTasks(); }, 0));
   box.addEventListener('click', e => {
     const b = e.target.closest('.ft-go');
-    if (b && typeof FPScenario !== 'undefined') { FPScenario.goYear(Number(b.dataset.year)); this.toast(`${b.dataset.year}년으로 바꿨습니다 (${FPScenario.label(Number(b.dataset.year))})`, 2500); }
+    // 4차 E3: 현장 과제의 관찰은 기준 미래에서 — 갈래를 'base' 로 정해 간다(E2 goTo 한 통로)
+    if (b && typeof FPScenario !== 'undefined') { const y = Number(b.dataset.year); FPScenario.goTo(y, 'base'); this.toast(`${y}년으로 바꿨습니다 (${FPScenario.label(y)})`, 2500); }
   });
 };
 
@@ -288,17 +299,20 @@ FPField.renderTasks = function () {
 // 계측기에 재현성 오차를 넣어 둔 이유가 여기 있다. 한 번 잰 값은 못 믿고,
 // 여러 번 재서 평균을 내야 참값에 가까워진다는 걸 표로 보게 하려는 것이다.
 // 해수 분석기 기록 한 줄은 용존CO2·DIC·Ω·수온 네 항목으로 펼쳐서 센다.
+// 4차 E3: (연도, 갈래, 구역, 지점, 항목)으로 묶는다 — 다른 해 값끼리 평균하면 '반복측정'이 아니라 서로 다른 세계를 섞은 값이 된다.
+// 경로(path)도 묶음 키에 넣는다: 현재까지는 늘 같은 값이라 지시서의 다섯 키와 같고, 미래는 고른 경로가 다르면 따로 센다(F3 대비).
 FPField.summary = function () {
   const g = new Map();
-  const add = (key, kindKo, spotKo, unit, dec, v) => {
-    if (!g.has(key)) g.set(key, { kindKo, spotKo, unit, dec, v: [] });
+  const add = (r, item, kindKo, unit, dec, v) => {
+    const key = [r.year, r.branch, r.path, r.zone, r.spotKo, item].join('|');
+    if (!g.has(key)) g.set(key, { year: r.year, branch: r.branch, branchKo: r.branchKo, path: r.path, zone: r.zone, kindKo, spotKo: r.spotKo, unit, dec, v: [] });
     g.get(key).v.push(v);
   };
   for (const r of this.rows) {
     if (r.sw) {
-      for (const ch of SW_CH) add(r.kind + ch.key + '|' + r.spotKo, ch.ko, r.spotKo, ch.unit, ch.dec, r.sw[ch.key]);
+      for (const ch of SW_CH) add(r, r.kind + ch.key, ch.ko, ch.unit, ch.dec, r.sw[ch.key]);
     } else {
-      add(r.kind + '|' + r.spotKo, r.kindKo, r.spotKo, r.unit, r.unit === 'ppm' ? 0 : 2, r.value);
+      add(r, r.kind, r.kindKo, r.unit, r.unit === 'ppm' ? 0 : 2, r.value);
     }
   }
   const out = [];
@@ -309,7 +323,8 @@ FPField.summary = function () {
     const sd = n > 1 ? Math.sqrt(s.v.reduce((a, b) => a + (b - mean) ** 2, 0) / (n - 1)) : null;
     out.push({ ...s, n, mean, sd });
   }
-  out.sort((a, b) => a.kindKo.localeCompare(b.kindKo) || a.spotKo.localeCompare(b.spotKo));
+  out.sort((a, b) => a.kindKo.localeCompare(b.kindKo) || a.spotKo.localeCompare(b.spotKo) || a.year - b.year
+    || String(a.branch).localeCompare(String(b.branch)) || String(a.path).localeCompare(String(b.path)));   // 같은 지점의 여러 해가 나란히 — 비교하기 쉽게
   return out;
 };
 
@@ -389,7 +404,9 @@ FPField.toCSV = function () {
   const head = ['번호', '측정항목', '측정지점', '구역', '측정값', '단위',
                 'X(m)', 'Z(m)', '시작점거리(m)', '설정CO2(ppm)', '시각(h)', '기록시각',
                 'water_temp(°C)', 'co2_aq(µmol/kg)', 'dic(µmol/kg)', 'omega',
-                'pco2_sw(ppm)', 'wind', 'game_time(h)'];
+                'pco2_sw(ppm)', 'wind', 'game_time(h)',
+                // 4차 E3: 연도·갈래·경로 — 앞 열 순서를 바꾸지 않으려고 맨 뒤에 붙인다(열 정리는 G1)
+                '연도', '갈래', '경로'];
   const f = (v, d) => (v == null || !isFinite(v) ? '' : v.toFixed(d));
   const T = this.transect;
   const lines = [head.join(',')];
@@ -401,6 +418,7 @@ FPField.toCSV = function () {
       r.hour == null ? '' : r.hour.toFixed(2), r.iso,
       f(r.waterTemp, 1), f(r.sw && r.sw.co2aq, 1), f(r.sw && r.sw.dic, 0), f(r.sw && r.sw.omega, 2),
       f(r.pco2Sw, 1), r.wind || '', f(r.gameTime, 2),
+      r.year == null ? '' : r.year, r.branchKo || '', r.path || '',
     ].join(','));
   }
   return '﻿' + lines.join('\r\n');
@@ -455,6 +473,13 @@ FPField.flash = function () {
   this._flashT = setTimeout(() => this.badge.classList.remove('on'), 700);
 };
 
+// 4차 E3: 표의 '연도·갈래' 칸 — '2100 기준 미래'. 미래 경로가 현재 정책이 아니면 경로 이름을 덧붙인다(F3 '사회의 선택' 대비)
+const PATH_KO = { ssp245: '현재 정책', ssp126: '파리협약 2 °C', ssp119: '1.5 °C 탄소중립', custom: '직접 설계', mine: '' };
+function yearCell(r) {
+  if (r.year == null) return '';
+  const extra = r.branch === 'base' && r.path && r.path !== 'ssp245' && PATH_KO[r.path] ? ` (${PATH_KO[r.path]})` : '';
+  return `${r.year} ${r.branchKo || ''}${extra}`;
+}
 FPField.refresh = function () {
   if (!this.el) return;
   const cnt = document.getElementById('fieldCount');
@@ -466,20 +491,20 @@ FPField.refresh = function () {
   if (tb) {
     const recent = this.rows.slice(-12).reverse();
     tb.innerHTML = recent.length ? recent.map(r =>
-      `<tr><td>${r.n}</td><td>${r.kindKo}</td><td>${r.spotKo}</td>` +
+      `<tr><td>${r.n}</td><td>${yearCell(r)}</td><td>${r.kindKo}</td><td>${r.spotKo}</td>` +
       `<td class="num">${r.sw ? `Ω ${r.sw.omega.toFixed(2)} · ${r.sw.temp.toFixed(1)}°C`
                                : `${r.value.toFixed(r.unit === 'ppm' ? 0 : 2)} ${r.unit}`}</td>` +
       `<td class="num dim">${(r.x * 50).toFixed(0)}, ${(r.z * 50).toFixed(0)}</td></tr>`).join('')
-      : '<tr><td colspan="5" class="empty">아직 기록이 없습니다. 도구를 들고 좌클릭해 측정하세요.</td></tr>';
+      : '<tr><td colspan="6" class="empty">아직 기록이 없습니다. 도구를 들고 좌클릭해 측정하세요.</td></tr>';
   }
   const sb = document.getElementById('fieldSummary');
   if (sb) {
     const s = this.summary();
     sb.innerHTML = s.length ? s.map(r =>
-      `<tr><td>${r.kindKo}</td><td>${r.spotKo}</td><td class="num">${r.n}</td>` +
+      `<tr><td>${yearCell(r)}</td><td>${r.kindKo}</td><td>${r.spotKo}</td><td class="num">${r.n}</td>` +
       `<td class="num">${r.mean.toFixed(r.dec)}</td>` +
       `<td class="num">${r.sd == null ? '—' : '±' + r.sd.toFixed(r.dec + 1)}</td></tr>`).join('')
-      : '<tr><td colspan="5" class="empty">같은 지점을 두 번 이상 재면 평균과 표준편차가 나옵니다.</td></tr>';
+      : '<tr><td colspan="6" class="empty">같은 해·같은 지점을 두 번 이상 재면 평균과 표준편차가 나옵니다.</td></tr>';
   }
   const tBtn = document.getElementById('fieldTransectBtn');
   if (tBtn) tBtn.textContent = this.transect ? '횡단 조사 종료' : '횡단 조사 시작';
