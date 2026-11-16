@@ -228,7 +228,7 @@ FPField.bindFieldTasks = function () {
   box.addEventListener('focusout', () => setTimeout(() => { if (!box.contains(document.activeElement)) this.renderTasks(); }, 0));
   box.addEventListener('click', e => {
     const b = e.target.closest('.ft-go');
-    if (b && typeof FPScenario !== 'undefined') { FPScenario.goYear(Number(b.dataset.year)); this.toast(`${b.dataset.year}년으로 바꿨습니다 (${FPScenario.label()})`, 2500); }
+    if (b && typeof FPScenario !== 'undefined') { FPScenario.goYear(Number(b.dataset.year)); this.toast(`${b.dataset.year}년으로 바꿨습니다 (${FPScenario.label(Number(b.dataset.year))})`, 2500); }
   });
 };
 

@@ -537,10 +537,27 @@ FPTools.update = function (dt) {
   }
 };
 
+// 4차 E2: 측정 중(계측기 수렴 중)에 연도·갈래가 바뀌면 그 측정은 취소한다 — 겨눈 순간의 해 값으로 수렴하다가
+// 다른 해에서 확정되면 기록에 다른 해의 값이 섞인다. 취소했으면 true(fp-main goTo 가 알림을 띄운다)
+FPTools.cancelReadings = function () {
+  let n = 0;
+  for (const tool of this.slots) {
+    if (!tool || !tool.reading) continue;
+    const multi = tool.reading.multi;
+    tool.reading = null;
+    n++;
+    if (multi) drawAnalyzer(tool, null, '연도가 바뀌어 취소', LCD('idle'));
+    else drawDisplay(tool, '--', '연도가 바뀌어 취소', LCD('idle'));
+  }
+  return n > 0;
+};
+
 // ── 측정 실행 (좌클릭) ──────────────────────────────────────────────────────
 FPTools.use = function () {
   const tool = this.slots[this.selected];
   if (!tool || !TOOL_SPEC[tool.kind]) return;
+  // 4차 E2: 시간 이동 덮개가 떠 있는 동안(0.4초)의 클릭은 무시 — 어느 해의 값인지 모호하다
+  if (typeof FPScenario !== 'undefined' && FPScenario.inTransition) return;
   // 4차 D1: 예전 'const ppm = FPWorld.co2' 는 C3 뒤로 쓰는 곳이 없어 뺐다(구역 CO₂ 는 measureCO2 → FPModel.zoneCO2)
 
   const hit = pickTarget();   // 하늘을 겨눠도 null이 아니라 '대기'가 돌아온다

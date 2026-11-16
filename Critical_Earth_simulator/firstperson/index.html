@@ -13,6 +13,9 @@
 <!-- 수중 진입 시 화면 전체에 씌우는 파란 틴트 -->
 <div id="waterOverlay"></div>
 
+<!-- 4차 E2: 시간 이동 덮개(0.4초) — 덮인 동안 세계를 바꾸고 가운데에 '2100년 · 기준 미래'. 움직임 줄이기 설정이면 쓰지 않는다(fp-main.js goTo) -->
+<div id="timeFade" aria-hidden="true"><p id="timeFadeText"></p></div>
+
 <!-- 화면 정중앙 크로스헤어 -->
 <div id="crosshair"><span></span><span></span></div>
 
@@ -157,6 +160,8 @@
     <p class="sh-note">화면 위 <b>타임라인</b>의 정거장(1850 · 1950 · 2000 · 현재 2026 · 2050 · 2100)을 누르거나 아래 막대로 한 해씩 옮깁니다.
       탐험 중에는 <span class="key">[</span> · <span class="key">]</span> 키로 정거장을 오갑니다. 막대의 <b>회색</b> 구간(2023년까지)은 실제 배출,
       <b>파란 점선</b> 구간은 고른 배출 경로입니다.</p>
+    <p class="sh-note"><b>현재(2026년)까지는 하나의 역사</b>입니다 — 어떤 미래를 고르든 2026년까지는 같은 값이고, 갈래는 2027년부터 나뉩니다.<button class="src-i" type="button" data-src="fp_now_join" aria-label="출처 보기: 1인칭 현재까지 하나의 역사 (2026 → 2027 이음, 연출)" aria-expanded="false">ⓘ</button>
+      연도가 바뀌면 재던 측정은 취소됩니다(다른 해의 값이 섞이지 않게).</p>
     <p class="sh-note">해마다의 전 지구 CO₂는 조감 모드 미래 예측과 <b>같은 모형</b>으로 계산합니다(2023년까지는 실제 배출, 그 뒤는 고른 경로) — 그 값은 CO₂센서로 직접 재 보세요.<button class="src-i" type="button" data-src="model_co2" aria-label="출처 보기: 대기 CO₂ (모형 계산)" aria-expanded="false">ⓘ</button>
       <!-- 4차 C5: CO₂는 무색 — 하늘·안개·파도는 연도와 무관(조감 EarthVisual 규칙). 도시는 배출 역사를 따른다(연출) -->
       CO₂는 눈에 보이지 않으므로 하늘·바다의 모습은 연도와 상관없이 같습니다.

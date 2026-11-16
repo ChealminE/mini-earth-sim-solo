@@ -98,6 +98,18 @@ const FPModel = (() => {
     return runFor(emissionsFor(preset, levers), key);
   }
 
+  // ── E2 '현재까지는 하나의 역사' (마스터 D6, 등록부 fp_now_join — assumption) ─────────────
+  // 프리셋 경로들은 엔진 조화 규칙(LAST_HIST_YEAR 2023 → HARMONIZE_END) 때문에 2024년부터 조금씩 갈라진다
+  // (2026년 CO₂ 425.3 / 424.6 / 423.7 ppm — 현재 정책 / 파리협약 / 1.5 °C). '현재'가 고른 미래에 따라 달라지면
+  // 학생이 같은 해(현재)를 두 번 재고 다른 값을 얻는다 → NOW_YEAR 까지는 언제나 기준 경로 실행의 값을 보여 준다.
+  // 엔진(PARAMS·경로 정의)은 그대로 두는 1인칭 표시 규칙이다 — SocietyCore.pickRun(year, baseRun, socRun)과 같은 규칙
+  // (test_fp_model 이 둘이 같은지 본다. 이 파일은 society-core 없이도 node 에서 돌아야 해서 따로 둔다).
+  // 갈림이 2027년으로 미뤄지며 2026 → 2027 사이에 작은 이음(1.5 °C 경로 약 −1.6 ppm)이 생긴다 — fp_now_join 에 밝힌다.
+  const BASE_PRESET = 'ssp245';
+  const shownRun = (year, run) => (Math.round(Number(year)) <= NOW_YEAR ? pathRun(BASE_PRESET) : run);
+  // 그해 사회 모습(전기차·재생 비중 등)도 같은 규칙 — 현재까지는 기준 경로의 사회
+  const shownSociety = (s, preset, levers, capture) => (s.year <= NOW_YEAR ? society(s, BASE_PRESET) : society(s, preset, levers, capture));
+
   // ── 그해 표본 ────────────────────────────────────────────────────────────
   // 엔진 궤적의 그해 항목을 '그대로' 돌려준다(복사·가공 없음) — 그래야 배경 CO₂·기온 편차·개방 해역 수온·pH·Ω가
   // 조감과 차이 0으로 같다(test_fp_model §6-1). 항목: year·ppm·T·sst·pH·omega·dic·fossil·cumFossilMax …
@@ -295,6 +307,7 @@ const FPModel = (() => {
   }
 
   return { NOW_YEAR, YEAR_MIN, YEAR_MAX, K, runFor, emissionsFor, pathRun, sample,
+    BASE_PRESET, shownRun, shownSociety,
     society, cityState, techState, TECH,
     airTemp, urbanHeat, seaTemp, iceSurfaceTemp, tempJitter,
     co2Frac, urbanCO2, zoneCO2,

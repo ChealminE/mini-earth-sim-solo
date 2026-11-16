@@ -431,6 +431,65 @@ for (const p of PATHS) {
     T.STOPS.join(' · '));
 }
 
+// ── E2 연도 → 세계 상태 한 통로 · 현재까지는 하나의 역사(D6) ─────────────────────
+{
+  const base = FM.pathRun('ssp245');
+  // '나의 미래' 자리에는 아무 실행이나 넣어도 된다 — 규칙은 실행의 종류와 상관없이 NOW_YEAR 까지 기준 실행을 쓴다
+  const mine = FM.runFor(ES.leverEmissions({ ...ES.LEVER_NOW, ev: 1, renewShare: 1 }), null);
+  const runs = { ssp245: base, ssp126: FM.pathRun('ssp126'), ssp119: FM.pathRun('ssp119'), mine };
+  let same = true, firstBad = '';
+  for (let y = FM.YEAR_MIN; y <= FM.NOW_YEAR && same; y++) {
+    const b = FM.sample(y, base);
+    for (const [k, r] of Object.entries(runs)) {
+      const s = FM.sample(y, FM.shownRun(y, r));
+      if (s !== b) { same = false; firstBad = `${k} ${y}`; break; }
+    }
+  }
+  check('E2 year ≤ 2026 이면 기준·나의 미래·세 경로의 표본이 모두 같다 (기준 경로 실행 그대로)', same, firstBad || `1750~${FM.NOW_YEAR}`);
+  const sh = (k, y) => FM.sample(y, FM.shownRun(y, runs[k]));
+  let diff = true;
+  for (let y = FM.NOW_YEAR + 1; y <= 2100; y++) {
+    if (!(sh('ssp245', y).ppm >= sh('ssp126', y).ppm && sh('ssp126', y).ppm >= sh('ssp119', y).ppm && sh('ssp245', y).ppm > sh('ssp119', y).ppm)) { diff = false; break; }
+  }
+  check('E2 2027년부터 경로별로 다르다 (현재 정책 ≥ 파리협약 ≥ 1.5 °C 경로 CO₂, 2027~2100 매해)', diff && sh('ssp119', 2027) === FM.sample(2027, runs.ssp119),
+    `2027 ${['ssp245', 'ssp126', 'ssp119'].map(k => sh(k, 2027).ppm.toFixed(2)).join(' / ')} ppm`);
+  check('E2 같은 해 같은 값: 현재 정책 2100 = 조감 엔진 (548 ppm)', sh('ssp245', 2100) === FM.sample(2100, base) && Math.round(sh('ssp245', 2100).ppm) === 548, `${sh('ssp245', 2100).ppm.toFixed(1)} ppm`);
+  // SocietyCore.pickRun 과 같은 규칙
+  const c3 = vm.createContext({ console, Math });
+  for (const f of [...LOAD, 'js/society-core.js']) vm.runInContext(read(f), c3, { filename: f });
+  const SC = vm.runInContext('SocietyCore', c3), FM3 = vm.runInContext('FPModel', c3);
+  const b3 = FM3.pathRun('ssp245'), o3 = FM3.pathRun('ssp119');
+  check('E2 FPModel.shownRun = SocietyCore.pickRun (1750~2200 매해 같은 실행)',
+    Array.from({ length: FM.YEAR_MAX - FM.YEAR_MIN + 1 }, (_, i) => FM.YEAR_MIN + i).every(y => FM3.shownRun(y, o3) === SC.pickRun(y, b3, o3)));
+  const s26 = FM.sample(2026, base);
+  check('E2 현재까지는 사회 모습도 기준 경로 (shownSociety ≤ 2026 = society(ssp245))',
+    JSON.stringify(FM.shownSociety(s26, 'custom', { ...ES.LEVER_NOW, ev: 1 })) === JSON.stringify(FM.society(s26, 'ssp245')));
+  // 이음(fp_now_join): 등록부 숫자 = 이 엔진 출력
+  const { SOURCES } = require(path.join(ROOT, 'js', 'sources.js'));
+  const J = SOURCES.fp_now_join || {};
+  const f1 = v => v.toFixed(1), sg = v => (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(2);
+  const ks = ['ssp245', 'ssp126', 'ssp119'];
+  const want26 = ks.map(k => f1(FM.sample(2026, runs[k]).ppm)).join(' / ');
+  const wantJoin = ks.map(k => sg(FM.sample(2027, runs[k]).ppm - FM.sample(2026, base).ppm)).join(' / ');
+  const wantSelf = ks.map(k => sg(FM.sample(2027, runs[k]).ppm - FM.sample(2026, runs[k]).ppm)).join(' / ');
+  check('E2 등록부 fp_now_join (assumption) 숫자 = 엔진 출력 (2026 CO₂ · 2026→2027 이음)', J.kind === 'assumption'
+    && J.dataset.includes(want26) && J.dataset.includes(wantJoin) && J.dataset.includes(wantSelf), `${want26} · 이음 ${wantJoin} · 자체 ${wantSelf}`);
+  // 한 통로 · 전환 덮개 · 측정 취소 (정적 검사)
+  const strip = t => t.replace(/<!--[\s\S]*?-->/g, '').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+  const mn = strip(read('firstperson/fp-main.js')), tl = strip(read('firstperson/fp-timeline.js')), tools = strip(read('firstperson/fp-tools.js'));
+  check('E2 표본은 갈래 → 실행 → 표시 규칙 (S.runOf → FPModel.shownRun, S.society → shownSociety)', /S\.runOf = [\s\S]*?FPModel\.shownRun\(/.test(mn) && /S\.sample = \(\) => FPModel\.sample\(S\.year, S\.runOf\(/.test(mn) && /FPModel\.shownSociety\(/.test(mn));
+  check('E2 세계 갱신은 goTo → applyScenarioYear → applyWorldState 한 곳 (applyWorldState 호출 1곳)', (mn.match(/applyWorldState\(/g) || []).length === 1 && /onGo: goTo/.test(mn) && /goYear = y => goTo\(/.test(mn));
+  check('E2 전환 덮개 0.4초(0.2 + 0.2) · 움직임 줄이기면 바로 · 슬라이더 끌기는 덮개 없이(instant)',
+    /FADE_HALF_MS = 200/.test(mn) && /prefers-reduced-motion: reduce/.test(mn) && /opt\.instant \|\| reducedMotion\(\)/.test(mn) && /\{ instant: true \}/.test(tl)
+    && /id="timeFade"/.test(read('firstperson/index.html')) && /#timeFade \{[^}]*transition: opacity \.2s/.test(read('firstperson/style.css')));
+  check('E2 전환 중 측정 클릭 무시 (FPTools.use 가 FPScenario.inTransition 을 본다)', /FPTools\.use = function[\s\S]{0,200}FPScenario\.inTransition\) return/.test(tools));
+  check('E2 연도가 바뀌면 측정 중이던 값 취소 (goTo → FPTools.cancelReadings, reading = null)', /FPTools\.cancelReadings\(\)/.test(mn) && /cancelReadings = function[\s\S]{0,200}tool\.reading = null/.test(tools));
+  const mj = read('js/main.js');
+  const nowM = /const FP_NOW_YEAR = (\d+);/.exec(mj);
+  check('E2 조감 현재 실태 [1인칭으로] 링크 연도 = NOW_YEAR (예전 LAST_HIST_YEAR)', nowM && +nowM[1] === FM.NOW_YEAR && /else q\.set\('year', String\(FP_NOW_YEAR\)\)/.test(mj) && !/q\.set\('year', String\(EarthSystem\.LAST_HIST_YEAR\)\)/.test(mj),
+    nowM ? nowM[1] : '없음');
+}
+
 // ── 표 (세이브포인트에 붙인다) ───────────────────────────────────────────────
 console.log('\n      경로     연도   CO₂ppm   T°C    sst°C   pH      Ω      화석GtC  누적최대GtC');
 for (const p of PATHS) {

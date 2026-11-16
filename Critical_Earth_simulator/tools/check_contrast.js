@@ -44,6 +44,8 @@ for (const bg of ['fp패널(검은 장면 위)', 'fp패널(흰 하늘 위)']) {
   for (const fg of ['--ink', '--ink-2', '--ink-3']) pairs.push([fg, bg, '1인칭 패널 글자']);
   pairs.push(['--ctl-rec', bg, '1인칭 야장 제목 기록 수']);
   pairs.push(['--warn', bg, '1인칭 HUD 경고(산호)']);
+  // 4차 E1·E2: 타임라인 큰 연도 숫자, 시간 이동 덮개 가운데 글(덮개 94 % = 패널 섞음 하한과 같다)
+  pairs.push(['--ctl-time', bg, '1인칭 타임라인 연도 · 시간 이동 덮개 글']);
 }
 // 학습지 패널(4차 D3): 불투명 종이 위 — 머리줄(--paper-2)의 기록 수, 고른 탭 글자
 pairs.push(['--ctl-rec', '--paper-2', '1인칭 학습지 머리 기록 수']);

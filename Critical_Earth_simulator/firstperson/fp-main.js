@@ -36,11 +36,20 @@ const FPScenario = (() => {
   };
   // 4차 C1: 엔진 궤적·그해 표본은 FPModel(fp-model.js)에서만 낸다 — 조감과 같은 해 같은 값을 node(test_fp_model)로 검사하려고.
   // 경로별 캐시도 FPModel 이 갖는다.
-  S.sample = () => FPModel.sample(S.year, FPModel.pathRun(S.preset, levers));
+  // 4차 E2: 갈래 → 경로 실행. 기준 미래 = 고른 경로(E 에서는 주소 ?scenario=, 없으면 현재 정책).
+  // 나의 미래 = F3 가 S.mineRun(행동 조합의 실행을 돌려주는 함수)을 채운다 — 실행 캐시(행동을 바꿀 때만 버림)도 F3 쪽이 갖는다.
+  // 경로마다 EarthSystem.run 한 번(1750~2200, 약 10 ms)은 FPModel.pathRun 캐시가 맡는다.
+  S.mineRun = null;
+  S.runOf = (branch, year) => FPModel.shownRun(year,
+    branch === 'mine' && typeof S.mineRun === 'function' ? S.mineRun() : FPModel.pathRun(S.preset, levers));
+  // '현재까지는 하나의 역사'(마스터 D6): year ≤ NOW_YEAR 면 어느 갈래·경로든 기준 경로 실행(FPModel.shownRun)
+  S.sample = () => FPModel.sample(S.year, S.runOf(S.branch, S.year));
   S.ppm = () => S.sample().ppm;
-  // 그해 사회 모습(전기차 비율 등) — 조감과 같은 규칙(FPModel.society). 직접 설계면 레버 값
-  S.society = s => FPModel.society(s, S.preset, levers);
-  S.label = () => (S.year <= EarthSystem.LAST_HIST_YEAR ? `${S.year}년 (실제 배출)` : `${PRESETS[S.preset]} ${S.year}년`);
+  // 그해 사회 모습(전기차 비율 등) — 조감과 같은 규칙(FPModel.society). 직접 설계면 레버 값. 현재까지는 기준 경로의 사회(D6)
+  S.society = s => FPModel.shownSociety(s, S.preset, levers);
+  // 4차 E2: 해를 인자로 받는다 — 전환 덮개(0.4초) 동안 S.year 는 아직 떠나는 해라서. 현재까지는 하나의 역사(D6)
+  S.label = (y = S.year) => (y <= EarthSystem.LAST_HIST_YEAR ? `${y}년 (실제 배출)`
+    : y <= FPModel.NOW_YEAR ? `${y}년 (하나의 역사)` : `${PRESETS[S.preset]} ${y}년`);
   return S;
 })();
 // 4차 C5: 세계 상태는 applyWorldState(그해 엔진 표본, 그해 사회 모습) 하나로 바꾼다(첫 반영은 아래 applyScenarioYear).
@@ -82,29 +91,74 @@ FPScenario.badge = () => {
   if (FPScenario.branch === 'mine') return { text: `${y}년 · 나의 미래`, era: 'future' };
   return { text: `${y}년 · 기준 미래 (${FPScenario.PRESETS[FPScenario.preset]})`, era: 'future' };
 };
-// 타임라인 오른쪽 글: 시대(과거·현재·미래)와 갈래 이름. 과거 = 2023년까지 실제 배출, 그 뒤 = 고른 경로(조감과 같은 약속)
-FPScenario.timelineInfo = () => {
-  const y = FPScenario.year, now = FPModel.NOW_YEAR, b = FPScenario.badge();
-  const path = FPScenario.PRESETS[FPScenario.preset];
+// 타임라인 오른쪽 글: 시대(과거·현재·미래)와 갈래 이름. 과거 = 2023년까지 실제 배출, 2024~현재 = 기준 경로 하나의 역사(D6),
+// 그 뒤 = 고른 경로(조감과 같은 약속). 4차 E2: 전환 중에는 '가는 해'를 먼저 보여 주므로 연도·갈래를 인자로 받는다
+const ERA_TEXT = { past: '과거', now: '현재', future: '미래' };
+const eraOf = y => (y < FPModel.NOW_YEAR ? 'past' : y === FPModel.NOW_YEAR ? 'now' : 'future');
+FPScenario.timelineInfo = (y = FPScenario.year, br = FPScenario.branch) => {
+  const era = eraOf(y);
   const branchName = y <= EarthSystem.LAST_HIST_YEAR ? '실제 배출'
-    : y <= now ? `${path} 경로` : (FPScenario.branch === 'mine' ? '나의 미래' : `기준 미래 · ${path}`);
-  return { era: b.era, eraText: { past: '과거', now: '현재', future: '미래' }[b.era] || '', branchName };
+    : y <= FPModel.NOW_YEAR ? '하나의 역사 (현재 정책)'
+    : (br === 'mine' ? '나의 미래' : `기준 미래 · ${FPScenario.PRESETS[FPScenario.preset]}`);
+  return { era, eraText: ERA_TEXT[era], branchName };
 };
+// 전환 덮개 가운데 글: '2100년 · 기준 미래'
+const branchLabel = (y, br) => (y > FPModel.NOW_YEAR ? (br === 'mine' ? '나의 미래' : '기준 미래') : ERA_TEXT[eraOf(y)]);
 function applyScenarioYear() {
   const s = FPScenario.sample();
   applyWorldState(s, FPScenario.society(s));   // 도시·차·굴뚝·산호·유빙 (C5) — 하늘·파도는 연도와 무관
   FPTimeline.show(FPScenario.year, FPScenario.branch, FPScenario.timelineInfo());
 }
-// 연도·갈래가 바뀌는 길은 이것 하나(타임라인 정거장·슬라이더·[ · ] 키·현장 과제 [O년으로 가기]).
-// E2 가 여기에 '현재까지는 하나의 역사'(D6) 실행 고르기·전환 덮개·측정 취소를 더한다
-function goTo(year, branch) {
-  const y = Math.max(FPModel.YEAR_MIN, Math.min(FPModel.YEAR_MAX, Math.round(Number(year))));
-  if (!Number.isFinite(y)) return;
-  const br = branch === 'mine' && FPTimeline.mineEnabled ? 'mine' : 'base';
-  if (y === FPScenario.year && br === FPScenario.branch) return;   // 같은 해·같은 갈래면 세계를 다시 만들지 않는다
+
+// ── 연도 → 세계 상태 한 통로 (4차 E2) ───────────────────────────────────────
+// 연도·갈래가 바뀌는 길은 goTo 하나다(타임라인 정거장·슬라이더·[ · ] 키·갈래 버튼·현장 과제 [O년으로 가기]).
+//   ① 측정 중이던 계측기는 취소(다른 해의 값이 섞이지 않게 — FPTools.cancelReadings)
+//   ② 0.4초 덮개(가운데 '2100년 · 기준 미래'): 덮개가 다 덮인 0.2초 시점에 세계를 바꾸고 걷어 낸다 — 건물·차가 튀어나오는 모습을 가린다.
+//      덮개가 떠 있는 동안 측정 클릭은 무시(FPScenario.inTransition, fp-tools.js use).
+//      움직임 줄이기(prefers-reduced-motion)면 덮개 없이 바로.
+//   ③ 슬라이더를 끄는 동안(opt.instant)은 덮개 없이 바로 — 한 해마다 화면이 깜빡이면 끌 수가 없다.
+//   전환 중에 다시 부르면 목표만 바꾼다(타임라인은 곧바로 가는 해를 보여 주므로 [ · ] 를 연달아 눌러도 한 칸씩 간다).
+const timeFade = document.getElementById('timeFade');
+const timeFadeText = document.getElementById('timeFadeText');
+const FADE_HALF_MS = 200;
+const reducedMotion = () => !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+FPScenario.inTransition = false;
+// phase: null(덮개 없음) · 'in'(덮는 중 — 끝에서 fadeTarget 으로 바꾼다) · 'out'(걷는 중 — 이미 바꿨다)
+let fadeTarget = null, fadeTimer = 0, phase = null;
+function commitYear(y, br) {
   FPScenario.year = y;
   FPScenario.branch = br;
   applyScenarioYear();
+}
+function goTo(year, branch, opt = {}) {
+  const y = Math.max(FPModel.YEAR_MIN, Math.min(FPModel.YEAR_MAX, Math.round(Number(year))));
+  if (!Number.isFinite(y)) return;
+  const br = branch === 'mine' && FPTimeline.mineEnabled ? 'mine' : 'base';
+  const cur = fadeTarget || { y: FPScenario.year, br: FPScenario.branch };
+  if (y === cur.y && br === cur.br) return;   // 같은 해·같은 갈래면 세계를 다시 만들지 않는다
+  if (FPTools.cancelReadings()) FPField.toast('연도가 바뀌어 측정을 취소했습니다 — 이 해에서 다시 재세요', 2200);
+  if (opt.instant || reducedMotion() || !timeFade) {
+    if (fadeTarget) fadeTarget = { y, br };   // 덮개가 떠 있으면 그 덮개가 이 해로 바꾸고 걷는다
+    else commitYear(y, br);
+    return;
+  }
+  fadeTarget = { y, br };
+  FPTimeline.show(y, br, FPScenario.timelineInfo(y, br));
+  timeFadeText.textContent = `${y}년 · ${branchLabel(y, br)}`;
+  if (phase === 'in') return;                 // 이미 덮는 중 — 아래 타이머가 마지막 목표로 바꾼다
+  // 덮개 없음 또는 걷는 중이면 새로 덮는다(걷는 중이던 타이머는 버린다)
+  phase = 'in';
+  FPScenario.inTransition = true;
+  timeFade.classList.add('on');
+  clearTimeout(fadeTimer);
+  fadeTimer = setTimeout(() => {
+    const t = fadeTarget;
+    fadeTarget = null;
+    commitYear(t.y, t.br);
+    phase = 'out';
+    timeFade.classList.remove('on');
+    fadeTimer = setTimeout(() => { phase = null; FPScenario.inTransition = false; }, FADE_HALF_MS);
+  }, FADE_HALF_MS);
 }
 FPScenario.goTo = goTo;
 // 야장 현장 과제(fp-field.js)가 '이 연도로 가기'로 부른다

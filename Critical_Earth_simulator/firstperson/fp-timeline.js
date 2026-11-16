@@ -11,7 +11,7 @@
 //   - 갈래 [기준 미래 | 나의 미래]. '나의 미래'는 F3 전까지 비활성 + 안내(setMineEnabled 로 연다)
 //   - 오른쪽: 지금 연도 큰 숫자 + 시대(과거·현재·미래) + 갈래 이름
 //
-// 연도를 실제로 바꾸는 일은 하지 않는다 — init 에 받은 onGo(year, branch) 를 부를 뿐이다.
+// 연도를 실제로 바꾸는 일은 하지 않는다 — init 에 받은 onGo(year, branch, opt) 를 부를 뿐이다(슬라이더는 opt.instant).
 // 세계 갱신의 한 통로는 fp-main.js goTo → applyWorldState(C5)이고, 그쪽이 다 바꾼 뒤 show() 로 이 막대를 맞춘다.
 // 그래서 버튼을 눌러도 이 파일이 혼자 '눌림'을 바꾸지 않는다(표시와 실제 연도가 어긋날 길이 없게).
 //
@@ -94,7 +94,8 @@ const FPTimeline = (() => {
     const nowBtn = el.querySelector('#tlStops .tl-now');
     if (nowBtn) { nowBtn.dataset.year = NOW; nowBtn.textContent = `현재 ${NOW}`; }
     stopEls.forEach(b => b.addEventListener('click', () => onGo && onGo(Number(b.dataset.year), branch)));
-    slider.addEventListener('input', () => onGo && onGo(Number(slider.value), branch));
+    // 끄는 동안은 덮개 없이 바로(instant) — 한 해마다 0.4초 덮개가 뜨면 끌 수가 없다(E2)
+    slider.addEventListener('input', () => onGo && onGo(Number(slider.value), branch, { instant: true }));
     $('tlBase').addEventListener('click', () => onGo && onGo(year, 'base'));
     $('tlMine').addEventListener('click', () => { if (mineOn && onGo) onGo(year, 'mine'); });
     document.addEventListener('pointerlockchange', () => { if (document.pointerLockElement) blur(); });

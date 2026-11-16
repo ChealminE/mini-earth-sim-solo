@@ -200,15 +200,18 @@ function updateLegend3D() {
 }
 
 // ── [1인칭으로] (3차 E4): 지금 보고 있는 배출 경로·연도로 1인칭을 연다 ──
-// 미래 예측 = 고른 시나리오와 재생 연도, 현재 실태 = 엔진이 실제 배출로 계산하는 마지막 해(EarthSystem.LAST_HIST_YEAR).
+// 미래 예측 = 고른 시나리오와 재생 연도, 현재 실태 = 1인칭의 '현재'(FP_NOW_YEAR).
 // 1인칭은 같은 엔진으로 그 해의 전 지구 CO₂를 다시 계산한다(firstperson/fp-main.js FPScenario). 주소는 누르는 순간 만든다.
+// 4차 E2(마스터 §4 가 허용한 조감 변경 — 링크 연도만): 현재 실태의 링크 연도 LAST_HIST_YEAR(2023) → 1인칭 '현재' 2026(마스터 D6).
+// 조감은 actions-core.js(ActionsCore.START = FPModel.NOW_YEAR)를 읽지 않아 값을 여기 적는다 — test_fp_model 이 둘이 같은지 본다.
+const FP_NOW_YEAR = 2026;
 function firstPersonQuery() {
   const q = new URLSearchParams();
   if (activeTab === 'future') {
     q.set('scenario', FUT.preset);
     if (FUT.preset === 'custom') q.set('levers', JSON.stringify(FUT.levers));
     q.set('year', String(Math.round(FUT.year)));
-  } else q.set('year', String(EarthSystem.LAST_HIST_YEAR));
+  } else q.set('year', String(FP_NOW_YEAR));
   return '?' + q.toString();
 }
 {
