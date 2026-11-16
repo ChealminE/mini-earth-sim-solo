@@ -191,6 +191,7 @@ function applyScenarioYear() {
   applyWorldState(s, FPScenario.society(s));   // 도시·차·굴뚝·산호·유빙 (C5) — 하늘·파도는 연도와 무관
   FPTimeline.show(FPScenario.year, FPScenario.branch, FPScenario.timelineInfo());
   FPActions.onYear(FPScenario.year);   // 4차 F2: 현재가 아니면 행동 카드 잠금·지점 표지판 흐림
+  FPStage.onYear(FPScenario.year, FPWorld.city);   // 4차 M2: 카페 정면은 2000년 도시 규모부터, 들어가기는 현재만
 }
 
 // ── 연도 → 세계 상태 한 통로 (4차 E2) ───────────────────────────────────────
@@ -301,6 +302,7 @@ function animate() {
   FPPlayer.update(dt, t);
   FPTools.update(dt);          // 측정 중인 계측기의 값이 안정되어 가는 과정
   FPActions.update(dt);        // 4차 F2: 행동 지점을 겨눴는지(초당 10번) → 'E 플러그 뽑기' 안내
+  FPStage.updateDoors(dt, camera);   // 4차 M2: 무대 입구(카페 문)를 겨눴는지 → 'E 카페에 들어가기'
   FPMinimap.update(dt);        // 초당 10회만 다시 그린다
   updateSunShadow(FPPlayer.pos.x, FPPlayer.pos.z);
 

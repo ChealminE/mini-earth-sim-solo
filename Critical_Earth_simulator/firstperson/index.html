@@ -20,6 +20,8 @@
 <div id="crosshair"><span></span><span></span></div>
 <!-- 4차 F2: 행동 지점(멀티탭·거치대·정류장·여행사)을 가까이서 겨누면 십자선 아래 'E 플러그 뽑기' (firstperson/fp-actions.js) -->
 <div id="actHint" role="status" aria-live="polite" hidden></div>
+<!-- 4차 M2: 무대 입구(카페 문 등)를 겨누면 'E 카페에 들어가기' (firstperson/fp-stage.js updateDoors) -->
+<div id="doorHint" role="status" aria-live="polite" hidden></div>
 
 <!-- 포인터락이 풀려 있을 때 뜨는 시작/재개 안내 -->
 <div id="startOverlay">
@@ -320,6 +322,8 @@
 <!-- 4차 M1: 미니게임 무대 — 소품 도구(fp-stage-kit) → 무대 관리자(fp-stage). 무대 파일(카페·분리배출장·회의실)은 이 뒤에 -->
 <script src="fp-stage-kit.js"></script>
 <script src="fp-stage.js"></script>
+<!-- 4차 M2: 카페 미니게임(세계 속 정면 + 실내 무대) -->
+<script src="fp-stage-cafe.js"></script>
 <script src="fp-main.js"></script>
 </body>
 </html>

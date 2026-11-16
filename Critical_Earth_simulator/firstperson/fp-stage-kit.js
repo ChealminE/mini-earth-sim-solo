@@ -72,7 +72,7 @@ const FPStageKit = (() => {
   // 둥근 띠의 점은 면 법선에서 0~45° 를 고르게 나누도록 u = (h − r) + r·tanθ 로 놓는다(옆 면이 나머지 45° 를 맡는다).
   // 법선은 '안쪽 점 → 표면 점' 방향이라 모서리가 정확히 매끈하다. UV 는 미터 단위(uvMeters 마다 텍스처 한 번) —
   // 긴 판재에 나무결이 늘어나 보이지 않게. 3 m 카운터와 30 cm 상자가 같은 결 밀도가 된다.
-  function roundedBoxGeometry(w, h, d, r, seg = 4, uvMeters = 1) {
+  function roundedBoxGeometry(w, h, d, r, seg = 3, uvMeters = 1) {   // 모서리 분할 3(=모서리마다 6 띠) — 4 는 상자 수십 개에서 삼각형이 넘쳤다
     const minSide = Math.min(w, h, d);
     r = Math.min(Math.max(r || 0, minSide * RULES.ROUND_MIN), minSide / 2 - 1e-6);
     seg = Math.max(2, seg | 0);
@@ -134,10 +134,13 @@ const FPStageKit = (() => {
   // ── 회전체 · 관 ──────────────────────────────────────────────────────────
   // profile: [[반지름, 높이], …] (아래 → 위). Catmull-Rom 으로 이어 24점 이상으로 다시 뽑는다.
   // opts.sharp: 곡선 보간 없이 꺾인 단면 그대로(컵 바닥 모서리처럼 꺾여야 하는 곳) — 그래도 점 수는 규칙대로 늘린다
+  // opts.far: 화면 가까이 오지 않는 회전체(벽 선반의 컵·병, 천장 등 갓, 작은 추출구) — Q2 규칙은 '가까운 회전체'라 절반(24 분할·12점)까지 허용.
+  //   무대 하나에 회전체가 50개를 넘으면 규칙 그대로는 삼각형 예산(한 프레임 30만, 그림자·투명 패스 포함)을 넘는다
   function latheGeometry(profile, seg = 64, opts = {}) {
-    seg = Math.max(RULES.LATHE_SEG_MIN, seg | 0);
+    const far = !!opts.far;
+    seg = Math.max(far ? RULES.LATHE_SEG_MIN / 2 : RULES.LATHE_SEG_MIN, seg | 0);
     const pts = profile.map(p => (p.isVector2 ? p.clone() : new THREE.Vector2(p[0], p[1])));
-    const n = Math.max(RULES.LATHE_PTS_MIN, opts.points || pts.length * 6);
+    const n = Math.max(far ? RULES.LATHE_PTS_MIN / 2 : RULES.LATHE_PTS_MIN, opts.points || pts.length * (far ? 2 : 4));   // 점 4배(24 이상) — 6배는 소품 수십 개에서 삼각형 예산(30만)을 넘겼다
     let out;
     if (opts.sharp || pts.length < 3) {
       // 꺾인 선을 길이 비례로 n 점에 다시 나눈다
@@ -149,7 +152,7 @@ const FPStageKit = (() => {
     }
     out.forEach(v => { if (v.x < 0) v.x = 0; });
     const g = new THREE.LatheGeometry(out, seg, opts.phiStart || 0, opts.phiLength || Math.PI * 2);
-    g.userData.kit = { kind: 'lathe', seg, points: out.length };
+    g.userData.kit = { kind: 'lathe', seg, points: out.length, far };
     g.computeBoundingSphere();
     return g;
   }
@@ -165,7 +168,7 @@ const FPStageKit = (() => {
   function create(renderer, cfg = {}) {
     const maxAniso = renderer && renderer.capabilities ? renderer.capabilities.getMaxAnisotropy() : 1;
     const kit = {
-      RULES, EASE, scene: null,
+      RULES, EASE, scene: null, renderer,
       reducedMotion: !!cfg.reducedMotion,
       viewColor: cfg.viewColor || '#6a2ea6',   // 강조 테두리 = 테마 --ctl-view (FPStage 가 CSS 에서 읽어 넘긴다)
       quality: 'high',
@@ -441,8 +444,11 @@ const FPStageKit = (() => {
     const OUTLINE_T = 0.004;   // 테두리 두께 약 4 mm
     function makeOutlines(obj) {
       const list = [];
+      let hasClear = false;
       obj.traverse(o => {
         if (!o.isMesh || o.userData.kitHelper || !o.geometry) return;
+        const ms = Array.isArray(o.material) ? o.material : [o.material];
+        if (ms.some(m => m && m.transmission > 0)) { hasClear = true; return; }
         const g = o.geometry;
         if (!g.boundingSphere) g.computeBoundingSphere();
         const bs = g.boundingSphere, wr = bs.radius * Math.max(o.getWorldScale(_v).x, _v.y, _v.z);
@@ -459,6 +465,20 @@ const FPStageKit = (() => {
         list.push([o, ol]);
       });
       for (const [o, ol] of list) o.add(ol);
+      // 투명 재질(transmission) 메시에는 뒷면 테두리를 달지 않았다 — 불투명한 보라 껍데기가 투명 컵 안으로 비쳐 컵이 보라로 찬다.
+      //   그런 물체만 남으면 바닥에 테두리 고리(같은 색)를 둔다 — 움직임(들림) + 고리로 알린다(색만으로 알리지 않음)
+      if (!list.length || hasClear) {
+        _b.setFromObject(obj);
+        const r = Math.max(_b.max.x - _b.min.x, _b.max.z - _b.min.z) / 2 + 0.008;
+        const ring = new THREE.Mesh(new THREE.TorusGeometry(r, 0.0025, 8, 64), outlineMaterial());
+        ring.rotation.x = Math.PI / 2;
+        obj.updateWorldMatrix(true, false);
+        ring.position.y = (_b.min.y - obj.getWorldPosition(_v).y) / (obj.getWorldScale(new THREE.Vector3()).y || 1) + 0.002;
+        ring.userData.kitHelper = true; ring.userData.pickThrough = true; ring.raycast = () => {};
+        ring.visible = false;
+        obj.add(ring);
+        return [...list.map(x => x[1]), ring];
+      }
       return list.map(x => x[1]);
     }
     kit.highlight = (obj, on) => {
@@ -503,6 +523,7 @@ const FPStageKit = (() => {
       anims.push({ kind: 'squash', obj, t: 0, ms, resolve, base: obj.scale.clone(), amt: amount });
     });
     kit.wait = ms => new Promise(r => anims.push({ kind: 'wait', obj: null, t: 0, ms, resolve: r }));
+    kit.stop = obj => stopAnims(obj);   // 무대를 나갈 때 진행 중이던 이동을 버린다(다시 들어오면 처음부터)
     kit.isMoving = obj => anims.some(a => a.obj === obj && (a.kind === 'tween' || a.kind === 'arc'));
 
     // ── 김 (부드러운 점 스프라이트 ≤ 40개) ──
@@ -678,6 +699,34 @@ const FPStageKit = (() => {
       for (const f of fx) f.update(dt);
     };
     const _v2 = new THREE.Vector2();
+    // 굽기(bake): 움직이지 않는 소품 묶음을 '재질 + 그림자 설정'이 같은 것끼리 메시 하나로 합친다 — 드로우콜 예산(무대 ≤ 120, 수용 12).
+    //   그림자 패스·투명(transmission) 패스가 불투명 메시를 한 번씩 더 그리므로, 합치지 않으면 소품 60개가 드로우콜 180이 된다.
+    //   root 아래 메시 중 userData.keep(움직이거나 고르는 것)·kitHelper 는 그대로 두고, 나머지를 합친 메시를 root 에 다시 단다.
+    kit.bake = root => {
+      root.updateMatrixWorld(true);
+      const inv = new THREE.Matrix4().copy(root.matrixWorld).invert();
+      const groups = new Map(), victims = [];
+      root.traverse(o => {
+        if (!o.isMesh || o.isInstancedMesh || o.isSkinnedMesh || o.userData.kitHelper || Array.isArray(o.material)) return;
+        for (let p = o; p && p !== root; p = p.parent) if (p.userData.keep) return;
+        const key = `${o.material.uuid}|${o.castShadow ? 1 : 0}${o.receiveShadow ? 1 : 0}|${o.renderOrder}`;
+        if (!groups.has(key)) groups.set(key, { mat: o.material, cast: o.castShadow, recv: o.receiveShadow, order: o.renderOrder, list: [] });
+        groups.get(key).list.push(new THREE.Matrix4().multiplyMatrices(inv, o.matrixWorld));
+        groups.get(key).list[groups.get(key).list.length - 1].geo = o.geometry;
+        victims.push(o);
+      });
+      for (const o of victims) o.parent.remove(o);
+      let n = 0;
+      for (const g of groups.values()) {
+        const geo = mergeGeometries(g.list.map(m => m.geo.clone().applyMatrix4(m)));
+        const m = new THREE.Mesh(geo, g.mat);
+        m.castShadow = g.cast; m.receiveShadow = g.recv; m.renderOrder = g.order;
+        m.name = 'baked:' + (g.mat.name || g.mat.type);
+        root.add(m);
+        n++;
+      }
+      return { meshes: victims.length, merged: n };
+    };
     kit.counts = () => ({ anims: anims.length, highlights: hls.size, shadows: shadows.length, fx: fx.length, shadowLights: shadowLights.length });
     return kit;
   }
@@ -755,7 +804,7 @@ const FPStageKit = (() => {
       const smudge = fbm(u, v, 3, 3, 3, seed + 4);
       const t = 0.92 + (line - 0.5) * 0.08;
       out[0] = 255 * t; out[1] = 255 * t; out[2] = 255 * t * 1.01;
-      out[3] = (o.rough == null ? 0.26 : o.rough) + (line - 0.5) * 0.2 + (smudge - 0.5) * 0.08;
+      out[3] = (o.rough == null ? 0.26 : o.rough) + (line - 0.5) * 0.1 + (smudge - 0.5) * 0.06;   // 거칠기 결은 옅게 — 넓은 면에서 줄무늬로 보였다(M2 머신)
     },
     // 종이: 고운 섬유 + 짧은 결. 골판지(cardboard)는 갈색 + 골 그림자 줄(옅게)
     paper(u, v, seed, o, out) {
@@ -788,5 +837,40 @@ const FPStageKit = (() => {
     },
   };
 
-  return { create, EASE, RULES, roundedBoxGeometry, latheGeometry, tubeGeometry, _noise: { vnoise, fbm, hash3, NOISE } };
+  // 지오메트리 합치기 (examples 의 BufferGeometryUtils 대신 — 애드온 금지, 마스터 §6-11). position·normal·uv 만 쓴다(없는 uv 는 0)
+  function mergeGeometries(geos) {
+    let nv = 0, ni = 0;
+    const parts = geos.map(g => {
+      const n = g.attributes.position.count;
+      const idx = g.index ? g.index.array : Array.from({ length: n }, (_, i) => i);
+      if (!g.attributes.normal) g.computeVertexNormals();
+      const p = { g, n, idx, v0: nv };
+      nv += n; ni += idx.length;
+      return p;
+    });
+    const pos = new Float32Array(nv * 3), nor = new Float32Array(nv * 3), uv = new Float32Array(nv * 2);
+    // 정점 색(빵 크러스트 등)은 모두가 가졌을 때만 합친다 — 하나라도 없으면 vertexColors 재질이 검게 나온다(굽기 쪽에서 재질별로 묶이므로 대개 다 같다)
+    const withColor = parts.every(({ g }) => g.attributes.color && g.attributes.color.itemSize === 3);
+    const col = withColor ? new Float32Array(nv * 3) : null;
+    const index = nv > 65535 ? new Uint32Array(ni) : new Uint16Array(ni);
+    let ii = 0;
+    for (const { g, n, idx, v0 } of parts) {
+      pos.set(g.attributes.position.array.subarray(0, n * 3), v0 * 3);
+      nor.set(g.attributes.normal.array.subarray(0, n * 3), v0 * 3);
+      if (g.attributes.uv) uv.set(g.attributes.uv.array.subarray(0, n * 2), v0 * 2);
+      if (col) col.set(g.attributes.color.array.subarray(0, n * 3), v0 * 3);
+      for (let k = 0; k < idx.length; k++) index[ii++] = idx[k] + v0;
+    }
+    const out = new THREE.BufferGeometry();
+    out.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    out.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+    out.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+    if (col) out.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    out.setIndex(new THREE.BufferAttribute(index, 1));
+    out.computeBoundingBox();
+    out.computeBoundingSphere();
+    return out;
+  }
+
+  return { create, EASE, RULES, roundedBoxGeometry, latheGeometry, tubeGeometry, mergeGeometries, _noise: { vnoise, fbm, hash3, NOISE } };
 })();

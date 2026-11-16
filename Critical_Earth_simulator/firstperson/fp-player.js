@@ -299,7 +299,8 @@ function bindInput(P, canvas) {
       e.preventDefault(); return;
     }
     // 4차 F2: E = 겨눈 행동 지점과 상호작용(fp-actions.js). e.code 라 한글 자판 ㄷ 이어도 같다. 겨눈 지점이 없으면 아무 일도 없다
-    if (e.code === 'KeyE') { if (!e.repeat) FPActions.interact(); e.preventDefault(); return; }
+    // 4차 M2: 행동 지점을 겨누지 않았으면 무대 입구(카페 문 등 — fp-stage.js)
+    if (e.code === 'KeyE') { if (!e.repeat && !FPActions.interact()) FPStage.interactDoor(); e.preventDefault(); return; }
     if (e.code === 'Space') e.preventDefault();   // 스페이스로 페이지가 스크롤되는 것 방지
     // 숫자키 1~4로 단축바 선택 (칸 수는 fp-tools.js HOTBAR_N)
     if (e.code.startsWith('Digit')) {
@@ -320,6 +321,7 @@ function bindInput(P, canvas) {
   // 버튼을 누르지 않아도 마우스를 움직이는 것만으로 시점이 돈다(드래그 방식 폐지).
   const overlay = document.getElementById('startOverlay');
   function enterGame() {
+    if (inStage()) return;   // 4차 M2: 무대 안(예: ?stage=cafe 첫 방문의 첫 안내 [시작하기])에서는 잠그지 않는다 — 무대는 커서로 조작
     const root = document.documentElement;
     if (!document.fullscreenElement && root.requestFullscreen) {
       // 실패해도(권한/브라우저 정책) 포인터락만으로 플레이는 가능해야 하므로 무시하고 진행

@@ -374,16 +374,18 @@ body.sheet-open #hotbar, body.sheet-open #keyLine, body.sheet-open #fieldBadge {
    4차 F2: 행동 지점 안내 + 학습지 [나의 행동] 카드 (firstperson/fp-actions.js)
    ============================================================================ */
 /* 십자선 아래 'E 플러그 뽑기' — 겨눈 동안만. 현재가 아닌 해에는 '현재로 가야 해요'(잠금, 보조 글자색) */
-#actHint {
+#actHint, #doorHint {
   position: fixed; left: 50%; top: calc(50% + 26px); transform: translateX(-50%); z-index: 7;
   padding: 5px var(--sp-3); border-radius: 999px; white-space: nowrap; pointer-events: none;
   font-size: var(--fs-2); font-weight: 700; color: var(--ink); border-color: var(--ctl-scen);
 }
-#actHint[hidden] { display: none; }
-#actHint .key { margin: 0 6px 0 0; }
+#actHint[hidden], #doorHint[hidden] { display: none; }
+#actHint .key, #doorHint .key { margin: 0 6px 0 0; }
 #actHint .ah-sub { font-weight: 500; color: var(--ink-2); margin-left: 4px; }
-#actHint.is-locked { color: var(--ink-2); border-color: var(--rule); }
-body.sheet-open #actHint { display: none; }
+#actHint.is-locked, #doorHint.is-locked { color: var(--ink-2); border-color: var(--rule); }
+body.sheet-open #actHint, body.sheet-open #doorHint, body.in-stage #doorHint { display: none; }
+/* 4차 M2: 입구 안내는 3D 위에 뜨는 종이 패널(행동 지점 안내와 같은 모양) */
+#doorHint { background: color-mix(in srgb, var(--paper-2) var(--fp-panel-mix), transparent); border: 1px solid var(--ctl-view); box-shadow: 0 4px 18px var(--fp-shadow); }
 
 /* 다른 해: 잠금 띠 + [현재로 가기] */
 .act-lock {
@@ -510,3 +512,53 @@ body.sheet-open #stageNote { right: calc(40% + 14px); }
 /* 학습지 [과제] '미니게임 화질' 단추 줄 */
 .stage-q { display: flex; gap: var(--sp-2); flex-wrap: wrap; margin: var(--sp-1) 0 var(--sp-2); }
 @media (prefers-reduced-motion: reduce) { #stageFade, #stageNote { transition-duration: .05s; } }
+
+/* ============================================================================
+   4차 M2: 카페 미니게임 겹침(firstperson/fp-stage-cafe.js) — 첫 안내 말풍선 · 컵 고르기 · 결과 카드. 종이 테마 토큰만
+   ============================================================================ */
+.cafe-ui { position: absolute; inset: 0; pointer-events: none; }
+.cafe-ui[hidden] { display: none; }
+.cafe-ui > * { pointer-events: auto; }
+.cafe-hint {
+  position: absolute; left: 50%; top: 76px; transform: translateX(-50%); margin: 0;
+  padding: var(--sp-2) var(--sp-4); border-radius: 999px; font-size: var(--fs-3); font-weight: 700; color: var(--ink);
+  background: color-mix(in srgb, var(--paper-2) var(--fp-panel-mix), transparent); border: 1.5px solid var(--ctl-view);
+  box-shadow: 0 4px 18px var(--fp-shadow); pointer-events: none;
+}
+.cafe-hint[hidden], .cafe-ask[hidden], .cafe-card[hidden] { display: none; }
+.cafe-ask {
+  position: absolute; left: 50%; bottom: 28px; transform: translateX(-50%);
+  padding: var(--sp-3) var(--sp-4); border-radius: 14px; text-align: center;
+  background: var(--paper-2); border: 1px solid var(--rule); box-shadow: 0 4px 18px var(--fp-shadow);
+}
+.cafe-ask-q { margin: 0 0 var(--sp-2); font-family: var(--font-title); font-size: var(--fs-4); font-weight: 700; color: var(--ink); }
+.cafe-ask-btns { display: flex; gap: var(--sp-3); justify-content: center; }
+.cafe-ask-btns .btn { font-size: var(--fs-3); min-height: 44px; padding: 0 var(--sp-4); }
+.cafe-ask-btns .key { margin: 0 var(--sp-1) 0 0; }
+.cafe-card {
+  position: absolute; right: 16px; top: 72px; bottom: 16px; width: min(40%, 500px); box-sizing: border-box; overflow-y: auto;
+  padding: var(--sp-4) var(--sp-4) var(--sp-3); border-radius: 14px;
+  background: var(--paper-2); border: 1px solid var(--rule); box-shadow: 0 6px 24px var(--fp-shadow);
+  color: var(--ink); font-size: var(--fs-2); line-height: 1.6;
+}
+body.sheet-open .cafe-card { right: calc(40% + 16px); width: min(34%, 420px); }
+.cafe-card h2 { margin: 0 0 var(--sp-2); font-family: var(--font-title); font-size: var(--fs-5); }
+.cafe-card h3 { margin: var(--sp-2) 0 var(--sp-1); font-size: var(--fs-3); color: var(--ink); }
+.cafe-card p { margin: 0 0 var(--sp-2); }
+.cafe-card .cc-top { display: flex; gap: var(--sp-3); align-items: center; }
+.cafe-card .cc-thumb { width: 84px; height: 84px; border-radius: 10px; border: 1px solid var(--rule); flex: none; background: var(--paper); }
+.cafe-card .cc-lead { font-size: var(--fs-3); }
+.cafe-card .cc-sub { color: var(--ink-2); font-size: var(--fs-1); }
+.cafe-card .cc-think { padding: var(--sp-2) var(--sp-3); border-radius: 8px; background: var(--paper); border-left: 4px solid var(--ctl-view); font-weight: 700; }
+.cafe-card .cc-slider { display: flex; flex-direction: column; gap: 2px; }
+.cafe-card .cc-bars { display: flex; flex-direction: column; gap: var(--sp-1); margin: var(--sp-1) 0 var(--sp-2); }
+/* 한 줄에 이름 · 막대 · 값 — 카드가 1280×720 에서도 [가게 나가기]까지 들어오게 */
+.cafe-card .cc-bar { display: grid; grid-template-columns: 11.5em 1fr 5.2em; gap: var(--sp-2); align-items: center; }
+.cafe-card .cc-bar b { text-align: right; }
+.cafe-card .cc-track { display: block; height: 12px; border-radius: 6px; background: var(--paper-3); overflow: hidden; }
+.cafe-card .cc-track i { display: block; height: 100%; background: var(--ctl-scen); }
+.cafe-card .cc-bar b { font-variant-numeric: tabular-nums; }
+/* [가게 나가기]는 카드를 굴려도 늘 아래에 보인다 */
+.cafe-card .cc-actions { display: flex; justify-content: flex-end; position: sticky; bottom: calc(-1 * var(--sp-3)); margin: var(--sp-2) calc(-1 * var(--sp-4)) 0;
+  padding: var(--sp-2) var(--sp-4); background: var(--paper-2); border-top: 1px solid var(--rule); }
+.cafe-card .cc-actions .btn { min-height: 44px; font-size: var(--fs-3); }

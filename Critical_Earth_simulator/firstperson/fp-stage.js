@@ -381,6 +381,8 @@ const FPStage = (() => {
   // ── 화면 연결 ──────────────────────────────────────────────────────────────
   function init(o) {
     R = o.renderer; worldCam = o.camera; worldScene = o.scene; canvas = o.canvas; refit = o.fit;
+    // 세계 쪽 외관(카페 정면 등)을 만든다 — 세계 축척 소품용 도구(무대 도구와 같은 함수, 세계 재질 규칙은 정의가 정한다)
+    buildWorlds(typeof FPStageKit !== 'undefined' && R ? FPStageKit.create(R, { reducedMotion: reducedMotion() }) : null);
     const $ = id => document.getElementById(id);
     if (!$('stageBar')) return;   // 무대 마크업이 없는 화면(검사 등)
     const css = getComputedStyle(document.documentElement);
@@ -449,6 +451,68 @@ const FPStage = (() => {
     });
   }
 
+  // ── 세계 속 입구 (M2 카페 · M3 분리배출장 · T2 회의실) ─────────────────────
+  // 무대 정의의 world(wctx) 가 세계 쪽 외관을 만들고 wctx.addDoor 로 입구를 단다. 입구 = 겨눌 점(세계 좌표) + 반경.
+  //   d = { id, stage, label: '카페에 들어가기', pos: Vector3(세계), radius(유닛), visible: () => bool,
+  //         canEnter: () => true | '안 되는 까닭', from: () => { x, y, z, yaw }(나올 때 설 자리) }
+  // 가까이(반경 안) 가서 겨누면 십자선 아래 'E 카페에 들어가기'(#doorHint — 행동 지점 안내 #actHint 와 같은 모양, 따로 둔 까닭은
+  //   FPActions.update 가 자기 안내를 초당 10번 숨기기 때문). E 는 fp-player 가 행동 지점 → 입구 순서로 넘긴다.
+  // 세계의 연도가 바뀌면 fp-main applyScenarioYear 가 FPStage.onYear(year, city) 로 알린다 → 정의의 onWorldYear(year, city).
+  const doors = [];
+  let doorFocus = null, doorTick = 0, doorHintEl = null, doorHintText = '', lastYear = null, lastCity = null;
+  const _dv = { a: null, b: null };
+  function addDoor(d) { doors.push(d); return d; }
+  function onYear(year, city) {
+    lastYear = year; lastCity = city;
+    for (const id in defs) if (defs[id].onWorldYear && defs[id]._world) defs[id].onWorldYear(year, city);
+  }
+  function updateDoors(dt, cam) {
+    doorTick += dt;
+    if (doorTick < 0.1) return;
+    doorTick = 0;
+    if (!doorHintEl) doorHintEl = document.getElementById('doorHint');
+    let best = null, bestD = Infinity;
+    const sheet = typeof FPSheet !== 'undefined' && FPSheet.isOpen;
+    if (!busy && !sheet && cam && doors.length) {
+      if (!_dv.a) { _dv.a = new THREE.Vector3(); _dv.b = new THREE.Vector3(); }
+      cam.getWorldDirection(_dv.a);
+      for (const d of doors) {
+        if (d.visible && !d.visible()) continue;
+        const dx = d.pos.x - cam.position.x, dz = d.pos.z - cam.position.z, hd = Math.hypot(dx, dz);
+        if (hd > d.radius) continue;
+        _dv.b.subVectors(d.pos, cam.position).normalize();
+        if (_dv.a.dot(_dv.b) < 0.82) continue;   // 대략 35° 안을 겨눴을 때만
+        if (hd < bestD) { best = d; bestD = hd; }
+      }
+    }
+    doorFocus = best;
+    if (!doorHintEl) return;
+    if (!best) { if (!doorHintEl.hidden) doorHintEl.hidden = true; doorHintText = ''; return; }
+    const ok = best.canEnter ? best.canEnter() : true;
+    const html = ok === true ? `<span class="key">E</span>${best.label}` : `<span class="key">E</span>${ok}`;
+    if (html !== doorHintText) { doorHintEl.innerHTML = html; doorHintText = html; doorHintEl.classList.toggle('is-locked', ok !== true); }
+    if (doorHintEl.hidden) doorHintEl.hidden = false;
+  }
+  // E 키(fp-player.js — 행동 지점이 먼저). 겨눈 입구가 없으면 false
+  function interactDoor() {
+    const d = doorFocus;
+    if (!d || busy) return false;
+    const ok = d.canEnter ? d.canEnter() : true;
+    if (ok !== true) { if (typeof FPField !== 'undefined') FPField.toast(ok, 3200); return true; }
+    if (doorHintEl) doorHintEl.hidden = true;
+    doorFocus = null; doorHintText = '';
+    enter(d.stage, { from: d.from ? d.from() : null });
+    return true;
+  }
+  function buildWorlds(kitWorld) {
+    for (const id in defs) {
+      const def = defs[id];
+      if (!def.world || def._world) continue;
+      def._world = def.world({ scene: worldScene, kit: kitWorld, addDoor, renderer: R }) || {};
+      if (lastYear != null && def.onWorldYear) def.onWorldYear(lastYear, lastCity);
+    }
+  }
+
   // 주소 ?stage=…&shot=… 로 바로 열기 (fp-main.js 가 화면 준비가 끝난 뒤 부른다)
   function boot() {
     const q = query(), id = q.get('stage');
@@ -463,7 +527,8 @@ const FPStage = (() => {
   const shotQuery = () => { const q = query(); return !!(q.get('stage') && q.get('shot') && defs[q.get('stage')]); };
 
   return {
-    register, enter, exit, active: () => curId, setQuality, init, boot, frame, resize, shotQuery,
+    register, enter, exit, active: () => curId, addDoor, updateDoors, interactDoor, onYear,
+    get doorFocus() { return doorFocus ? doorFocus.id : null; }, setQuality, init, boot, frame, resize, shotQuery,
     shot: setShot, askExit,
     pixelRatio: () => prFor(quality),
     get busy() { return !!busy; },

@@ -223,7 +223,8 @@ const near = (a, b, e = 1e-6) => Math.abs(a - b) <= e;
     const iP = srcs.indexOf('fp-player.js'), iK = srcs.indexOf('fp-stage-kit.js'), iS = srcs.indexOf('fp-stage.js'), iM = srcs.indexOf('fp-main.js');
     check('index.html 로드 순서: fp-player → fp-stage-kit → fp-stage → fp-main', iP >= 0 && iP < iK && iK < iS && iS < iM, `${iP} ${iK} ${iS} ${iM}`);
     const b = (read('tools/build_single_html.py').match(/FP_JS = \[([\s\S]*?)\]/) || [, ''])[1];
-    check('빌더 FP_JS 도 같은 순서', /fp-player\.js",\s*"firstperson\/fp-stage-kit\.js", "firstperson\/fp-stage\.js", "firstperson\/fp-main\.js"/.test(b));
+    check('빌더 FP_JS 도 같은 순서 (M2 카페는 fp-stage 뒤)', /fp-player\.js",\s*"firstperson\/fp-stage-kit\.js", "firstperson\/fp-stage\.js", "firstperson\/fp-stage-cafe\.js", "firstperson\/fp-main\.js"/.test(b)
+      && srcs.indexOf('fp-stage-cafe.js') === iS + 1);
     const main = code('firstperson/fp-main.js');
     const iFrame = main.indexOf('if (FPStage.active()) { FPStage.frame(dt); return; }'), iUpd = main.indexOf('FPPlayer.update(dt, t)');
     check('fp-main: 무대에 있으면 세계 갱신·렌더 전에 무대만 그리고 끝 (M §1-1)', iFrame > 0 && iFrame < iUpd);
@@ -245,6 +246,61 @@ const near = (a, b, e = 1e-6) => Math.abs(a - b) <= e;
     const st = code('firstperson/fp-stage.js');
     check('사진 자세: ?stage=…&shot=… → 덮개 없이(instant), 자동 품질 낮추기 안 함', /enter\(id, shot \? \{ shot, instant: true \} : \{\}\)/.test(st) && /if \(!autoQ \|\| shotMode/.test(st));
     check('모듈을 읽을 때 DOM·THREE 를 건드리지 않음 (node 에서 읽힘 — TDZ 방지)', typeof S.register === 'function' && S.active() === null && S.registered.length === 0);
+  }
+
+  // ── 7. M2 카페 (firstperson/fp-stage-cafe.js) ─────────────────────────────
+  {
+    const c2 = vm.createContext({ console: { log() {}, warn() {}, error: console.error }, Math, Promise, setTimeout });
+    for (const f of ['vendor/three.min.js', 'js/earth-model.js', 'js/earth-data.js', 'js/earth-system.js', 'js/earth-visual.js', 'js/society-core.js', 'js/actions-core.js',
+      'firstperson/fp-model.js', 'firstperson/fp-stage-kit.js', 'firstperson/fp-stage.js', 'firstperson/fp-stage-cafe.js']) vm.runInContext(read(f), c2, { filename: f });
+    const C = vm.runInContext('FPStageCafe', c2), S2 = vm.runInContext('FPStage', c2), AC = vm.runInContext('ActionsCore', c2), K2 = vm.runInContext('FPStageKit', c2), T3 = vm.runInContext('THREE', c2);
+    const src = code('firstperson/fp-stage-cafe.js'), raw = read('firstperson/fp-stage-cafe.js');
+    const { SOURCES } = require(path.join(ROOT, 'js', 'sources.js'));
+    check('M2 카페 무대 등록 · 이름 \'초록잔 카페\'(D10)', S2.registered.includes('cafe') && C.TITLE === '초록잔 카페');
+    check('실존 브랜드 이름 없음 (M §0-2)', !/스타벅스|starbucks|이디야|투썸|메가커피|빽다방|폴바셋|컴포즈|OOZY|할리스|커피빈/i.test(raw));
+    check('효과음 없음 (D12 — Audio·AudioContext 없음)', !/\bAudio\b|AudioContext/.test(src));
+    check('컵 더미 = 주당 잔 수 × 52 (2잔 → 104, 14잔 → 728, 범위 밖은 자름)', C.pileCount(2) === 104 && C.pileCount(14) === 728 && C.pileCount(20) === 728 && C.pileCount(-3) === 0 && C.pileCount(0) === 0);
+    check('컵 더미는 개수만 — kg 로 바꾸지 않음 (문헌값 1-7·4부-11)', /cc-pile[^\n]*개수만 셉니다/.test(raw) && !/cc-pile[^\n]*kg/.test(raw)
+      && SOURCES.cafe_cup_pile && SOURCES.cafe_cup_pile.kind === 'assumption');
+    const rows = C.compareRows(), A = id => AC.ACTIONS.find(a => a.id === id).kgPerYear;
+    check('크기 막대 3개 = ActionsCore 값 그대로 (텀블러 3.5 · 대중교통 285.4 · 비행 1,000 kg)', rows.length === 3 && rows[0].kg === A('tumbler') && rows[1].kg === A('transit') && rows[2].kg === A('flight')
+      && rows[0].kg === 3.5 && rows[1].kg === 285.4 && rows[2].kg === 1000, rows.map(r => r.kg).join(' / '));
+    check('카페 코드에 행동 kg 숫자를 직접 적지 않음 (3.5·285·1000 은 ActionsCore 에서만)', !/(?<![\d.])(3\.5|285(\.4)?|1,?000)(?![\d])/.test(src.replace(/PER_WEEK|0x[0-9a-f]+|\* 1000 \//gi, '')));
+    check('본전 약 220번 · 실제 20여 회 = 문헌값 1-7, 등록부 tumbler_breakeven unverified(ⓘ 확인 중 경고)', C.BREAKEVEN_USES === 220 && C.REAL_USES_TEXT === '20여 회'
+      && SOURCES.tumbler_breakeven && SOURCES.tumbler_breakeven.status === 'unverified' && /srcButton\('tumbler_breakeven'\)/.test(src));
+    check('결과 카드 ⓘ: act_tumbler · cafe_cup_pile · 막대마다 행동 출처', /srcButton\('act_tumbler'\)/.test(src) && /srcButton\('cafe_cup_pile'\)/.test(src) && /sb\(r\.src\)/.test(src));
+    check('크기 비교를 건너뛸 수 없게: [가게 나가기] 처음엔 disabled, 1.5초 뒤 활성 (M §0-1)', /data-leave disabled/.test(raw) && /leave\.disabled = false; \}, 1500\)/.test(src));
+    check('텀블러 → FPActions.setMinigameResult(\'tumbler\') (D13), 일회용 컵 → 분리배출 첫 품목 takeout_cup', /setMinigameResult\('tumbler', result\)/.test(src) && /'takeout_cup'/.test(src));
+    check('들어가기는 현재(NOW_YEAR)만, 다른 해엔 \'현재(…)로 가야 들어갈 수 있어요\' (M §0-3)', /FPScenario\.year === NOW\(\) \? true : `현재\(\$\{NOW\(\)\}\)로 가야 들어갈 수 있어요`/.test(src));
+    check('정면은 2000년 도시 규모부터 (cityLevel 2000 기준)', /FPModel\.sample\(2000, FPModel\.pathRun\(FPModel\.BASE_PRESET\)\)/.test(src) && /city\.level >= LEVEL_2000/.test(src));
+    {
+      // 카페 건물 = bldDefs 의 (0.35, 0.45) — 가장 낮은 건물(1750년부터 늘 보임 → 현재에 반드시 있음)
+      const defs = (read('firstperson/fp-world.js').match(/const bldDefs = \[([\s\S]*?)\n  \];/) || [, ''])[1].match(/\[[^\[\]]+\]/g).map(t => JSON.parse(t));
+      const cafe = defs.find(d => d[0] === C.SHOP.bx && d[1] === C.SHOP.bz);
+      check('카페 건물 = 가장 낮은 건물 (낮은 것부터 나타남 → 2000년·현재에 반드시 있음)', cafe && cafe[3] === Math.min(...defs.map(d => d[3])) && Math.abs(cafe[0] - cafe[2] / 2 - C.SHOP.face) < 1e-9,
+        cafe ? `(${cafe[0]}, ${cafe[1]}) 높이 ${cafe[3]}` : '없음');
+    }
+    check('사진 자세 5개: wide · counter · machine · pour(추출 1.2초 고정) · result (M §2-5)', ['wide', 'counter', 'machine', 'pour', 'result'].every(k => new RegExp(`\\b${k}: \\{ pos:`).test(src))
+      && /pour: \{[^}]*t: T\.pourOn \+ 1\.2, freeze: true/.test(src));
+    check('추출 줄기 2개 · 2.5초 (pourOn 0.7 → pourOff 3.2), 컵 포물선 0.6초, 텀블러 돌려 닫기 0.4초', /\[-0\.012, 0\.012\]\.map\(dx => kit\.pourStream/.test(src) && /pourOn: 0\.7, pourOff: 3\.2/.test(src)
+      && /kit\.arc\(cup, HOME\[st\.cup\]\.clone\(\), TRAY, 0\.12, 600\)/.test(src) && /rotation: \[0, Math\.PI \* 2, 0\] \}, 400\)/.test(src));
+    check('키보드: 숫자 1·2 (메뉴·컵), 키오스크 화면 버튼은 레이캐스트 UV', /Digit1: 1, Numpad1: 1, Digit2: 2, Numpad2: 2/.test(src) && /info\.uv\.x/.test(src));
+    check('세계 쪽: 유리창은 transmission 아님(세계 투명 패스 방지), 입구 = FPStage.addDoor', !/transmission/.test(src.slice(src.indexOf('function world'), src.indexOf('function build'))) && /FPStage\.addDoor\(/.test(src));
+    check('fp-player: E = 행동 지점 → 없으면 무대 입구', /if \(!e\.repeat && !FPActions\.interact\(\)\) FPStage\.interactDoor\(\)/.test(code('firstperson/fp-player.js')));
+    check('fp-main: 연도 → FPStage.onYear, 프레임마다 FPStage.updateDoors', /FPStage\.onYear\(FPScenario\.year, FPWorld\.city\)/.test(code('firstperson/fp-main.js')) && /FPStage\.updateDoors\(dt, camera\)/.test(code('firstperson/fp-main.js')));
+    // 굽기(합치기): 재질이 같은 메시끼리 하나로, 정점 색 유지
+    {
+      const kit = K2.create(null), g = new T3.Group();
+      const mA = new T3.MeshStandardMaterial(), mB = new T3.MeshStandardMaterial({ vertexColors: true });
+      const col = geo => { geo.setAttribute('color', new T3.Float32BufferAttribute(new Array(geo.attributes.position.count * 3).fill(0.5), 3)); return geo; };
+      for (let i = 0; i < 3; i++) g.add(new T3.Mesh(kit.roundedBox(0.1, 0.1, 0.1, 0.01), mA));
+      for (let i = 0; i < 2; i++) g.add(new T3.Mesh(col(new T3.SphereGeometry(0.05, 8, 6)), mB));
+      const keep = new T3.Mesh(kit.roundedBox(0.1, 0.1, 0.1, 0.01), mA); keep.userData.keep = true; g.add(keep);
+      const r = kit.bake(g);
+      const merged = g.children.filter(o => /^baked:/.test(o.name));
+      check('kit.bake: 메시 5개(재질 2종) → 2개, keep 은 그대로, 정점 색 유지', r.meshes === 5 && r.merged === 2 && merged.length === 2 && g.children.includes(keep)
+        && merged.some(m => m.geometry.attributes.color));
+    }
   }
 
   console.log(fails ? `\n${fails}개 실패` : '\n전부 통과');
