@@ -497,5 +497,46 @@ check('선택지 5개: 현재 정책 · 파리협약 2 °C · 1.5 °C 탄소중�
   check('T4 F4 미래 비교 카드에 \'우리 사회 차이\' 열(같은 함수 FPSociety.societyDelta)', /FPSociety\.societyDelta\(y, ours, r\.key\)/.test(fa));
 }
 
+// ── T5 [우리 사회] 탭 · 과제 ⑫~⑮ · 탐험 지도 (firstperson/fp-society.js) ─────────────
+{
+  const FS = vm.runInContext('FPSociety', ctx);
+  const nos = FS.SOC_TASKS.map(t => t.no).join('');
+  const field = read('firstperson/fp-field.js'), html = read('firstperson/index.html');
+  const fieldNos = ['①', '②', '③', '④', '⑤'].every(n => new RegExp(`title: '${n} `).test(field));
+  check('T5 과제 번호: 1장 ①~⑤(D3) 다음 2장 ⑥~⑪(F5 여섯) · 3장 ⑫~⑭ · 4장 ⑮ — 빈 번호 없음, 탐험 지도 표와 같음',
+    nos === '⑫⑬⑭⑮' && fieldNos && FS.CHAPTERS.map(c => c.nos).join('|') === '①~⑤|⑥~⑪|⑫~⑭|⑮'
+    && FS.SOC_TASKS.filter(t => t.chapter === 3).length === 3 && FS.SOC_TASKS.filter(t => t.chapter === 4).length === 1);
+  check('T5 탐험 지도 네 장 = 관측자 · 시민 · 결정자 · 성찰 (T §6-3)', FS.CHAPTERS.map(c => c.role).join() === '관측자,시민,결정자,성찰');
+  const none = FS.taskProgress({ tasks: {}, society: {} }, []);
+  check('T5 아무것도 안 했으면 ⑫~⑮ 미완료', none.every(p => !p.done));
+  const fp = { society: { levers: { ...ES.LEVER_NOW } }, tasks: {
+    soc_design: { obs: { '고른 카드와 까닭': '재생 3단계' } },
+    soc_measure: { obs: {}, diff: '우리 사회가 낮다' },
+    soc_issue: { obs: { '찬성 근거': 'a', '우려 근거': 'b' }, diff: '' },
+    soc_scale: { obs: { '견준 결과': 'x' }, diff: 'y' } } };
+  const rows = [];
+  const add = (n, path, kind, spot) => { for (let i = 0; i < n; i++) rows.push({ year: 2050, branch: 'base', path, kind, spot }); };
+  add(5, 'custom', 'co2', 'airCity'); add(5, 'ssp245', 'co2', 'airCity'); add(5, 'custom', 'ph', 'sea'); add(4, 'ssp245', 'ph', 'sea');
+  add(9, 'custom', 'co2', 'airGreen');                 // 녹지 CO₂ 는 세지 않는다
+  rows.push({ year: 2100, branch: 'base', path: 'ssp245', kind: 'ph', spot: 'sea' });   // 다른 해는 세지 않는다
+  const P = Object.fromEntries(FS.taskProgress(fp, rows).map(p => [p.task.id, p]));
+  check('T5 판정은 기록 수·글 유무로만: ⑫ 설계 확정 + 글 → 완료, ⑭ 세 칸 중 판단이 비면 미완료(어느 쪽 판단이든 같음), ⑮ 두 칸 → 완료',
+    P.soc_design.done && !P.soc_issue.done && P.soc_scale.done);
+  check('T5 ⑬ = 2050년·기준 미래 갈래·경로(우리 사회 custom / 기준 사회 ssp245)·도심 CO₂·해수 pH 각 5 — 4/5 면 미완료',
+    !P.soc_measure.done && P.soc_measure.subs.slice(0, 4).map(s => s.n).join() === '5,5,5,4');
+  add(1, 'ssp245', 'ph', 'sea');
+  check('T5 ⑬ 다섯째 기록으로 완료', FS.taskProgress(fp, rows).find(p => p.task.id === 'soc_measure').done);
+  check('T5 설계 초안이 확정한 레버와 다르면 알림(draftChanged)', FS.draftChanged({ levers: { ...ES.LEVER_NOW }, cards: { renew: 0.55 } }) && !FS.draftChanged({ levers: SC.leversFrom({ renew: 0.55 }), cards: { renew: 0.55 } }));
+  const src = read('firstperson/fp-society.js');
+  check('T5 저장 모양 = 현장 과제와 같음 { id, title, link, obs, diff, scenario, time } (조감 renderFp, 마스터 §6-4) · 쟁점 메모 = fp.society.issueNotes',
+    /fp\.tasks\[id\] \|\| \{ id, title: t\.title, link: TASK_LINK, obs: \{\} \}/.test(src) && /scenario: typeof FPScenario/.test(src) && /time: new Date\(\)\.toISOString\(\)/.test(src)
+    && /so\.issueNotes = \{\}/.test(src));
+  check('T5 탐험 지도 자리(#socMap)·과제 자리(#socTasks) · 첫 안내 셋째 장에 \'탐험 지도는 학습지 [과제] 탭\' · 교사용 ?chapter=',
+    /id="socMap"/.test(html) && /id="socTasks"/.test(html) && /탐험 지도<\/b>[^<]*학습지 \[과제\] 탭/.test(html) && /q\.get\('chapter'\)/.test(src));
+  const strs = (src.replace(/\/\/.*$/gm, '').match(/'[^'\n]*'|`[^`]*`/g) || []).join('\n');
+  const BAN = [/완벽한/, /반드시/, /무조건/, /위험하다/, /포집하면.{0,15}배출|배출해도\s*(된|돼|괜찮)/, /소용없|의미 없/, /지구를 구|해결된다|해결돼요/];
+  check('T5 문구 점검: [우리 사회]·과제 화면 글 금지 표현 0건', !BAN.some(re => re.test(strs)), BAN.filter(re => re.test(strs)).map(String).join(', '));
+}
+
 console.log(fails ? `\n실패 ${fails}건` : '\n전부 통과');
 process.exit(fails ? 1 : 0);

@@ -725,3 +725,30 @@ body.sheet-open .cs-hint { left: 30%; }
 .soc-cmp thead th .ac-sub { display: block; font-weight: 500; }
 .soc-cmp td.is-ours { font-weight: 700; color: var(--ctl-scen); background: var(--ctl-scen-bg); }
 .soc-scale b { color: var(--ink); }
+
+/* 4차 T5: [우리 사회] 설계 요약·쟁점 메모 · [과제] 탐험 지도(firstperson/fp-society.js) — 종이 테마 토큰만 */
+.soc-design { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: var(--sp-3); align-items: start; }
+.soc-design h4 { margin: 0 0 2px; font-size: var(--fs-2); }
+.soc-design ul { margin: 0 0 var(--sp-2); padding-left: 1.1em; }
+.soc-levers td.is-ours { font-weight: 700; color: var(--ctl-scen); background: var(--ctl-scen-bg); }
+.soc-issue { border: 1px solid var(--rule); border-radius: 10px; padding: var(--sp-1) var(--sp-3); margin: 0 0 var(--sp-2); background: var(--paper); }
+.soc-issue summary { cursor: pointer; font-weight: 700; padding: var(--sp-1) 0; }
+.soc-issue-cols { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-2); }
+.soc-issue-cols h4 { margin: 0; font-size: var(--fs-2); }
+.soc-issue-cols ul { margin: 0 0 var(--sp-2); padding-left: 1.1em; font-size: var(--fs-1); }
+.soc-note { display: flex; flex-direction: column; gap: 2px; margin-bottom: var(--sp-2); }
+.soc-note textarea { width: 100%; box-sizing: border-box; font: inherit; }
+.soc-map { margin-bottom: var(--sp-3); }
+.soc-ch { border: 1px solid var(--rule); border-radius: 10px; margin: 0 0 var(--sp-1); background: var(--paper); }
+.soc-ch summary { display: grid; grid-template-columns: 3em 4.5em minmax(0, 1fr) 7em 3.2em; gap: var(--sp-2); align-items: center; padding: var(--sp-1) var(--sp-3); cursor: pointer; }
+.soc-ch[open] { border-color: var(--ctl-view); }
+.soc-ch-n { font-weight: 800; }
+.soc-ch-role { font-weight: 700; }
+.soc-ch-time { color: var(--ink-2); font-size: var(--fs-1); }
+.soc-ch-bar { display: block; height: 10px; border-radius: 5px; background: var(--paper-3); overflow: hidden; }
+.soc-ch-bar i { display: block; height: 100%; background: var(--ctl-scen); }
+.soc-ch-pct { text-align: right; font-variant-numeric: tabular-nums; font-size: var(--fs-1); }
+.soc-ch-what { margin: 0 var(--sp-3) var(--sp-1); color: var(--ink-2); }
+.soc-ch-items { margin: 0 var(--sp-3) var(--sp-2); padding-left: 1.1em; }
+.soc-ch-items li.ok { color: var(--ctl-scen); font-weight: 700; }
+.soc-levers td.num { white-space: nowrap; }

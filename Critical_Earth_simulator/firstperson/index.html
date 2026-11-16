@@ -60,6 +60,7 @@
       <h2>3. 시간과 행동</h2>
       <p>같은 자리를 <b>다른 해</b>에서 재 보세요. 연도는 화면 위 <b>타임라인</b>에서 바꿉니다 — 탐험 중에는 <span class="key">[</span> · <span class="key">]</span> 키로 정거장(1850 ~ 2100)을 오갑니다.</p>
       <p>도시의 멀티탭·자전거 거치대·버스 정류장·여행사에서 하는 탄소중립 행동(<span class="key">E</span>)은 학습지 [나의 행동]에 쌓입니다. 행동은 <b>현재(2026년)</b>에서만 고를 수 있습니다.</p>
+      <p>네 장으로 된 <b>탐험 지도</b>(관측자 · 시민 · 결정자 · 성찰)는 학습지 [과제] 탭 맨 위에 있어요.</p>
       <p class="ob-sub">조작법은 언제든 <span class="key">H</span> 또는 학습지 [과제] 맨 아래 '조작법'에서 다시 볼 수 있습니다.</p>
     </section>
     <div class="ob-actions">
@@ -177,8 +178,12 @@
 
   <!-- [과제]: 측정 과제(기록 수로 판정) + 현장 과제(두 연도 관찰 글) + 연도·배출 경로 -->
   <section class="sheet-panel" role="tabpanel" id="shPanelTasks" aria-labelledby="shTabTasks" tabindex="0">
+    <!-- 4차 T5: 탐험 지도(네 장) — firstperson/fp-society.js. 교사용 ?chapter=3 이면 그 장을 펼친 채 시작 -->
+    <div class="soc-map" id="socMap"></div>
     <p class="task-intro" id="fieldTaskIntro"></p>
     <div class="task-grid" id="fieldTasks"></div>
+    <!-- 4차 T5: 사회의 선택 과제 ⑫~⑮(fp.tasks — 현장 과제와 같은 모양, 조감 [기록] '1인칭 현장 기록'에도 보인다) -->
+    <div class="task-grid" id="socTasks"></div>
     <p class="field-note">측정 과제의 완료 여부는 <b>학습지에 쌓인 기록 수</b>로만 판정합니다 — 값이 맞고 틀리고가 아니라,
       조건을 채울 만큼 재었는지를 봅니다. 결론은 [기록] 탭의 평균과 표준편차로 내리세요.</p>
 

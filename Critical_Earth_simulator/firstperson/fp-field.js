@@ -297,6 +297,7 @@ FPField.renderTasks = function () {
       `</div>`;
   }).join('');
   this.renderFieldTasks();   // 3차 E4 현장 과제 카드 (위)
+  if (typeof FPSociety !== 'undefined' && FPSociety.renderTasks) FPSociety.renderTasks();   // 4차 T5 탐험 지도 · 과제 ⑫~⑮ (기록이 쌓이면 ⑬ 진행도)
 };
 // ── 통계: 같은 지점 종류를 반복 측정했을 때의 평균과 표준편차 ────────────────
 // 계측기에 재현성 오차를 넣어 둔 이유가 여기 있다. 한 번 잰 값은 못 믿고,
