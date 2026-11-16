@@ -176,8 +176,10 @@ FPScenario.recordTag = () => {
   const y = FPScenario.year, era = eraOf(y);
   const branch = era === 'future' ? FPScenario.branch : era;
   const c = branch === 'mine' ? FPActions.chosen() : null;
-  const path = era !== 'future' ? FPModel.BASE_PRESET
-    : (branch === 'mine' ? `mine:${FPScenario.choice}:${FPActions.scale}:${c.ids.slice().sort().join('+')}` : FPScenario.choice);
+  // 4차 F4: '우리 도시'가 도심 공기를 바꾸는 동안(현재·나의 미래)의 기록은 ':city42'(감소 %)를 붙여 참여 전 기록과 따로 센다(과제 ⑩ 전·후 비교)
+  const lc = FPActions.localCutFor(y, branch), city = lc > 0 ? `:city${Math.round(lc * 100)}` : '';
+  const path = (era !== 'future' ? FPModel.BASE_PRESET
+    : (branch === 'mine' ? `mine:${FPScenario.choice}:${FPActions.scale}:${c.ids.slice().sort().join('+')}` : FPScenario.choice)) + city;
   return { year: y, branch, branchKo: BRANCH_KO[branch], path };
 };
 // 전환 덮개 가운데 글: '2100년 · 기준 미래'

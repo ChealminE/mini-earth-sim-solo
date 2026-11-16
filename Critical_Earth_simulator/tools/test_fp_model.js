@@ -517,7 +517,7 @@ for (const p of PATHS) {
     && /FPScenario\.recordTag = \(\) =>/.test(mn) && /past: '과거', now: '현재', base: '기준 미래', mine: '나의 미래'/.test(mn));
   // 4차 F3: 미래 경로 키 = 사회의 선택 id, 나의 미래 = 'mine:선택:규모:행동'(행동을 바꾼 뒤의 기록이 앞 평균과 섞이지 않게)
   check('E3·F3 현재까지의 기록 경로 = 기준 경로(D6), 미래 = 사회의 선택 · 나의 미래 = mine:선택:규모:행동',
-    /era !== 'future' \? FPModel\.BASE_PRESET/.test(mn) && /`mine:\$\{FPScenario\.choice\}:\$\{FPActions\.scale\}:/.test(mn) && /: FPScenario\.choice\);/.test(mn));
+    /\(era !== 'future' \? FPModel\.BASE_PRESET/.test(mn) && /`mine:\$\{FPScenario\.choice\}:\$\{FPActions\.scale\}:/.test(mn) && /: FPScenario\.choice\)\) \+ city;/.test(mn));
   check('E3 표에 연도·갈래 칸 (지점별 반복측정 · 최근 측정)', (read('firstperson/index.html').match(/<th>연도·갈래<\/th>/g) || []).length === 2);
   // 현장 과제 ③~⑤ 의 두 연도와 [O년으로 가기]
   check('E3 현장 과제 연도 [NOW_YEAR, 2100] (예전 [2023, 2100])', TASKS.length === 3 && TASKS.every(t => t.years.join() === [FM.NOW_YEAR, 2100].join()), TASKS.map(t => t.years.join('·')).join(' / '));

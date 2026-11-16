@@ -103,6 +103,8 @@ function measureCO2(s, x, z, zone, px, pz) {
     ex += Math.max(0, 1 - Math.hypot(x - c.tailPos.x, z - c.tailPos.z) / 0.10);
   }
   opt.exhaustNear = ex;
+  // 4차 F4: '우리 도시'가 함께 걷기·자전거·대중교통을 하면 도심의 도시 증가분이 준다(현재 바로, 미래는 나의 미래 갈래에서만 — fp-actions localCutFor)
+  if (zone === 'city' && typeof FPActions !== 'undefined' && typeof FPScenario !== 'undefined') opt.localCut = FPActions.localCutFor(FPScenario.year, FPScenario.branch);
   return FPModel.zoneCO2(zone, s, opt);
 }
 

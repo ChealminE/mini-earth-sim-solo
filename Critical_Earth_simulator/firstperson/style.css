@@ -420,3 +420,9 @@ body.sheet-open #actHint { display: none; }
 /* 4차 F3: ③ 사회의 선택 — 다섯(+조감에서 가져온 직접 설계) 버튼을 두 줄 칸에. 고른 것 = 채움(.is-on) */
 .act-society { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-1); }
 .act-society .act-soc { justify-content: flex-start; text-align: left; white-space: normal; min-height: 34px; }
+/* 4차 F4: 미래 비교 카드 — 숫자 칸은 오른쪽 맞춤, 차이 칸 아래 '재서 구분' 어림 한 줄 */
+.act-cmp { margin-top: var(--sp-2); }
+.act-cmp th[scope="row"] { font-weight: 600; color: var(--ink); text-align: left; white-space: nowrap; }
+.act-cmp td.num { vertical-align: top; }
+.act-cmp .ac-how { display: block; font-size: var(--fs-1); color: var(--ink-3); text-align: right; line-height: 1.35; }
+.act-cmp thead th:not(:last-child) { white-space: nowrap; }

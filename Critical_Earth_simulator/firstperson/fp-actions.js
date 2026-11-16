@@ -108,6 +108,17 @@ const FPActions = (() => {
   // 참여 규모로 함께 했을 때 1년에 줄이는 CO₂ [t/년, 다 퍼진 뒤] — 엔진에 넣는 양과 같은 식(cutGtC)
   const scaleTonnes = (chosen, scaleId) => AC.cutGtC(chosen, scaleId) * AC.C_TO_CO2 * 1e9;
 
+  // F4 '재서 구분할 수 있나요?' (등록부 fp_detect_n, assumption): 두 갈래를 n번씩 재서 평균을 낼 때 차이가 평균 차의
+  //   표준오차 σ√(2/n)의 2배를 넘으려면 n ≥ 2 × (2σ ÷ |차이|)². 차이가 σ의 1/20 보다 작으면(n > 3,200) '구분할 수 없는 차이'.
+  //   σ = 계측기 재현성(fp-tools.js TOOL_SPEC — CO₂센서 8 ppm, 온도계·수온 0.15 °C, pH미터 0.02). 차이를 키우는 배율은 쓰지 않는다
+  function detectN(diff, sigma) {
+    const d = Math.abs(Number(diff) || 0);
+    if (!(sigma > 0) || d < sigma / 20) return { n: Infinity, distinct: false };
+    return { n: Math.ceil(2 * (2 * sigma / d) ** 2), distinct: true };
+  }
+  // '우리 도시' 참여 비율 단계(0~1) — 도시 공기 즉시 효과 전용(D1 '우리 도시', 등록부 fp_local_cut)
+  const CITY_STEPS = Object.freeze([0, 0.25, 0.5, 0.75, 1]);
+
   // 숫자 글: 한국어 자릿수(만·억). 반올림 자리는 크기에 맞춰 — 작은 값이 0 으로 사라지지 않게
   const nf = (v, d = 0) => Number(v).toLocaleString('ko-KR', { maximumFractionDigits: d, minimumFractionDigits: 0 });
   const fmtKg = v => nf(v, v < 1000 ? 1 : 0);   // 285.4 · 61.6 처럼 안내서 자리 그대로(정수면 소수점 없이)
@@ -127,7 +138,7 @@ const FPActions = (() => {
   // ── 상태 ────────────────────────────────────────────────────────────────
   let free = false;
   try { free = new URLSearchParams(window.__FP_QUERY__ || location.search).get('free') === '1'; } catch (e) { free = false; }
-  const st = { chosen: [], scale: 'me', minigames: {} };
+  const st = { chosen: [], scale: 'me', minigames: {}, city: 0 };   // city = '우리 도시' 참여 비율(F4)
   let year = NOW;            // 지금 보고 있는 해 — fp-main applyScenarioYear 가 onYear 로 알린다
   let context = null;        // 학습지를 지점에서 열었을 때의 고르기 카드(지점 id)
   const listeners = [];
@@ -138,6 +149,7 @@ const FPActions = (() => {
       const a = WorksheetStore.readFp().actions || {};
       st.chosen = Array.isArray(a.chosen) ? a.chosen.filter(id => byId[id]) : [];
       st.scale = AC.SCALES.some(s => s.id === a.scale) ? a.scale : 'me';
+      st.city = CITY_STEPS.includes(Number(a.city)) ? Number(a.city) : 0;
       st.minigames = a.minigames && typeof a.minigames === 'object' ? a.minigames : {};
     } catch (e) { /* 저장소가 막히면 빈 상태로 */ }
     // 체험 전 미니게임 행동이 (예전 저장분 등으로) 켜져 있으면 끈다 — D13
@@ -149,6 +161,7 @@ const FPActions = (() => {
         fp.actions = fp.actions && typeof fp.actions === 'object' && !Array.isArray(fp.actions) ? fp.actions : {};
         fp.actions.chosen = st.chosen.slice();
         fp.actions.scale = st.scale;
+        fp.actions.city = st.city;
         fp.actions.minigames = st.minigames;
       });
     } catch (e) { /* 메모리에만 */ }
@@ -172,6 +185,20 @@ const FPActions = (() => {
     return true;
   }
   const toggle = id => setAction(id, !has(id));
+  // F4 '우리 도시' 참여 비율 — 현재에서만
+  function setCity(v) {
+    v = Number(v);
+    if (!isNow() || !CITY_STEPS.includes(v) || v === st.city) return false;
+    st.city = v;
+    changed();
+    return true;
+  }
+  // 도심 공기 '도시 증가분'을 줄이는 비율(0~0.42). 이동 행동(걷기·자전거, 대중교통)을 골랐을 때만(ActionsCore.localCut).
+  //   현재: 바로 적용(도시 공기는 그 도시의 지금 배출에 반응 — 문헌값 1-6). 미래: '나의 미래' 갈래에서만 이어 적용
+  //   (기준 미래는 나의 행동이 없는 세계). 과거: 0. fp-tools measureCO2 가 도심을 잴 때 부른다
+  const localCutNow = () => AC.localCut(chosen(), st.city);
+  const localCutFor = (y, branch) => (y === NOW || (y > NOW && branch === 'mine') ? localCutNow() : 0);
+
   function setScale(id) {
     if (!isNow() || !AC.SCALES.some(s => s.id === id) || id === st.scale) return false;
     st.scale = id;
@@ -241,11 +268,68 @@ const FPActions = (() => {
       <p class="sh-note"><b>기준 미래</b> = 이 경로 그대로, <b>나의 미래</b> = 같은 경로 − 아래 나의 행동 × 참여 규모. 2026년까지는 하나의 역사이고 2027년부터 갈라집니다.${srcButton('fp_now_join')}</p>`;
   }
 
+  // ── F4 체감 장치 ──────────────────────────────────────────────────────────
+  // 도시 공기 즉시 효과(현재) — 숫자는 FPModel.urbanCO2(현재 = 기준 경로 하나의 역사의 2026년 표본)
+  function cityHtml() {
+    if (typeof FPModel === 'undefined') return '';
+    const move = AC.LOCAL_IDS.some(has), lc = localCutNow();
+    const sNow = FPModel.sample(NOW, FPModel.pathRun(FPModel.BASE_PRESET));
+    const inc = FPModel.urbanCO2(sNow, 0), drop = inc - FPModel.urbanCO2(sNow, lc);
+    const btns = CITY_STEPS.map(v => `<button class="btn btn--nav btn--sm${v === st.city ? ' is-on' : ''}" type="button" data-city="${v}"`
+      + ` aria-pressed="${v === st.city}"${isNow() && move ? '' : ' disabled'}>${v === 0 ? '나만' : `${nf(v * 100)} %`}</button>`).join('');
+    const dn = detectN(drop, CMP_ROWS[0].sigma);   // CO₂센서 σ
+    const eff = !move ? '걷기·자전거나 대중교통을 고르면 \'우리 도시\'에서 함께 할 수 있어요.'
+      : lc === 0 ? '우리 도시 사람들이 함께 하면 도심 공기가 지금 바로 달라집니다.'
+      : `현재 도심 공기의 '도시 증가분'(약 ${nf(inc, 1)} ppm)이 ${nf(lc * 100)} % 줄어 <b>약 ${nf(drop, 1)} ppm</b> 낮아집니다.`
+        + ` CO₂센서 재현성(±8 ppm) 때문에 한 번으로는 안 보여요 — 참여 전·후를 <b>${dn.n}번 이상씩</b> 재서 평균을 견주세요.${srcButton('fp_detect_n')}`;
+    return `<h3 class="sh-h">우리 도시 공기 <span class="sub">전 지구 CO₂와 달리 도시 공기는 지금 바로 바뀐다</span></h3>
+      <div class="act-scales" role="group" aria-label="우리 도시 참여 비율">${btns}</div>
+      <p class="act-line">${eff}</p>
+      <p class="sh-note">서울에서 거리두기 때 도심 증가분이 약 42 % 줄었습니다(상한 근거).${srcButton('fp_local_cut')} 미래에서는 '나의 미래' 갈래에만 이어 적용합니다.</p>`;
+  }
+
+  // 미래 비교 카드: 2050·2100 × CO₂·기온 편차·해수온·pH — 기준 / 나의 / 차이(+ 재서 구분할 수 있나) · 사회의 선택(현재 정책 → 1.5 °C) 차이
+  const CMP_ROWS = Object.freeze([
+    { key: 'ppm', label: 'CO₂', unit: 'ppm', dec: 1, ddec: 2, sigma: 8, tool: 'CO₂센서' },
+    { key: 'T', label: '기온 편차', unit: '°C', dec: 2, ddec: 3, sigma: 0.15, tool: '온도계' },
+    { key: 'sst', label: '해수온', unit: '°C', dec: 2, ddec: 3, sigma: 0.15, tool: '수온' },
+    { key: 'pH', label: 'pH', unit: '', dec: 3, ddec: 4, sigma: 0.02, tool: 'pH미터' },
+  ]);
+  let cmpYear = 2100;
+  const fmtSigned = (v, dec) => {
+    const r = Number(v.toFixed(dec));
+    if (r === 0) return v === 0 ? '0' : `0 <span class="ac-sub">(${dec}자리 아래)</span>`;
+    return (r > 0 ? '+' : '−') + Math.abs(r).toFixed(dec);
+  };
+  function compareHtml() {
+    if (typeof FPScenario === 'undefined' || typeof FPModel === 'undefined') return '';
+    const y = cmpYear, c = chosen();
+    const base = FPModel.sample(y, FPModel.pathRun(FPScenario.preset, FPScenario.levers));
+    const mine = FPModel.sample(y, FPScenario.mineRun());
+    const p245 = FPModel.sample(y, FPModel.pathRun('ssp245')), p119 = FPModel.sample(y, FPModel.pathRun('ssp119'));
+    const yb = [2050, 2100].map(v => `<button class="btn btn--time btn--sm${v === y ? ' is-on' : ''}" type="button" data-cmp="${v}" aria-pressed="${v === y}">${v}년</button>`).join('');
+    const rows = CMP_ROWS.map(r => {
+      const d = mine[r.key] - base[r.key], dn = detectN(d, r.sigma);
+      const how = !c.ids.length ? '' : dn.distinct ? `${r.tool}로 약 ${nf(dn.n)}번씩 재야 구분` : '계측기로는 구분할 수 없는 차이예요';
+      return `<tr><th scope="row">${r.label}${r.unit ? ` <span class="ac-sub">${r.unit}</span>` : ''}</th>
+        <td class="num">${base[r.key].toFixed(r.dec)}</td><td class="num">${mine[r.key].toFixed(r.dec)}</td>
+        <td class="num">${c.ids.length ? fmtSigned(d, r.ddec) : '—'}${how ? `<span class="ac-how">${how}</span>` : ''}</td>
+        <td class="num">${fmtSigned(p119[r.key] - p245[r.key], r.ddec)}</td></tr>`;
+    }).join('');
+    return `<h3 class="sh-h">미래 비교 <span class="sub">${esc(FPScenario.shortName())} · 참여 규모 ${esc(AC.SCALES.find(x => x.id === st.scale).label)}</span></h3>
+      <div class="act-scales" role="group" aria-label="비교할 해">${yb}</div>
+      <table class="field-table act-cmp">
+        <thead><tr><th>${y}년</th><th>기준 미래</th><th>나의 미래</th><th>차이 (나의 행동)</th><th>사회의 선택 차이*</th></tr></thead>
+        <tbody>${rows}</tbody></table>
+      <p class="sh-note">${c.ids.length ? '' : '행동을 고르면 \'나의 미래\'와 차이가 채워집니다. '}* 사회의 선택 차이 = 현재 정책 → 1.5 °C 탄소중립 경로(같은 해). 나의 행동 차이와 나란히 견줘 보세요.${srcButton('scen_ssp119')}
+        '재서 구분'은 두 갈래를 같은 횟수씩 재서 평균을 견줄 때의 어림입니다.${srcButton('fp_detect_n')} 세계의 모습(건물·굴뚝)은 행동만으로는 눈에 띄게 바뀌지 않습니다 — 큰 변화는 사회의 선택에서 나옵니다.</p>`;
+  }
+
   function render() {
     if (!root) return;
     // 다시 그리면 초점이 사라진다 — 누르던 버튼을 기억했다가 같은 버튼에 되돌린다(키보드로 이어서 조작할 수 있게)
     const ae = document.activeElement, keep = ae && root.contains(ae)
-      ? ['data-toggle', 'data-scale', 'data-choice', 'data-try', 'data-society', 'id'].map(k => [k, ae.getAttribute(k)]).find(([, v]) => v) : null;
+      ? ['data-toggle', 'data-scale', 'data-choice', 'data-try', 'data-society', 'data-city', 'data-cmp', 'id'].map(k => [k, ae.getAttribute(k)]).find(([, v]) => v) : null;
 
     const c = chosen(), sum = AC.personalKg(c), sc = AC.SCALES.find(s => s.id === st.scale);
     const tonnes = scaleTonnes(c, st.scale);
@@ -275,6 +359,8 @@ const FPActions = (() => {
         ${c.ids.length ? ` 모두 합치면 1년에 <b>${fmtTonnes(tonnes)}</b> CO₂를 줄입니다(2030년에 다 퍼진 뒤).${srcButton('action_ramp')}${flightCap}` : ''}</p>
       <p class="act-line">이만큼 줄이면 미래의 CO₂·기온이 얼마나 달라지는지는 미래로 가서 계측기로 직접 재 보세요.</p>
       <p class="sh-links"><button class="btn btn--time" type="button" id="actGoFuture"><span data-icon="play"></span>미래 보러 가기 (2100년 · 나의 미래)</button></p>
+      ${cityHtml()}
+      ${compareHtml()}
       <p class="sh-note">IPCC는 인프라와 정책이 받쳐 줄 때 생활 속 수요 측 조치로 건물·육상 수송·식품 부문 배출을 2050년까지 40~70 % 줄일 수 있다고 봅니다.${srcButton('ipcc_ar6_demand')}
         개인 행동은 많은 사람이 함께 하고 사회의 선택이 받쳐 줄 때 미래를 크게 바꿉니다.</p>`;
     if (typeof Icons !== 'undefined' && Icons.fill) Icons.fill(root);
@@ -289,6 +375,8 @@ const FPActions = (() => {
     if (!b || !root.contains(b) || b.disabled) return;
     if (b.dataset.toggle) { toggle(b.dataset.toggle); return; }
     if (b.dataset.scale) { setScale(b.dataset.scale); return; }
+    if (b.dataset.city != null) { setCity(b.dataset.city); return; }
+    if (b.dataset.cmp) { cmpYear = Number(b.dataset.cmp); render(); return; }
     if (b.dataset.choice && context) {
       const p = POINTS.find(q => q.id === context), o = CHOICES[context].opts.find(x => x.key === b.dataset.choice);
       if (p && o) { setAction(p.action, o.on); flashCard(p.action, false); }
@@ -628,7 +716,8 @@ const FPActions = (() => {
     // 순수 계산(node 검사용)
     chosenOf, canToggle, cardKg, recycleAccuracy, tumblerYearsPerFlight, footprintPct, scaleTonnes, fmtTonnes, fmtPeople, fmtKg,
     // 상태
-    chosen, get scale() { return st.scale; }, get free() { return free; }, has,
+    chosen, get scale() { return st.scale; }, get city() { return st.city; }, get free() { return free; }, has,
+    detectN, CITY_STEPS, CMP_ROWS, setCity, localCutNow, localCutFor,
     setAction, toggle, setScale, setMinigameResult, onChange: fn => { listeners.push(fn); },
     minigameHook: null, councilHook: null, SOCIETY_DESC,
     // 화면

@@ -482,8 +482,11 @@ const PATH_KO = { ssp245: '현재 정책', ssp126: '파리협약 2 °C', ssp119:
   custom: '우리가 설계한 사회', aerial: '직접 설계(조감)', mine: '' };
 function yearCell(r) {
   if (r.year == null) return '';
-  const p = r.branch === 'mine' && r.path ? String(r.path).split(':')[1] : r.path;
-  const extra = (r.branch === 'base' || r.branch === 'mine') && p && p !== 'ssp245' && PATH_KO[p] ? ` (${PATH_KO[p]})` : '';
+  const p = r.branch === 'mine' && r.path ? String(r.path).split(':')[1] : String(r.path || '').split(':')[0];
+  let extra = (r.branch === 'base' || r.branch === 'mine') && p && p !== 'ssp245' && PATH_KO[p] ? ` (${PATH_KO[p]})` : '';
+  // 4차 F4: '우리 도시' 참여 중에 잰 기록(path 끝 ':city42')
+  const cm = /:city(\d+)$/.exec(String(r.path || ''));
+  if (cm) extra += ` (우리 도시 −${cm[1]} %)`;
   return `${r.year} ${r.branchKo || ''}${extra}`;
 }
 FPField.refresh = function () {

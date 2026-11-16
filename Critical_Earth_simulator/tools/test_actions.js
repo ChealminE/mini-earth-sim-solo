@@ -360,6 +360,21 @@ check('④ 행동 없음 → 배출 함수가 기준과 모든 해에 같다', (
     return m && m[1] === FA.SOCIETY_DESC[k];
   });
   check('F3 사회의 선택 설명 = 조감 PRESET_DESC (SSP 세 경로)', same.length === 3, same.join(','));
+  // F4: 재서 구분할 수 있나요? n = 2 × (2σ/|d|)², |d| < σ/20 이면 구분 불가 (fp_detect_n)
+  const dA = FA.detectN(9.7, 8), dB = FA.detectN(0.3, 8), dC = FA.detectN(0.41, 8), dZ = FA.detectN(0, 8);
+  check('F4 detectN: 도심 −9.7 ppm 은 6번씩, 0.3 ppm(< σ/20)·0 은 구분 불가, 0.41 ppm 은 2 × (16/0.41)² 올림', dA.n === 6 && dA.distinct
+    && !dB.distinct && !dZ.distinct && dC.n === Math.ceil(2 * (16 / 0.41) ** 2), `${dA.n} · ${dC.n}`);
+  // 계측기 σ 는 fp-tools.js TOOL_SPEC 과 같아야 한다(카드가 다른 σ 로 어림하면 학생이 잰 것과 어긋난다)
+  const tools = read('firstperson/fp-tools.js');
+  const sig = k => Number((new RegExp(k + ':\\s*\\{[^}]*sigma:\\s*([\\d.]+)').exec(tools) || [])[1]);
+  const rows = Object.fromEntries(FA.CMP_ROWS.map(r => [r.key, r.sigma]));
+  check('F4 미래 비교 σ = TOOL_SPEC (CO₂ 8 · 온도 0.15 · pH 0.02)', rows.ppm === sig('co2') && rows.T === sig('temp') && rows.sst === sig('temp') && rows.pH === sig('ph'),
+    `${sig('co2')} · ${sig('temp')} · ${sig('ph')}`);
+  // localCut: 현재는 바로, 미래는 나의 미래 갈래만, 과거는 0 — 상태 없이 확인하려고 ActionsCore 식과 함께 본다
+  check('F4 우리 도시 단계 0·25·50·75·100 % → localCut 최대 0.42 (이동 행동만)', FA.CITY_STEPS.join() === '0,0.25,0.5,0.75,1'
+    && AC.localCut({ ids: ['bike'] }, 1) === 0.42 && AC.localCut({ ids: ['flight'] }, 1) === 0);
+  check('F4 도심 측정이 localCut 을 받는다 (fp-tools measureCO2 → FPActions.localCutFor)', /opt\.localCut = FPActions\.localCutFor\(FPScenario\.year, FPScenario\.branch\)/.test(tools)
+    && /localCutFor = \(y, branch\) => \(y === NOW \|\| \(y > NOW && branch === 'mine'\)/.test(read('firstperson/fp-actions.js')));
 }
 
 console.log(fails ? `\n실패 ${fails}건` : '\n전부 통과');
