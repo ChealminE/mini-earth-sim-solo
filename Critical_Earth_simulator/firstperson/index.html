@@ -131,6 +131,29 @@
 <!-- 기록된 측정 개수. 패널을 안 열어둬도 뭔가 남고 있다는 걸 알게 한다 -->
 <div id="fieldBadge">기록 0 · 과제 0/2</div>
 
+<!-- 4차 M1: 미니게임 무대(firstperson/fp-stage.js) — 미터 축척의 별도 장면. 들어가 있는 동안 body.in-stage 가 세계 HUD 를 숨긴다.
+     덮개 = 종이색 0.5초 + 무대 이름(검정 아님) · 위 막대 = 이름·[나가기]·키 안내 · 초점 테두리 = Tab 으로 고른 물체(HTML 겹침) ·
+     #stageUi = 무대가 띄우는 주문 화면·결과 카드 자리 · 구석 알림 = 화질 자동 낮춤 · 나가기 확인 = Esc -->
+<div id="stageFade" aria-hidden="true"><p id="stageFadeTitle"></p></div>
+<div id="stageBar" role="group" aria-label="무대">
+  <b id="stageTitle"></b>
+  <span class="sb-keys"><span class="key">Tab</span>고르기 <span class="key">Enter</span>누르기 <span class="key">F</span>학습지</span>
+  <button class="btn btn--nav btn--sm" type="button" id="stageExitBtn"><span data-icon="back"></span>나가기 <span class="key">Esc</span></button>
+</div>
+<div id="stageFocus" aria-hidden="true" hidden><span class="sf-label" id="stageFocusLabel"></span></div>
+<p id="stageLive" class="stage-sr" aria-live="polite"></p>
+<div id="stageUi"></div>
+<div id="stageNote" role="status" aria-live="polite"></div>
+<div id="stageExit" role="alertdialog" aria-modal="true" aria-labelledby="stageExitText" hidden>
+  <div class="se-box">
+    <p id="stageExitText">나갈까요? 진행 중인 게임은 저장되지 않아요</p>
+    <div class="se-actions">
+      <button class="btn btn--nav" type="button" id="stageExitNo">계속하기</button>
+      <button class="btn btn--nav is-on" type="button" id="stageExitYes">나가기</button>
+    </div>
+  </div>
+</div>
+
 <!-- 짧은 안내. 몇 초 뜨고 사라진다. -->
 <div id="toast" role="status" aria-live="polite"></div>
 
@@ -187,6 +210,16 @@
       <tr><td><span class="key">Esc</span> (탐험 중)</td><td>마우스 고정 풀기 — 다시 잠그려면 3D 화면을 클릭</td></tr>
     </table>
     <p class="sh-links"><button class="btn btn--nav btn--sm" type="button" id="onboardAgain"><span data-icon="list"></span>첫 안내 다시 보기</button></p>
+    <!-- 4차 M1 §1-5: 미니게임 무대 화질. 자동 = 높음에서 시작해 3초 평균 초당 40장 미만이면 한 단계씩 낮춘다(firstperson/fp-stage.js) -->
+    <h3 class="sh-h" id="shStageQ">미니게임 화질 <span class="sub" id="stageQNow">지금 높음</span></h3>
+    <div class="stage-q" role="group" aria-labelledby="shStageQ">
+      <button class="btn btn--view btn--sm" type="button" data-stage-q="auto" aria-pressed="true">자동</button>
+      <button class="btn btn--view btn--sm" type="button" data-stage-q="high" aria-pressed="false">높음</button>
+      <button class="btn btn--view btn--sm" type="button" data-stage-q="mid" aria-pressed="false">보통</button>
+      <button class="btn btn--view btn--sm" type="button" data-stage-q="low" aria-pressed="false">낮음</button>
+    </div>
+    <p class="sh-note">카페·분리배출장 같은 실내 무대의 화질입니다. <b>자동</b>이면 높음에서 시작해 화면이 느리면(3초 평균 초당 40장 미만) 한 단계씩 낮춥니다.
+      높음 = 그림자 2048 · 보통 = 그림자 1024 · 낮음 = 그림자 끔(바닥 그림자만)·해상도 1배.</p>
     <h3 class="sh-h">도구</h3>
   <!-- 4차 C2(마스터 D2·D9): 지면 3종(해변 모래·녹지 지면·도시 지면)을 뺐고 값은 그해 연평균이다 -->
   <!-- 4차 D1: ⓘ = 조감과 같은 출처 상자(js/source-tip.js). 키는 C6 등록부(js/sources.js) — check_sources.js 가 누락을 막는다 -->
@@ -284,6 +317,9 @@
 <script src="fp-actions.js"></script>
 <script src="fp-tools.js"></script>
 <script src="fp-player.js"></script>
+<!-- 4차 M1: 미니게임 무대 — 소품 도구(fp-stage-kit) → 무대 관리자(fp-stage). 무대 파일(카페·분리배출장·회의실)은 이 뒤에 -->
+<script src="fp-stage-kit.js"></script>
+<script src="fp-stage.js"></script>
 <script src="fp-main.js"></script>
 </body>
 </html>

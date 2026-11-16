@@ -53,7 +53,9 @@ const FPOnboard = (() => {
     if (again) again.addEventListener('click', () => { if (typeof FPSheet !== 'undefined') FPSheet.close(); open(); });
     let seen = false;
     try { seen = !!WorksheetStore.readFp().ui.onboarded; } catch (e) { /* 못 읽으면 보여 준다 */ }
-    if (!seen) open();
+    // 4차 M1: 사진 자세 주소(?stage=…&shot=…)는 첫 안내를 건너뛴다 — 본 것으로 저장하지는 않는다
+    const shot = typeof FPStage !== 'undefined' && FPStage.shotQuery();
+    if (!seen && !shot) open();
   }
   return { init, open, close, get isOpen() { return isOpen; } };
 })();

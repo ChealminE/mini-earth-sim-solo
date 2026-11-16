@@ -12,6 +12,9 @@
 //   checkFp('underwater')③ 수중 (개방 해역 한가운데, 해저와 수면 사이)
 //   checkFp('all')       ①②③을 차례로 재고 표 하나로
 // 시점을 숫자로 고정한 까닭: 손으로 걸어가 맞추면 B 전후로 같은 화면이 안 나와 비교가 흔들린다.
+// 4차 M1: 무대(미니게임) 모드 — 무대 안(FPStage.active())에서 붙여 넣으면 무대를 잰다. 시점 이름 대신 그 무대의 사진 자세 이름:
+//   /firstperson/?stage=cafe&shot=wide 로 열고 붙여 넣기 → checkFp() 지금 자세 · checkFp('machine') 그 자세 · checkFp('all') 모든 자세.
+//   무대는 한 프레임에 render() 를 한 번 부른다 → '무대' 칸이 드로우콜 전부다(수용 12: ≤ 120, 삼각형 ≤ 300k, FPS ≥ 55).
 //
 // 재는 것:
 //   - 드로우콜·삼각형(한 프레임): 1인칭은 한 프레임에 render()를 두 번 부른다(세계 → 손·도구 덧그림, fp-main.js animate).
@@ -58,10 +61,12 @@
         const calls = info.autoReset ? info.render.calls : info.render.calls - before.calls;
         const tris = info.autoReset ? info.render.triangles : info.render.triangles - before.tris;
         if (!cur) {
-          cur = { world: 0, overlay: 0, tris: 0, passes: 0 };
+          cur = { world: 0, overlay: 0, stage: 0, tris: 0, passes: 0 };
           queueMicrotask(() => { frames.push(cur); cur = null; });
         }
-        if (scene === W.scene) cur.world += calls; else cur.overlay += calls;
+        if (scene === W.scene) cur.world += calls;
+        else if (typeof FPStage !== 'undefined' && FPStage.current && scene === FPStage.current.scene) cur.stage += calls;
+        else cur.overlay += calls;
         cur.tris += tris;
         cur.passes++;
       };
@@ -108,9 +113,13 @@
     };
   }
 
+  const stageOn = () => typeof FPStage !== 'undefined' && FPStage.active();
   async function measure(key) {
-    const pose = key ? POSES[key] : null;
-    if (key && !pose) throw new Error('시점 이름은 start / cityWest / underwater / all 중 하나');
+    const st = stageOn() ? FPStage.current : null;
+    const pose = key && !st ? POSES[key] : null;
+    if (st && key && !st.shots[key]) throw new Error(`이 무대의 사진 자세: ${Object.keys(st.shots).join(' / ')} / all`);
+    if (!st && key && !pose) throw new Error('시점 이름은 start / cityWest / underwater / all 중 하나');
+    if (st && key) { FPStage.shot(key); await wait(1500); }
     if (pose) { pose.set(FPPlayer); await wait(1500); }   // 컬링·HUD·카메라가 새 자리에 자리 잡을 시간
     const { frames, gaps } = await sampleFrames(5000);
     const avgGap = gaps.reduce((a, b) => a + b, 0) / Math.max(1, gaps.length);
@@ -118,13 +127,15 @@
     const m = renderer.info.memory;
     const p = FPPlayer.pos;
     return {
-      '시점': pose ? pose.label : '지금 시점',
+      '시점': st ? `무대 ${FPStage.active()} · ${key || '지금 자세'}` : pose ? pose.label : '지금 시점',
+      '무대 화질': st ? FPStage.quality : '-',
       '창': `${innerWidth}×${innerHeight} @${devicePixelRatio}x`,
       '위치(x,y,z)': `${p.x.toFixed(2)}, ${p.y.toFixed(3)}, ${p.z.toFixed(2)}`,
       '수중': FPPlayer.underwater,
       '드로우콜(한 프레임, 중앙값)': median(frames.map(f => f.world + f.overlay)),
       '  세계': median(frames.map(f => f.world)),
       '  손·도구': median(frames.map(f => f.overlay)),
+      '  무대(≤120)': median(frames.map(f => f.stage)),
       '드로우콜 최대': frames.length ? Math.max(...frames.map(f => f.world + f.overlay)) : null,
       '삼각형(중앙값)': median(frames.map(f => f.tris)),
       'FPS(5초 평균)': gaps.length ? +(1000 / avgGap).toFixed(1) : null,
@@ -138,7 +149,7 @@
   }
 
   window.checkFp = async function (key) {
-    const keys = key === 'all' ? Object.keys(POSES) : [key];
+    const keys = key === 'all' ? Object.keys(stageOn() ? FPStage.current.shots : POSES) : [key];
     const rows = [];
     for (const k of keys) rows.push(await measure(k));
     console.table(rows);

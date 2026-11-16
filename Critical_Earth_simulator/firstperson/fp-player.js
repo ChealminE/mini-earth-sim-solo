@@ -275,6 +275,8 @@ function bindInput(P, canvas) {
   // 4차 D3: E키 설정창(#settingsPanel)과 F키 야장(#fieldPanel)을 오른쪽 학습지 패널 하나(firstperson/fp-sheet.js)로 합쳤다.
   // 패널이 열려 있는 동안은 P.uiOpen 이 걷기·도구 조작을 막는다(FPSheet 가 세우고 내린다). E 는 4차 F2 부터 행동 지점 '상호작용' 키다.
   P.uiOpen = false;
+  // 4차 M1: 무대에 들어가 있거나 드나드는 중(FPStage.busy)이면 걷기·잠금·시작 안내를 쓰지 않는다 — 무대는 커서로 조작한다
+  const inStage = () => typeof FPStage !== 'undefined' && FPStage.busy;
 
   window.addEventListener('keydown', e => {
     // 학습지 현장 과제의 글 칸·목록 상자에 글을 쓰는 중이면 단축키를 쓰지 않는다(3차 E4, 마스터 §6-5).
@@ -285,6 +287,7 @@ function bindInput(P, canvas) {
     // e.repeat 가드: 키를 누르고 있으면 keydown이 연속으로 들어와 창이 깜빡인다
     if (e.code === 'KeyF') { if (!e.repeat) FPSheet.toggle(); e.preventDefault(); return; }
     if (P.uiOpen) return;                      // 학습지가 열려 있으면 게임 조작 차단 (Tab·화살표는 패널 안 초점 이동에 쓴다)
+    if (inStage()) return;                     // 4차 M1: 무대(미니게임) 안 — 키는 fp-stage.js 가 받는다(Tab·Enter·Esc·숫자키)
     P.keys[e.code] = true;
     if (e.code === 'KeyM' && !e.repeat) FPMinimap.toggle();
     if (e.code === 'KeyR') P.respawn();
@@ -327,7 +330,7 @@ function bindInput(P, canvas) {
   P.enterGame = enterGame;
   overlay.addEventListener('click', enterGame);
   canvas.addEventListener('click', () => {
-    if (document.pointerLockElement !== canvas && !P.uiOpen) enterGame();
+    if (document.pointerLockElement !== canvas && !P.uiOpen && !inStage()) enterGame();
   });
 
   // 시점 튐 방지. Windows Chrome은 포인터락 중에 movementX/Y가 가끔 한 번씩 수백 픽셀로
@@ -364,7 +367,7 @@ function bindInput(P, canvas) {
     if (locked) { lockedAt = performance.now(); lastMove = 0; }
     // 다시 잠기면 안내는 처음 모양('클릭해서 시작' 설명)으로 — 학습지를 닫은 뒤의 짧은 '3D를 클릭해 계속'은 그때 한 번만
     if (locked) { overlay.classList.add('hidden'); delete overlay.dataset.mode; }
-    else if (!P.uiOpen) overlay.classList.remove('hidden');
+    else if (!P.uiOpen && !inStage()) overlay.classList.remove('hidden');
     if (!locked) P.keys = Object.create(null);
   });
 }

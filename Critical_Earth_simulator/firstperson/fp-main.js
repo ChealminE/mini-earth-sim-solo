@@ -129,11 +129,13 @@ FPMinimap.init();
 // setSize(…, false): 렌더러가 캔버스 style 폭·높이를 px 로 덮어쓰지 않게 — 덮어쓰면 CSS 의 60 %/100 % 가 듣지 않는다.
 function fit() {
   const w = glCanvas.clientWidth || window.innerWidth, h = glCanvas.clientHeight || window.innerHeight;
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  // 4차 M1: 무대 안에서는 무대 품질 단계의 픽셀 비(high ≤ 2 · mid 1.5 · low 1, fp-stage.js), 세계에서는 늘 ≤ 2
+  renderer.setPixelRatio(typeof FPStage !== 'undefined' && FPStage.active() ? FPStage.pixelRatio() : Math.min(window.devicePixelRatio, 2));
   renderer.setSize(w, h, false);
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
   FPTools.resize(w / h);
+  if (typeof FPStage !== 'undefined') FPStage.resize(w / h);   // 학습지를 열면 3D 칸이 60 % — 무대 카메라 화면비도 같이
 }
 // 칸 크기가 바뀌는 길이 둘(창 크기 변경 · 학습지 열고 닫기)이라 캔버스 자체를 지켜본다
 if (typeof ResizeObserver !== 'undefined') new ResizeObserver(fit).observe(glCanvas);
@@ -261,6 +263,8 @@ function syncMine() {
 FPActions.onChange(syncMine);
 FPScenario.onChoice = () => { FPActions.render(); applyScenarioYear(); };   // 사회의 선택 → 카드 다시 그리기·타임라인 글
 syncMine();
+// 4차 M1: 무대(미니게임) 관리자 — 렌더러는 하나라 세계의 renderer·장면을 넘긴다(들어갈 때 값 저장 → 나올 때 복원, 마스터 §6-14)
+FPStage.init({ renderer, camera, scene: FPWorld.scene, canvas: glCanvas, fit });
 FPOnboard.init(); // 4차 D4: 첫 진입 안내 3장(본 적 없으면 바로 띄운다). Icons.fill 앞이라 안내 속 아이콘도 채워진다
 // 4차 D1: 정적 마크업의 <span data-icon=…> 을 조감과 같은 SVG 아이콘으로 채운다(이모지는 기기마다 모양이 달라서 안 씀)
 Icons.fill();
@@ -291,6 +295,8 @@ function animate() {
   const dt = Math.min((now - last) / 1000, 0.1);
   last = now;
   t += dt;
+  // 4차 M1: 무대에 들어가 있으면 세계 갱신·렌더를 멈추고 무대만 그린다(M §1-1 — 세계 쪽 성능 예산을 무대가 통째로 쓴다)
+  if (FPStage.active()) { FPStage.frame(dt); return; }
 
   FPPlayer.update(dt, t);
   FPTools.update(dt);          // 측정 중인 계측기의 값이 안정되어 가는 과정
@@ -362,3 +368,5 @@ function animate() {
   FPTools.render(renderer);   // 손·도구는 깊이 버퍼를 비우고 맨 위에 덧그림
 }
 animate();
+// 4차 M1: 주소 ?stage=cafe&shot=wide 면 무대·카메라 자세로 바로(사진 자세 — 덮개·첫 안내 없이). 화면 준비가 다 끝난 뒤라 맨 끝
+FPStage.boot();

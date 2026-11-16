@@ -64,10 +64,13 @@ const FPSheet = (() => {
     el.hidden = true;
     document.body.classList.remove('sheet-open');
     FPPlayer.uiOpen = false;
-    // 포인터 잠금은 클릭에서만 다시 걸린다(마스터 §6-6) → '3D를 클릭해 계속' 안내
-    const ov = $('startOverlay');
-    ov.dataset.mode = 'resume';
-    ov.classList.remove('hidden');
+    // 포인터 잠금은 클릭에서만 다시 걸린다(마스터 §6-6) → '3D를 클릭해 계속' 안내.
+    // 4차 M1: 무대(미니게임) 안에서는 잠금을 쓰지 않으므로(커서 조작) 안내를 띄우지 않는다
+    if (!(typeof FPStage !== 'undefined' && FPStage.busy)) {
+      const ov = $('startOverlay');
+      ov.dataset.mode = 'resume';
+      ov.classList.remove('hidden');
+    }
     WorksheetStore.updateFp(fp => { fp.ui.sheetOpen = false; });
   }
 

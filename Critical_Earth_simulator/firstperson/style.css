@@ -426,3 +426,87 @@ body.sheet-open #actHint { display: none; }
 .act-cmp td.num { vertical-align: top; }
 .act-cmp .ac-how { display: block; font-size: var(--fs-1); color: var(--ink-3); text-align: right; line-height: 1.35; }
 .act-cmp thead th:not(:last-child) { white-space: nowrap; }
+
+/* ============================================================================
+   4차 M1: 미니게임 무대(firstperson/fp-stage.js) — 미터 축척의 별도 장면. body.in-stage 동안 세계 HUD 를 숨기고
+   커서로 조작한다(포인터 잠금 없음). 색은 토큰만.
+   ============================================================================ */
+/* 무대 안에서는 세계의 십자선·HUD·타임라인·단축바·지도·기록 배지·행동 안내·수중 틴트가 쓸모없다 */
+body.in-stage #crosshair, body.in-stage #hud, body.in-stage #timeline, body.in-stage #keyLine, body.in-stage #hotbar,
+body.in-stage #minimapBox, body.in-stage #fieldBadge, body.in-stage #actHint, body.in-stage #waterOverlay, body.in-stage #timeFade { display: none; }
+body.in-stage canvas#gl { cursor: default; }
+body.in-stage canvas#gl.is-pick { cursor: pointer; }
+
+/* 진입·퇴장 덮개: 종이색(검정 아님) + 무대 이름. 지속 시간은 JS 가 정한다(0.25초 + 0.25초, 움직임 줄이기 0.05초 + 0.05초) */
+#stageFade {
+  position: fixed; inset: 0; z-index: 60; pointer-events: none; opacity: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--paper);
+  transition: opacity .25s ease-in-out;
+}
+#stageFade.on { opacity: 1; pointer-events: auto; }
+#stageFade p { margin: 0; font-family: var(--font-title); font-size: var(--fs-6); font-weight: 700; color: var(--ink); }
+
+/* 위 막대: 무대 이름 · 키 안내 · [나가기] */
+#stageBar, #stageUi, #stageNote { display: none; }
+body.in-stage #stageBar {
+  position: fixed; top: 14px; left: 14px; z-index: 6;
+  display: flex; align-items: center; gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-3); border-radius: 12px;
+  background: color-mix(in srgb, var(--paper-2) var(--fp-panel-mix), transparent);
+  border: 1px solid var(--rule); color: var(--ink); box-shadow: 0 4px 18px var(--fp-shadow);
+}
+#stageTitle { font-family: var(--font-title); font-size: var(--fs-4); }
+#stageBar .sb-keys { font-size: var(--fs-1); color: var(--ink-2); }
+#stageBar .sb-keys .key { margin-left: var(--sp-2); }
+#stageBar .btn .key { margin: 0 0 0 var(--sp-1); }
+/* 학습지가 열리면 3D 칸(왼쪽 60 %) 안에 남는다 — 키 안내는 학습지 조작법과 겹쳐 뺀다 */
+body.sheet-open #stageBar .sb-keys { display: none; }
+body.sheet-open #stageFade { width: 60%; right: auto; }
+
+/* 무대 HTML 겹침(주문 화면·결과 카드)의 자리 — 무대 파일이 안을 채운다. 비어 있으면 클릭을 3D 로 흘린다 */
+body.in-stage #stageUi { display: block; position: fixed; inset: 0; z-index: 8; pointer-events: none; }
+#stageUi > * { pointer-events: auto; }
+
+/* Tab 으로 고른 물체의 초점 테두리(HTML 겹침) + 이름표. 3D 강조(들림 + 테두리 빛)와 함께 — 색만으로 알리지 않는다 */
+#stageFocus {
+  position: fixed; z-index: 7; pointer-events: none; box-sizing: border-box;
+  border: 3px solid var(--ctl-view); border-radius: 10px;
+  box-shadow: 0 0 0 2px var(--paper), 0 0 14px var(--ctl-view);
+}
+#stageFocus[hidden] { display: none; }
+#stageFocus .sf-label {
+  position: absolute; left: 50%; top: 100%; transform: translate(-50%, 6px); white-space: nowrap;
+  padding: 2px var(--sp-2); border-radius: 999px; background: var(--ctl-view); color: var(--on-fill);
+  font-size: var(--fs-2); font-weight: 700;
+}
+#stageFocus .sf-label:empty { display: none; }
+/* 화면 읽기 프로그램용 안내(보이지 않는 글) — 고른 물체 이름을 읽어 준다 */
+.stage-sr { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+/* 구석 알림(화질 자동 낮춤, 2초) */
+body.in-stage #stageNote {
+  display: block; position: fixed; right: 14px; bottom: 14px; z-index: 12; max-width: min(60vw, 420px);
+  padding: var(--sp-2) var(--sp-3); border-radius: 10px; font-size: var(--fs-2);
+  background: color-mix(in srgb, var(--paper-2) var(--fp-panel-mix), transparent);
+  border: 1px solid var(--ctl-view); color: var(--ink); box-shadow: 0 4px 18px var(--fp-shadow);
+  opacity: 0; transition: opacity .3s; pointer-events: none;
+}
+body.in-stage #stageNote.on { opacity: 1; }
+body.sheet-open #stageNote { right: calc(40% + 14px); }
+
+/* 나가기 확인 (Esc) — 무대 위 가운데, 불투명 */
+#stageExit {
+  position: fixed; inset: 0; z-index: 65;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--fp-scrim);
+}
+#stageExit[hidden] { display: none; }
+#stageExit .se-box { background: var(--paper-2); border: 1px solid var(--rule); border-radius: 14px; padding: var(--sp-5) 28px var(--sp-4);
+  box-shadow: 0 4px 18px var(--fp-shadow); max-width: min(90vw, 460px); }
+#stageExit p { margin: 0 0 var(--sp-4); font-size: var(--fs-3); color: var(--ink); }
+#stageExit .se-actions { display: flex; gap: var(--sp-2); justify-content: flex-end; }
+
+/* 학습지 [과제] '미니게임 화질' 단추 줄 */
+.stage-q { display: flex; gap: var(--sp-2); flex-wrap: wrap; margin: var(--sp-1) 0 var(--sp-2); }
+@media (prefers-reduced-motion: reduce) { #stageFade, #stageNote { transition-duration: .05s; } }
