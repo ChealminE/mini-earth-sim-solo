@@ -222,6 +222,13 @@
     </div>
     <p class="sh-note">카페·분리배출장 같은 실내 무대의 화질입니다. <b>자동</b>이면 높음에서 시작해 화면이 느리면(3초 평균 초당 40장 미만) 한 단계씩 낮춥니다.
       높음 = 그림자 2048 · 보통 = 그림자 1024 · 낮음 = 그림자 끔(바닥 그림자만)·해상도 1배.</p>
+    <!-- 4차 M3(마스터 D14): 분리배출 지역 기준. 기본 = 공통 규칙, 지역 차이가 확인된 품목만 바뀐다(firstperson/fp-recycle-items.js REGION_RULES) -->
+    <h3 class="sh-h" id="shRecycleRegion">분리배출 지역 기준</h3>
+    <div class="stage-q" role="group" aria-labelledby="shRecycleRegion">
+      <button class="btn btn--view btn--sm" type="button" data-recycle-region="common" aria-pressed="true">공통 기준</button>
+      <button class="btn btn--view btn--sm" type="button" data-recycle-region="seoul" aria-pressed="false">서울시 기준</button>
+    </div>
+    <p class="sh-note">분리배출 기준은 지자체마다 다를 수 있어요. <b>서울시 기준</b>을 고르면 '이물질 묻은 비닐'을 비우고 비닐로 냅니다<button class="src-i" type="button" data-src="rec_seoul" aria-label="출처 보기: 서울시 탄소중립 라이프 #8 자원순환 (2024)" aria-expanded="false">ⓘ</button>. 다음 판부터 적용돼요.</p>
     <h3 class="sh-h">도구</h3>
   <!-- 4차 C2(마스터 D2·D9): 지면 3종(해변 모래·녹지 지면·도시 지면)을 뺐고 값은 그해 연평균이다 -->
   <!-- 4차 D1: ⓘ = 조감과 같은 출처 상자(js/source-tip.js). 키는 C6 등록부(js/sources.js) — check_sources.js 가 누락을 막는다 -->
@@ -324,6 +331,9 @@
 <script src="fp-stage.js"></script>
 <!-- 4차 M2: 카페 미니게임(세계 속 정면 + 실내 무대) -->
 <script src="fp-stage-cafe.js"></script>
+<!-- 4차 M3: 분리배출장 미니게임 — 품목 데이터(선생님이 고치는 파일) → 무대(세계 속 배출장 + 작업대·수거함 9개) -->
+<script src="fp-recycle-items.js"></script>
+<script src="fp-stage-recycle.js"></script>
 <script src="fp-main.js"></script>
 </body>
 </html>

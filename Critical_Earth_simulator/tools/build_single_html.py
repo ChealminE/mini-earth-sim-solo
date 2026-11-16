@@ -145,7 +145,8 @@ FP_JS = ["js/earth-model.js", "js/earth-data.js", "js/sources.js", "js/theme.js"
          "js/society-core.js", "js/actions-core.js", "firstperson/fp-model.js", "firstperson/fp-world.js", "firstperson/fp-tech-world.js",
          "firstperson/fp-minimap.js", "firstperson/fp-field.js", "firstperson/fp-sheet.js", "firstperson/fp-onboard.js", "firstperson/fp-timeline.js",
          "firstperson/fp-actions.js", "firstperson/fp-tools.js", "firstperson/fp-player.js",
-         "firstperson/fp-stage-kit.js", "firstperson/fp-stage.js", "firstperson/fp-stage-cafe.js", "firstperson/fp-main.js"]
+         "firstperson/fp-stage-kit.js", "firstperson/fp-stage.js", "firstperson/fp-stage-cafe.js",
+         "firstperson/fp-recycle-items.js", "firstperson/fp-stage-recycle.js", "firstperson/fp-main.js"]
 
 
 # index.html 쪽에 스크립트가 추가됐는데 이 목록을 안 고치면 조용히 깨진 파일이 나온다.

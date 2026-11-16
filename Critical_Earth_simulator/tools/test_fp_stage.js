@@ -223,7 +223,7 @@ const near = (a, b, e = 1e-6) => Math.abs(a - b) <= e;
     const iP = srcs.indexOf('fp-player.js'), iK = srcs.indexOf('fp-stage-kit.js'), iS = srcs.indexOf('fp-stage.js'), iM = srcs.indexOf('fp-main.js');
     check('index.html 로드 순서: fp-player → fp-stage-kit → fp-stage → fp-main', iP >= 0 && iP < iK && iK < iS && iS < iM, `${iP} ${iK} ${iS} ${iM}`);
     const b = (read('tools/build_single_html.py').match(/FP_JS = \[([\s\S]*?)\]/) || [, ''])[1];
-    check('빌더 FP_JS 도 같은 순서 (M2 카페는 fp-stage 뒤)', /fp-player\.js",\s*"firstperson\/fp-stage-kit\.js", "firstperson\/fp-stage\.js", "firstperson\/fp-stage-cafe\.js", "firstperson\/fp-main\.js"/.test(b)
+    check('빌더 FP_JS 도 같은 순서 (M2 카페 · M3 분리배출 품목 → 무대는 fp-stage 뒤)', /fp-player\.js",\s*"firstperson\/fp-stage-kit\.js", "firstperson\/fp-stage\.js", "firstperson\/fp-stage-cafe\.js",\s*"firstperson\/fp-recycle-items\.js", "firstperson\/fp-stage-recycle\.js", "firstperson\/fp-main\.js"/.test(b)
       && srcs.indexOf('fp-stage-cafe.js') === iS + 1);
     const main = code('firstperson/fp-main.js');
     const iFrame = main.indexOf('if (FPStage.active()) { FPStage.frame(dt); return; }'), iUpd = main.indexOf('FPPlayer.update(dt, t)');

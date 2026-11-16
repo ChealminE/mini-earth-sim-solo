@@ -469,6 +469,9 @@ body.sheet-open #stageFade { width: 60%; right: auto; }
 /* 무대 HTML 겹침(주문 화면·결과 카드)의 자리 — 무대 파일이 안을 채운다. 비어 있으면 클릭을 3D 로 흘린다 */
 body.in-stage #stageUi { display: block; position: fixed; inset: 0; z-index: 8; pointer-events: none; }
 #stageUi > * { pointer-events: auto; }
+/* 무대 겹침 묶음(.cafe-ui · .rc-ui)은 화면 전체를 덮는 틀이라 자신은 클릭을 통과시킨다 — 위 규칙(아이디 선택자)이 .cafe-ui { pointer-events: none } 을 이겨
+   3D 캔버스 클릭(키오스크·컵·수거함·끌기)이 막혔다(4차 M3에서 발견). 틀 안의 부품만 받는다(.cafe-ui > * · .rc-ui > *) */
+#stageUi > .cafe-ui, #stageUi > .rc-ui { pointer-events: none; }
 
 /* Tab 으로 고른 물체의 초점 테두리(HTML 겹침) + 이름표. 3D 강조(들림 + 테두리 빛)와 함께 — 색만으로 알리지 않는다 */
 #stageFocus {
@@ -562,3 +565,97 @@ body.sheet-open .cafe-card { right: calc(40% + 16px); width: min(34%, 420px); }
 .cafe-card .cc-actions { display: flex; justify-content: flex-end; position: sticky; bottom: calc(-1 * var(--sp-3)); margin: var(--sp-2) calc(-1 * var(--sp-4)) 0;
   padding: var(--sp-2) var(--sp-4); background: var(--paper-2); border-top: 1px solid var(--rule); }
 .cafe-card .cc-actions .btn { min-height: 44px; font-size: var(--fs-3); }
+
+/* ============================================================================
+   4차 M3: 분리배출장 미니게임 겹침(firstperson/fp-stage-recycle.js) — 지금 품목 · 준비 단추 · 판정 · 끝 화면. 종이 테마 토큰만
+   맞음/틀림은 색 + 기호(✔ ✕) + 문구를 함께(Q8 — 색만으로 알리지 않는다). 3D 쪽은 수거함 테두리 + 움직임
+   ============================================================================ */
+.rc-ui { position: absolute; inset: 0; pointer-events: none; }
+.rc-ui[hidden], .rc-ui [hidden] { display: none !important; }
+.rc-ui > * { pointer-events: auto; }
+.rc-panel {
+  position: absolute; left: 16px; top: 72px; width: min(30%, 360px); box-sizing: border-box;
+  padding: var(--sp-3) var(--sp-4); border-radius: 14px; color: var(--ink); font-size: var(--fs-2); line-height: 1.5;
+  background: color-mix(in srgb, var(--paper-2) var(--fp-panel-mix), transparent); border: 1px solid var(--rule); box-shadow: 0 4px 18px var(--fp-shadow);
+}
+.rc-count { margin: 0; color: var(--ink-2); font-size: var(--fs-1); font-weight: 700; }
+.rc-name { margin: 2px 0 var(--sp-1); font-family: var(--font-title); font-size: var(--fs-4); }
+.rc-sub { margin: 0 0 var(--sp-2); color: var(--ink-2); }
+.rc-region { color: var(--ctl-view); font-weight: 700; }
+.rc-prep { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-1); margin: 0 0 var(--sp-2); }
+.rc-prep .btn { justify-content: flex-start; min-height: 38px; font-size: var(--fs-2); }
+.rc-prep .rc-done { display: inline-block; width: 1.1em; visibility: hidden; font-weight: 800; }
+.rc-prep .btn[aria-pressed="true"] .rc-done { visibility: visible; }
+.rc-how { margin: 0 0 var(--sp-1); }
+.rc-how .key { margin: 0 2px; }
+.rc-rules { margin: 0; color: var(--ink-2); font-size: var(--fs-1); }
+.rc-note {
+  position: absolute; left: 50%; top: 76px; transform: translateX(-50%); margin: 0; max-width: min(46%, 560px);
+  padding: var(--sp-2) var(--sp-4); border-radius: 999px; font-size: var(--fs-3); font-weight: 700; color: var(--ink); text-align: center;
+  background: color-mix(in srgb, var(--paper-2) var(--fp-panel-mix), transparent); border: 1.5px solid var(--ctl-view);
+  box-shadow: 0 4px 18px var(--fp-shadow); pointer-events: none;
+}
+.rc-feed {
+  position: absolute; left: 50%; bottom: 24px; transform: translateX(-50%); width: min(58%, 680px); box-sizing: border-box;
+  display: grid; grid-template-columns: auto 1fr auto; gap: var(--sp-3); align-items: center;
+  padding: var(--sp-3) var(--sp-4); border-radius: 14px; color: var(--ink); font-size: var(--fs-2); line-height: 1.5;
+  background: var(--paper-2); border: 3px solid var(--rule); box-shadow: 0 6px 24px var(--fp-shadow);
+  animation: rc-pop .28s ease-out;
+}
+.rc-feed.is-ok { border-color: var(--ctl-scen); }
+.rc-feed.is-half { border-color: var(--warn); }
+.rc-feed.is-bad { border-color: var(--data-temp); animation: rc-shake .36s ease-out; }
+.rc-feed .rf-sym { width: 52px; height: 52px; border-radius: 50%; display: grid; place-items: center; font-size: 30px; font-weight: 800; color: var(--on-fill); }
+.rc-feed.is-ok .rf-sym { background: var(--ctl-scen); }
+.rc-feed.is-half .rf-sym { background: var(--warn); }
+.rc-feed.is-bad .rf-sym { background: var(--data-temp); }
+.rc-feed h3 { margin: 0 0 2px; font-size: var(--fs-4); }
+.rc-feed.is-ok h3 { color: var(--ctl-scen); }
+.rc-feed.is-half h3 { color: var(--warn); }
+.rc-feed.is-bad h3 { color: var(--data-temp); }
+.rc-feed .rf-sub { color: var(--ink-2); font-size: var(--fs-2); font-weight: 600; }
+.rc-feed p { margin: 0 0 2px; }
+.rc-feed .rf-miss { font-weight: 700; color: var(--warn); }
+.rc-feed .rf-region, .rc-badge { display: inline-block; margin-top: 2px; padding: 1px var(--sp-2); border-radius: 6px; background: var(--warn-bg); color: var(--warn); font-weight: 700; font-size: var(--fs-1); }
+.rc-feed .rf-act .btn { min-height: 44px; font-size: var(--fs-3); }
+@keyframes rc-pop { from { transform: translate(-50%, 12px); opacity: 0; } to { transform: translate(-50%, 0); opacity: 1; } }
+@keyframes rc-shake { 0%, 100% { transform: translateX(-50%); } 25% { transform: translateX(calc(-50% - 8px)); } 50% { transform: translateX(calc(-50% + 6px)); } 75% { transform: translateX(calc(-50% - 3px)); } }
+@media (prefers-reduced-motion: reduce) { .rc-feed, .rc-feed.is-bad { animation: rc-fade .1s ease-out; } }
+@keyframes rc-fade { from { opacity: 0; } to { opacity: 1; } }
+body.sheet-open .rc-panel { width: min(26%, 300px); }
+body.sheet-open .rc-feed { left: 30%; width: min(54%, 520px); }
+/* 끝 화면: 카페 결과 카드(.cafe-card)와 같은 모양에 표를 더해 조금 넓게 */
+.rc-card {
+  position: absolute; right: 16px; top: 72px; bottom: 16px; width: min(64%, 860px); box-sizing: border-box; overflow-y: auto;
+  padding: var(--sp-4) var(--sp-4) var(--sp-3); border-radius: 14px;
+  background: var(--paper-2); border: 1px solid var(--rule); box-shadow: 0 6px 24px var(--fp-shadow);
+  color: var(--ink); font-size: var(--fs-2); line-height: 1.55;
+}
+body.sheet-open .rc-card { right: calc(40% + 16px); width: min(56%, 640px); }
+.rc-card h2 { margin: 0 0 var(--sp-2); font-family: var(--font-title); font-size: var(--fs-5); }
+.rc-card h3 { margin: var(--sp-2) 0 var(--sp-1); font-size: var(--fs-3); }
+.rc-card p { margin: 0 0 var(--sp-2); }
+.rc-card .rc-lead { font-size: var(--fs-3); }
+.rc-card .cc-sub { color: var(--ink-2); font-size: var(--fs-1); }
+.rc-card .rc-tools { display: flex; gap: var(--sp-3); align-items: center; margin: 0 0 var(--sp-2); }
+.rc-table-wrap { overflow-x: auto; }
+.rc-table { width: 100%; border-collapse: collapse; font-size: var(--fs-1); }
+.rc-table th, .rc-table td { padding: 5px 6px; border-bottom: 1px solid var(--paper-3); text-align: left; vertical-align: top; }
+.rc-table thead th { color: var(--ink-2); border-bottom: 1.5px solid var(--rule); white-space: nowrap; }
+.rc-table tbody th { font-weight: 700; }
+.rc-table td:nth-child(2), .rc-table td:nth-child(3) { white-space: nowrap; }
+.rc-table tbody th { min-width: 8.5em; }
+.rc-table tr.is-wrong { background: color-mix(in srgb, var(--warn-bg) 70%, transparent); }
+.rc-table .rc-why { min-width: 14em; color: var(--ink-2); }
+.rc-table .rc-pok { color: var(--ctl-scen); white-space: nowrap; }
+.rc-table .rc-pmiss { color: var(--data-temp); white-space: nowrap; }
+.rc-table .rc-dim { color: var(--ink-3); }
+.rc-table .rc-s1 { color: var(--ctl-scen); } .rc-table .rc-s5 { color: var(--warn); } .rc-table .rc-s0 { color: var(--data-temp); }
+.rc-card .cc-bars { display: flex; flex-direction: column; gap: var(--sp-1); margin: var(--sp-1) 0 var(--sp-2); }
+.rc-card .cc-bar { display: grid; grid-template-columns: 12em 1fr 5.2em; gap: var(--sp-2); align-items: center; }
+.rc-card .cc-bar b { text-align: right; font-variant-numeric: tabular-nums; }
+.rc-card .cc-track { display: block; height: 12px; border-radius: 6px; background: var(--paper-3); overflow: hidden; }
+.rc-card .cc-track i { display: block; height: 100%; background: var(--ctl-scen); }
+.rc-card .cc-actions { display: flex; gap: var(--sp-2); justify-content: flex-end; position: sticky; bottom: calc(-1 * var(--sp-3)); margin: var(--sp-2) calc(-1 * var(--sp-4)) 0;
+  padding: var(--sp-2) var(--sp-4); background: var(--paper-2); border-top: 1px solid var(--rule); }
+.rc-card .cc-actions .btn { min-height: 44px; font-size: var(--fs-3); }
