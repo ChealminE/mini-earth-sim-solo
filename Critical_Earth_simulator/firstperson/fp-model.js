@@ -86,16 +86,34 @@ const FPModel = (() => {
 
   // 조감 미래 예측과 같은 경로 정의: 프리셋(SSP)은 presetEmissions, 직접 설계는 leverEmissions(2050 목표 레버).
   // 경로 이름 → 배출 함수를 여기 한 곳에서만 만든다(fp-main.js 가 엔진을 직접 부르지 않게).
+  // 4차 F3: 'ndc' = 국가 목표(NDC)를 전 세계가 따른다면(SocietyCore.ndcEmissions, 마스터 D18). 감축률은 levers.cut, 없으면
+  //   SocietyCore.CHOICES 의 2035 NDC 범위 낮은 끝(53 %). SocietyCore 는 부를 때 읽는다(이 파일은 society-core 없이도 node 에서 돈다).
+  function ndcCut(levers) {
+    if (levers && Number.isFinite(levers.cut)) return levers.cut;
+    return SocietyCore.CHOICES.find(c => c.id === 'ndc').cuts[0];
+  }
   function emissionsFor(preset, levers) {
     if (preset === 'custom') {
       if (!levers) throw new Error('직접 설계 경로에는 레버 값이 필요합니다');
       return EarthSystem.leverEmissions(levers);
     }
+    if (preset === 'ndc') return SocietyCore.ndcEmissions(ndcCut(levers));
     return EarthSystem.presetEmissions(preset);
   }
+  const pathKey = (preset, levers) => (preset === 'custom' ? 'custom:' + JSON.stringify(levers)
+    : preset === 'ndc' ? 'ndc:' + ndcCut(levers) : preset);
   function pathRun(preset, levers) {
-    const key = preset === 'custom' ? 'custom:' + JSON.stringify(levers) : preset;
-    return runFor(emissionsFor(preset, levers), key);
+    return runFor(emissionsFor(preset, levers), pathKey(preset, levers));
+  }
+
+  // ── F3 '나의 미래' = 같은 사회의 선택 경로 − 나의 행동 × 참여 규모 (ActionsCore.emissionsFn) ─────────────
+  // chosen = { ids, recycleAccuracy }(FPActions.chosen()), scaleId = 참여 규모. 행동이 없으면 기준 미래 실행 그대로(같은 객체 — 두 갈래가 같다).
+  // 여기서는 캐시하지 않는다(key 없음): 행동 조합 × 규모 × 경로마다 쌓이면 끝이 없다 — 마지막 하나만 fp-main(FPScenario.mineRun)이 들고,
+  // 행동·규모·사회의 선택이 바뀔 때만 버린다. 엔진 궤적은 여전히 이 파일의 runFor 한 곳에서만 만든다.
+  function mineRun(preset, levers, chosen, scaleId) {
+    const ids = chosen && chosen.ids ? chosen.ids : [];
+    if (!ids.length || !(ActionsCore.cutGtC(chosen, scaleId) > 0)) return pathRun(preset, levers);
+    return runFor(ActionsCore.emissionsFn(emissionsFor(preset, levers), chosen, scaleId));
   }
 
   // ── E2 '현재까지는 하나의 역사' (마스터 D6, 등록부 fp_now_join — assumption) ─────────────
@@ -306,7 +324,7 @@ const FPModel = (() => {
     };
   }
 
-  return { NOW_YEAR, YEAR_MIN, YEAR_MAX, K, runFor, emissionsFor, pathRun, sample,
+  return { NOW_YEAR, YEAR_MIN, YEAR_MAX, K, runFor, emissionsFor, pathKey, pathRun, mineRun, sample,
     BASE_PRESET, shownRun, shownSociety,
     society, cityState, techState, TECH,
     airTemp, urbanHeat, seaTemp, iceSurfaceTemp, tempJitter,

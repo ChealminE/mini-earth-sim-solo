@@ -16,7 +16,8 @@ const ROOT = path.resolve(__dirname, '..');
 const read = f => fs.readFileSync(path.join(ROOT, f), 'utf8');
 
 // 1인칭 index.html 과 같은 순서(fp-world 앞까지). module 이 없는 컨텍스트라 브라우저처럼 전역으로만 남는다.
-const LOAD = ['js/earth-model.js', 'js/earth-data.js', 'js/earth-system.js', 'js/earth-visual.js', 'js/actions-core.js', 'firstperson/fp-model.js'];
+// 4차 F3: society-core 를 더했다(NDC 경로 'ndc' 는 FPModel 이 부를 때 SocietyCore 를 읽는다). 순서 = 1인칭 index.html
+const LOAD = ['js/earth-model.js', 'js/earth-data.js', 'js/earth-system.js', 'js/earth-visual.js', 'js/society-core.js', 'js/actions-core.js', 'firstperson/fp-model.js'];
 const ctx = vm.createContext({ console, Math });
 for (const f of LOAD) vm.runInContext(read(f), ctx, { filename: f });
 const ES = vm.runInContext('EarthSystem', ctx);
@@ -456,7 +457,7 @@ for (const p of PATHS) {
   check('E2 같은 해 같은 값: 현재 정책 2100 = 조감 엔진 (548 ppm)', sh('ssp245', 2100) === FM.sample(2100, base) && Math.round(sh('ssp245', 2100).ppm) === 548, `${sh('ssp245', 2100).ppm.toFixed(1)} ppm`);
   // SocietyCore.pickRun 과 같은 규칙
   const c3 = vm.createContext({ console, Math });
-  for (const f of [...LOAD, 'js/society-core.js']) vm.runInContext(read(f), c3, { filename: f });
+  for (const f of LOAD) vm.runInContext(read(f), c3, { filename: f });
   const SC = vm.runInContext('SocietyCore', c3), FM3 = vm.runInContext('FPModel', c3);
   const b3 = FM3.pathRun('ssp245'), o3 = FM3.pathRun('ssp119');
   check('E2 FPModel.shownRun = SocietyCore.pickRun (1750~2200 매해 같은 실행)',
@@ -514,7 +515,9 @@ for (const p of PATHS) {
   const fc = read('firstperson/fp-field.js'), mn = read('firstperson/fp-main.js');
   check('E3 기록 한 줄에 year · branch(과거/현재/기준 미래/나의 미래) · path(경로 키)', /year: tag\.year, branch: tag\.branch, branchKo: tag\.branchKo, path: tag\.path/.test(fc)
     && /FPScenario\.recordTag = \(\) =>/.test(mn) && /past: '과거', now: '현재', base: '기준 미래', mine: '나의 미래'/.test(mn));
-  check('E3 현재까지의 기록 경로 = 기준 경로(D6), 미래 = 고른 경로 · 나의 미래 = mine', /era !== 'future' \? FPModel\.BASE_PRESET : \(branch === 'mine' \? 'mine' : FPScenario\.preset\)/.test(mn));
+  // 4차 F3: 미래 경로 키 = 사회의 선택 id, 나의 미래 = 'mine:선택:규모:행동'(행동을 바꾼 뒤의 기록이 앞 평균과 섞이지 않게)
+  check('E3·F3 현재까지의 기록 경로 = 기준 경로(D6), 미래 = 사회의 선택 · 나의 미래 = mine:선택:규모:행동',
+    /era !== 'future' \? FPModel\.BASE_PRESET/.test(mn) && /`mine:\$\{FPScenario\.choice\}:\$\{FPActions\.scale\}:/.test(mn) && /: FPScenario\.choice\);/.test(mn));
   check('E3 표에 연도·갈래 칸 (지점별 반복측정 · 최근 측정)', (read('firstperson/index.html').match(/<th>연도·갈래<\/th>/g) || []).length === 2);
   // 현장 과제 ③~⑤ 의 두 연도와 [O년으로 가기]
   check('E3 현장 과제 연도 [NOW_YEAR, 2100] (예전 [2023, 2100])', TASKS.length === 3 && TASKS.every(t => t.years.join() === [FM.NOW_YEAR, 2100].join()), TASKS.map(t => t.years.join('·')).join(' / '));
@@ -556,6 +559,49 @@ for (const p of PATHS) {
     const s = FM.sample(y, FM.pathRun(p)), o = FM.seaState(0, s), c = FM.seaState(1, s), co = FM.coralState(0, s), cc = FM.coralState(1, s);
     console.log(`      ${p}  ${y}  ${o.pco2.toFixed(1).padStart(7)}  ${o.pH.toFixed(4)}   ${o.omega.toFixed(3)}    ${c.pH.toFixed(4)}   ${c.omega.toFixed(3)}    ${(co.bleach * 100).toFixed(0).padStart(3)} %       ${co.habitat.toFixed(2)} / ${cc.habitat.toFixed(2)}        ${FM.oceanHealth(s).toFixed(2)}     ${V.glacierFrac(s.T).toFixed(2)}`);
   }
+}
+
+// ── 4차 F3: 두 갈래 미래 (F §6 검사 2) ─────────────────────────────────────────
+{
+  const AC = vm.runInContext('ActionsCore', ctx), SC = vm.runInContext('SocietyCore', ctx);
+  const at = (run, y) => FM.sample(y, run);
+  const SOME = { ids: ['standby', 'bike', 'transit'], recycleAccuracy: 0 };
+  const ALL = { ids: AC.ACTIONS.map(a => a.id), recycleAccuracy: 1 };
+  const CUSTOM = { ...ES.LEVER_NOW, renewShare: 0.6, fossilShare: 0.31, ev: 0.5 };
+  let okLE = true, okSame = true, okNow = true, okWorld = true;
+  const det = [];
+  for (const [p, l] of [['ssp245', null], ['ssp126', null], ['ssp119', null], ['ndc', null], ['custom', CUSTOM]]) {
+    const base = FM.pathRun(p, l);
+    for (const sc of AC.SCALES.map(s => s.id)) {
+      const mine = FM.mineRun(p, l, ALL, sc);
+      if (!(at(mine, 2100).ppm <= at(base, 2100).ppm + 1e-9 && at(mine, 2050).ppm <= at(base, 2050).ppm + 1e-9)) okLE = false;
+      // 현재까지는 하나의 역사: 어느 갈래·경로든 표시 실행은 기준 경로(shownRun)
+      for (const y of [1850, 2023, 2026]) if (FM.sample(y, FM.shownRun(y, mine)) !== FM.sample(y, FM.pathRun('ssp245'))) okNow = false;
+    }
+    if (FM.mineRun(p, l, { ids: [] }, 'world') !== base) okSame = false;
+    const d = at(base, 2100).ppm - at(FM.mineRun(p, l, ALL, 'world'), 2100).ppm;
+    det.push(`${p} −${d.toFixed(2)}`);
+    if (!(d > 0)) okWorld = false;
+  }
+  check('F3 나의 미래 2100·2050 CO₂ ≤ 기준 미래 (5경로 × 5규모, 여섯 행동 모두)', okLE);
+  check('F3 행동 없음이면 두 갈래가 같은 실행', okSame);
+  check('F3 2026년까지는 갈래·경로와 상관없이 같은 값 (shownRun, D6)', okNow);
+  check('F3 세계 규모 여섯 행동이면 2100 CO₂ 가 실제로 낮다 (경로마다)', okWorld, det.join(' · '));
+  // 나의 미래의 2026년 엔진 값 자체도 기준과 같다(감축은 2027년부터, ActionsCore.rampAt)
+  const m = FM.mineRun('ssp245', null, ALL, 'world'), b = FM.pathRun('ssp245');
+  check('F3 나의 미래 엔진 궤적도 2026년까지 기준과 같고 2027년부터 갈라진다',
+    at(m, 2026).ppm === at(b, 2026).ppm && at(m, 2027).fossil < at(b, 2027).fossil, `${at(b, 2027).fossil.toFixed(3)} → ${at(m, 2027).fossil.toFixed(3)} GtC`);
+  // 1명은 표시 자릿수에서 0 (정직한 규모 — F §0)
+  const one = at(FM.pathRun('ssp245'), 2100).ppm - at(FM.mineRun('ssp245', null, SOME, 'me'), 2100).ppm;
+  check('F3 나 1명의 행동은 2100 CO₂ 를 0.001 ppm 도 바꾸지 못한다', Math.abs(one) < 0.001, one.toExponential(2));
+  // NDC 경로 = SocietyCore.ndcEmissions(53 %) — 경로 이름 → 배출 함수는 FPModel.emissionsFor 한 곳
+  const ndcRun = FM.pathRun('ndc');
+  const ref = ES.run({ fromYear: FM.YEAR_MIN, toYear: FM.YEAR_MAX, emissionsFn: SC.ndcEmissions(0.53) });
+  check('F3 NDC 경로 = SocietyCore.ndcEmissions(0.53) (2035 NDC 범위 낮은 끝), 캐시 키 ndc:0.53',
+    Math.abs(at(ndcRun, 2100).ppm - ref.find(o => o.year === 2100).ppm) < 1e-9 && FM.pathKey('ndc') === 'ndc:0.53',
+    `2100 ${at(ndcRun, 2100).ppm.toFixed(1)} ppm`);
+  check('F3 경로 캐시: 같은 경로는 같은 실행, 나의 미래는 캐시하지 않음(fp-main 한 칸)', FM.pathRun('ndc') === ndcRun
+    && FM.mineRun('ssp245', null, ALL, 'korea') !== FM.mineRun('ssp245', null, ALL, 'korea'));
 }
 
 console.log(fails ? `\n실패 ${fails}건` : '\n전부 통과');

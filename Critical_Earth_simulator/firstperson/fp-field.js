@@ -162,7 +162,7 @@ const FIELD_TASKS = [
   { id: 'coral', link: 'C3', title: '③ 산호 — 해수온', concept: '해수온 상승 · 산호 백화', years: FIELD_YEARS,
     goal: '같은 산호를 지금과 2100년에 보고 색이 어떻게 달라지는지 비교한다.',
     how: '[O년으로 가기](또는 화면 위 타임라인)로 연도를 바꿔 개방 해역 산호를 가까이서 보시오. 4번 해수분석기로 수온도 재 보세요.',
-    think: '산호가 하얗게 바래는(백화) 까닭은 무엇일까? 배출 경로를 바꾸면 2100년의 산호는 어떻게 다를까?' },
+    think: '산호가 하얗게 바래는(백화) 까닭은 무엇일까? 학습지 [나의 행동]에서 사회의 선택(배출 경로)을 1.5 °C 탄소중립으로 바꾸고 2100년에 다시 가 보면 산호는 어떻게 다를까?' },
   { id: 'shell', link: 'C3', title: '④ 껍데기·골격 — pH · Ω', concept: '해양 산성화 · 아라고나이트 포화도', years: FIELD_YEARS,
     goal: '유빙 옆 차가운 바다(냉수대) 산호의 탄산칼슘 골격을 지금과 2100년에 보고 비교한다. (조개 껍데기와 같은 재료)',
     how: '유빙 바로 옆 냉수대로 가서 [O년으로 가기]로 연도를 바꿔 보시오. 2번 pH미터와 4번 해수분석기(Ω)로 재 보세요.',
@@ -173,6 +173,9 @@ const FIELD_TASKS = [
     how: '유빙 곁에서 1번 온도계로 빙하 표면과 해양 대기 온도를 재시오. [O년으로 가기]로 연도를 바꿔 다시 재세요. (유빙 크기도 그해 기온을 따라 바뀝니다 — 크기는 연출, 온도는 측정값입니다)',
     think: '빙하 표면이 0 °C에 가까워지면 무슨 일이 생길까? 조감 모드에서 고른 경로의 2100년 기온과 견주어 보세요.' },
 ];
+// fp.tasks[id].scenario: 조감 [기록] 탭(worksheet.js renderFp)이 PRESET_KO[scenario] 로 이름을 찾는다 — SSP 세 경로는 그 키 그대로,
+// 4차 F3 의 NDC·설계한 사회는 조감에 키가 없으므로 한국어 이름을 그대로 넣는다(조감은 못 찾으면 글을 그대로 보인다)
+const scenarioTag = () => (/^ssp/.test(FPScenario.choice) ? FPScenario.choice : FPScenario.shortName());
 // 공용 저장소의 fp 묶음 읽기·쓰기 (4차 D3: js/worksheet-store.js — try/catch·메모리 대체는 그쪽이 맡는다)
 // fp.tasks[id] = { id, title, link, obs: {연도: 글}, diff, scenario, time } — 조감 [기록] 탭 renderFp 가 이 모양을 읽는다(마스터 §6-4)
 const FieldStore = {
@@ -181,7 +184,7 @@ const FieldStore = {
     const t = FIELD_TASKS.find(x => x.id === id);
     WorksheetStore.updateFp(fp => {
       const cur = fp.tasks[id] || { id, title: t.title, link: t.link, obs: {} };
-      Object.assign(cur, patch, { title: t.title, link: t.link, scenario: typeof FPScenario !== 'undefined' ? FPScenario.preset : '', time: new Date().toISOString() });
+      Object.assign(cur, patch, { title: t.title, link: t.link, scenario: typeof FPScenario !== 'undefined' ? scenarioTag() : '', time: new Date().toISOString() });
       fp.tasks[id] = cur;
     });
   },
@@ -474,10 +477,13 @@ FPField.flash = function () {
 };
 
 // 4차 E3: 표의 '연도·갈래' 칸 — '2100 기준 미래'. 미래 경로가 현재 정책이 아니면 경로 이름을 덧붙인다(F3 '사회의 선택' 대비)
-const PATH_KO = { ssp245: '현재 정책', ssp126: '파리협약 2 °C', ssp119: '1.5 °C 탄소중립', custom: '직접 설계', mine: '' };
+// 4차 F3: 사회의 선택 다섯(+ 조감에서 가져온 직접 설계). 나의 미래 path = 'mine:선택:규모:행동' — 선택 부분으로 이름을 붙인다
+const PATH_KO = { ssp245: '현재 정책', ssp126: '파리협약 2 °C', ssp119: '1.5 °C 탄소중립', ndc: '국가 목표(NDC)',
+  custom: '우리가 설계한 사회', aerial: '직접 설계(조감)', mine: '' };
 function yearCell(r) {
   if (r.year == null) return '';
-  const extra = r.branch === 'base' && r.path && r.path !== 'ssp245' && PATH_KO[r.path] ? ` (${PATH_KO[r.path]})` : '';
+  const p = r.branch === 'mine' && r.path ? String(r.path).split(':')[1] : r.path;
+  const extra = (r.branch === 'base' || r.branch === 'mine') && p && p !== 'ssp245' && PATH_KO[p] ? ` (${PATH_KO[p]})` : '';
   return `${r.year} ${r.branchKo || ''}${extra}`;
 }
 FPField.refresh = function () {

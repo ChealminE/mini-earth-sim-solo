@@ -417,3 +417,6 @@ body.sheet-open #actHint { display: none; }
 .act-line { margin: var(--sp-2) 0; font-size: var(--fs-2); line-height: 1.6; color: var(--ink-2); }
 .act-line b { color: var(--ink); }
 .act-scales { display: flex; gap: var(--sp-1); flex-wrap: wrap; }
+/* 4차 F3: ③ 사회의 선택 — 다섯(+조감에서 가져온 직접 설계) 버튼을 두 줄 칸에. 고른 것 = 채움(.is-on) */
+.act-society { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-1); }
+.act-society .act-soc { justify-content: flex-start; text-align: left; white-space: normal; min-height: 34px; }

@@ -24,23 +24,75 @@ FPActions.build(camera);   // 4차 F2: 도시의 행동 지점 4개(멀티탭·�
 // 도시 열섬·나무 밑 CO₂ 같은 공간 차이 계산은 그대로 — HUD에 '전 지구'와 '이 지점'을 나눠 적는다.
 const FPScenario = (() => {
   const q = new URLSearchParams(window.__FP_QUERY__ || location.search);
-  const PRESETS = { ssp245: '현재 정책', ssp126: '파리협약 2 °C', ssp119: '1.5 °C 탄소중립', custom: '직접 설계' };
-  let levers = null;
-  try { levers = q.get('levers') ? JSON.parse(q.get('levers')) : null; } catch (e) { levers = null; }
+  // 4차 F3: 경로(path) 이름 — 이름·아이콘은 조감 미래 예측 시나리오 버튼과 같다. 'ndc'·'custom' 은 사회의 선택(D18)에서 왔다.
+  //   PRESETS 는 FPModel.pathRun 에 넘기는 경로 키별 짧은 이름(타임라인·HUD 배지가 좁아서 짧게).
+  const PRESETS = { ssp245: '현재 정책', ssp126: '파리협약 2 °C', ssp119: '1.5 °C 탄소중립', ndc: '국가 목표(NDC)', custom: '직접 설계' };
+  let urlLevers = null;
+  try { urlLevers = q.get('levers') ? JSON.parse(q.get('levers')) : null; } catch (e) { urlLevers = null; }
+  if (!urlLevers || typeof urlLevers !== 'object') urlLevers = null;
+  // 레버 묶음은 빠진 칸을 지금 값(LEVER_NOW)으로 채운다 — 저장값·주소가 낡아 칸이 빠져도 엔진이 멈추지 않게
+  const fullLevers = l => (l && typeof l === 'object' ? { ...EarthSystem.LEVER_NOW, ...l } : null);
+  // T2 회의실이 저장한 '우리가 설계한 사회' 레버(fp.society.levers). 없으면 null → 그 선택지는 잠긴다
+  function designedLevers() {
+    try { return fullLevers(WorksheetStore.readFp().society.levers); } catch (e) { return null; }
+  }
+
+  // ── 사회의 선택 (4차 F3, 마스터 D18) ─────────────────────────────────────
+  // 선택지 = SocietyCore.CHOICES(현재 정책 · 파리협약 2 °C · 1.5 °C 탄소중립 · 국가 목표(NDC)를 전 세계가 따른다면 · 우리가 설계한 사회)
+  //   + 조감 [1인칭으로] 링크가 레버(직접 설계)를 넘겨 왔으면 '직접 설계(조감에서 가져옴)'(F §3 끝, 'aerial').
+  // 고른 것은 학습지 공용 저장소 fp.actions.society 에 둔다. 주소의 ?scenario= 가 있으면 그 링크의 뜻이 먼저다(저장값보다).
+  const CHOICE_ICON = { ssp245: 'globe', ssp126: 'accord', ssp119: 'target', ndc: 'list', custom: 'blocks', aerial: 'blocks' };
+  function choiceList() {
+    const list = SocietyCore.CHOICES.map(c => ({ id: c.id, label: c.label, src: c.src, icon: CHOICE_ICON[c.id],
+      available: c.id !== 'custom' || !!designedLevers() }));
+    if (urlLevers) list.push({ id: 'aerial', label: '직접 설계(조감에서 가져옴)', src: 'lever_fossil', icon: 'blocks', available: true });
+    return list;
+  }
+  const pathOf = id => (id === 'custom' || id === 'aerial' ? 'custom' : id);
+  const leversOf = id => (id === 'aerial' ? fullLevers(urlLevers) : id === 'custom' ? designedLevers() : null);
+  const valid = id => choiceList().some(c => c.id === id && c.available);
+  let choice = 'ssp245';
+  {
+    const qs = q.get('scenario');
+    let stored = null;
+    try { stored = WorksheetStore.readFp().actions.society; } catch (e) { stored = null; }
+    if (qs === 'custom' && urlLevers) choice = 'aerial';
+    else if (qs && qs !== 'custom' && valid(qs)) choice = qs;
+    else if (stored && stored !== 'aerial' && valid(stored)) choice = stored;
+  }
+  let levers = leversOf(choice);
+
   const S = {
-    preset: PRESETS[q.get('scenario')] && (q.get('scenario') !== 'custom' || levers) ? q.get('scenario') : 'ssp245',
+    get choice() { return choice; },
+    get preset() { return pathOf(choice); },          // FPModel.pathRun 에 넘기는 경로 키
+    get levers() { return levers; },
     // 4차 E1: 기본 연도 = '현재'(FPModel.NOW_YEAR, 마스터 D6). 예전 기본 2023(LAST_HIST_YEAR)은 '마지막 실제 배출 해'라 현재와 다르다
     year: Math.max(FPModel.YEAR_MIN, Math.min(FPModel.YEAR_MAX, Math.round(Number(q.get('year')) || FPModel.NOW_YEAR))),
-    // 갈래: 'base' = 기준 미래(고른 경로), 'mine' = 나의 미래(F3 가 연다). E1 에서는 base 만 켜진다(fp-timeline.js)
+    // 갈래: 'base' = 기준 미래(사회의 선택 경로), 'mine' = 나의 미래(같은 경로 − 나의 행동 × 참여 규모). 행동이 하나라도 있어야 열린다
     branch: 'base',
     PRESETS,
+    choices: choiceList,
   };
+  // 짧은 이름(타임라인·HUD·기록 표). 'custom' 경로는 누가 설계했는지로 이름이 다르다
+  S.shortName = () => (choice === 'custom' ? '우리가 설계한 사회' : choice === 'aerial' ? '직접 설계(조감)' : PRESETS[choice]);
   // 4차 C1: 엔진 궤적·그해 표본은 FPModel(fp-model.js)에서만 낸다 — 조감과 같은 해 같은 값을 node(test_fp_model)로 검사하려고.
-  // 경로별 캐시도 FPModel 이 갖는다.
-  // 4차 E2: 갈래 → 경로 실행. 기준 미래 = 고른 경로(E 에서는 주소 ?scenario=, 없으면 현재 정책).
-  // 나의 미래 = F3 가 S.mineRun(행동 조합의 실행을 돌려주는 함수)을 채운다 — 실행 캐시(행동을 바꿀 때만 버림)도 F3 쪽이 갖는다.
-  // 경로마다 EarthSystem.run 한 번(1750~2200, 약 10 ms)은 FPModel.pathRun 캐시가 맡는다.
-  S.mineRun = null;
+  // 4차 F3: 갈래 → 경로 실행. 기준 미래 = 사회의 선택 경로(FPModel.pathRun — 경로별 캐시는 FPModel).
+  //   나의 미래 = 같은 경로 − 나의 행동 × 참여 규모(FPModel.mineRun → ActionsCore.emissionsFn). 실행 캐시는 여기 한 칸:
+  //   행동·참여 규모·사회의 선택이 바뀔 때만 버린다(mineKey 가 달라지면 다시 굴린다, 약 10 ms).
+  let mineCache = null, mineKeyCached = '';
+  const mineKey = () => {
+    const c = FPActions.chosen();
+    return [FPModel.pathKey(S.preset, levers), FPActions.scale, c.ids.slice().sort().join('+'), c.recycleAccuracy].join('|');
+  };
+  S.mineRun = () => {
+    const k = mineKey();
+    if (!mineCache || k !== mineKeyCached) {
+      mineCache = FPModel.mineRun(S.preset, levers, FPActions.chosen(), FPActions.scale);
+      mineKeyCached = k;
+    }
+    return mineCache;
+  };
+  S.dropMine = () => { mineCache = null; mineKeyCached = ''; };
   S.runOf = (branch, year) => FPModel.shownRun(year,
     branch === 'mine' && typeof S.mineRun === 'function' ? S.mineRun() : FPModel.pathRun(S.preset, levers));
   // '현재까지는 하나의 역사'(마스터 D6): year ≤ NOW_YEAR 면 어느 갈래·경로든 기준 경로 실행(FPModel.shownRun)
@@ -50,7 +102,18 @@ const FPScenario = (() => {
   S.society = s => FPModel.shownSociety(s, S.preset, levers);
   // 4차 E2: 해를 인자로 받는다 — 전환 덮개(0.4초) 동안 S.year 는 아직 떠나는 해라서. 현재까지는 하나의 역사(D6)
   S.label = (y = S.year) => (y <= EarthSystem.LAST_HIST_YEAR ? `${y}년 (실제 배출)`
-    : y <= FPModel.NOW_YEAR ? `${y}년 (하나의 역사)` : `${PRESETS[S.preset]} ${y}년`);
+    : y <= FPModel.NOW_YEAR ? `${y}년 (하나의 역사)` : `${S.shortName()} ${y}년`);
+  // 사회의 선택 바꾸기 — 현재에서만(행동과 같은 '지금의 선택' 규칙, 학습지 [나의 행동] 잠금). 바뀌었으면 true.
+  //   현재까지는 하나의 역사라 세계 모습은 그대로지만, 미래로 가면 이 경로가 보인다
+  S.setChoice = id => {
+    if (S.year !== FPModel.NOW_YEAR || id === choice || !valid(id)) return false;
+    choice = id;
+    levers = leversOf(id);
+    S.dropMine();
+    if (id !== 'aerial') WorksheetStore.updateFp(fp => { fp.actions.society = id; });
+    if (typeof S.onChoice === 'function') S.onChoice(id);
+    return true;
+  };
   return S;
 })();
 // 4차 C5: 세계 상태는 applyWorldState(그해 엔진 표본, 그해 사회 모습) 하나로 바꾼다(첫 반영은 아래 applyScenarioYear).
@@ -89,8 +152,8 @@ FPScenario.badge = () => {
   const y = FPScenario.year, now = FPModel.NOW_YEAR;
   if (y < now) return { text: `${y}년 · 과거`, era: 'past' };
   if (y === now) return { text: `${y}년 · 현재`, era: 'now' };
-  if (FPScenario.branch === 'mine') return { text: `${y}년 · 나의 미래`, era: 'future' };
-  return { text: `${y}년 · 기준 미래 (${FPScenario.PRESETS[FPScenario.preset]})`, era: 'future' };
+  if (FPScenario.branch === 'mine') return { text: `${y}년 · 나의 미래 (${FPScenario.shortName()})`, era: 'future' };
+  return { text: `${y}년 · 기준 미래 (${FPScenario.shortName()})`, era: 'future' };
 };
 // 타임라인 오른쪽 글: 시대(과거·현재·미래)와 갈래 이름. 과거 = 2023년까지 실제 배출, 2024~현재 = 기준 경로 하나의 역사(D6),
 // 그 뒤 = 고른 경로(조감과 같은 약속). 4차 E2: 전환 중에는 '가는 해'를 먼저 보여 주므로 연도·갈래를 인자로 받는다
@@ -100,17 +163,21 @@ FPScenario.timelineInfo = (y = FPScenario.year, br = FPScenario.branch) => {
   const era = eraOf(y);
   const branchName = y <= EarthSystem.LAST_HIST_YEAR ? '실제 배출'
     : y <= FPModel.NOW_YEAR ? '하나의 역사 (현재 정책)'
-    : (br === 'mine' ? '나의 미래' : `기준 미래 · ${FPScenario.PRESETS[FPScenario.preset]}`);
+    : (br === 'mine' ? `나의 미래 · ${FPScenario.shortName()} − 나의 행동` : `기준 미래 · ${FPScenario.shortName()}`);
   return { era, eraText: ERA_TEXT[era], branchName };
 };
 // 4차 E3: 측정 기록 한 줄에 붙이는 연도·갈래·경로 (fp-field.js record). 갈래는 학생 말로 넷 — 과거 / 현재 / 기준 미래 / 나의 미래.
 // path = 그 값이 나온 경로 실행의 키: 현재까지는 하나의 역사라 늘 기준 경로(FPModel.BASE_PRESET, D6), 그 뒤는 고른 경로(나의 미래면 'mine').
-// F3 의 '사회의 선택'이 경로를 바꾸면 같은 해·같은 갈래라도 path 가 달라 평균이 섞이지 않는다(fp-field summary 묶음 키)
+// F3 의 '사회의 선택'이 경로를 바꾸면 같은 해·같은 갈래라도 path 가 달라 평균이 섞이지 않는다(fp-field summary 묶음 키).
+// 4차 F3: path = 사회의 선택 id(ssp245 · ssp126 · ssp119 · ndc · custom · aerial). 나의 미래는 'mine:선택:규모:행동' —
+//   행동·참여 규모를 바꾼 뒤 잰 값이 앞의 평균과 섞이지 않게(과제 ⑨ '기준 vs 나의 미래 평균 비교')
 const BRANCH_KO = { past: '과거', now: '현재', base: '기준 미래', mine: '나의 미래' };
 FPScenario.recordTag = () => {
   const y = FPScenario.year, era = eraOf(y);
   const branch = era === 'future' ? FPScenario.branch : era;
-  const path = era !== 'future' ? FPModel.BASE_PRESET : (branch === 'mine' ? 'mine' : FPScenario.preset);
+  const c = branch === 'mine' ? FPActions.chosen() : null;
+  const path = era !== 'future' ? FPModel.BASE_PRESET
+    : (branch === 'mine' ? `mine:${FPScenario.choice}:${FPActions.scale}:${c.ids.slice().sort().join('+')}` : FPScenario.choice);
   return { year: y, branch, branchKo: BRANCH_KO[branch], path };
 };
 // 전환 덮개 가운데 글: '2100년 · 기준 미래'
@@ -182,6 +249,16 @@ applyScenarioYear();
 FPField.init();
 FPSheet.init();   // 4차 D3: 오른쪽 학습지 패널(열고 닫기·탭). 내용은 위 FPField 가 이미 그려 두었다
 FPActions.init(); // 4차 F2: 학습지 [나의 행동] 카드(저장값 읽기 → 그리기). Icons.fill 앞이라 카드 속 아이콘도 채워진다
+// 4차 F3: 행동·참여 규모가 바뀌면 '나의 미래' 실행을 버리고, 행동이 하나라도 있을 때만 갈래 [나의 미래]를 연다.
+//   행동은 현재에서만 바뀌므로(잠금) 미래에서 갈래가 갑자기 바뀌는 일은 없다 — 그래도 나의 미래에 있으면 세계를 다시 맞춘다
+function syncMine() {
+  FPScenario.dropMine();
+  FPTimeline.setMineEnabled(FPActions.chosen().ids.length > 0);
+  if (FPScenario.branch === 'mine') applyScenarioYear();
+}
+FPActions.onChange(syncMine);
+FPScenario.onChoice = () => { FPActions.render(); applyScenarioYear(); };   // 사회의 선택 → 카드 다시 그리기·타임라인 글
+syncMine();
 FPOnboard.init(); // 4차 D4: 첫 진입 안내 3장(본 적 없으면 바로 띄운다). Icons.fill 앞이라 안내 속 아이콘도 채워진다
 // 4차 D1: 정적 마크업의 <span data-icon=…> 을 조감과 같은 SVG 아이콘으로 채운다(이모지는 기기마다 모양이 달라서 안 씀)
 Icons.fill();

@@ -353,6 +353,13 @@ check('④ 행동 없음 → 배출 함수가 기준과 모든 해에 같다', (
     /fp-timeline\.js"><\/script>\s*(<!--[^]*?-->\s*)?<script src="fp-actions\.js"><\/script>\s*<script src="fp-tools\.js">/.test(fpHtml)
     && /"firstperson\/fp-timeline\.js",\s*"firstperson\/fp-actions\.js", "firstperson\/fp-tools\.js"/.test(bld));
   check('F2 E 키는 e.code 로 받는다(한글 자판 ㄷ, 함정 5)', /e\.code === 'KeyE'/.test(read('firstperson/fp-player.js')));
+  // F3: 사회의 선택 SSP 세 설명은 조감 미래 예측 PRESET_DESC 와 같은 글(F §3 '같은 이름·PRESET_DESC 문구')
+  const tf = read('js/tab-future.js');
+  const same = ['ssp245', 'ssp126', 'ssp119'].filter(k => {
+    const m = new RegExp(k + ":\\s*'([^']+)'").exec(tf.slice(tf.indexOf('const PRESET_DESC')));
+    return m && m[1] === FA.SOCIETY_DESC[k];
+  });
+  check('F3 사회의 선택 설명 = 조감 PRESET_DESC (SSP 세 경로)', same.length === 3, same.join(','));
 }
 
 console.log(fails ? `\n실패 ${fails}건` : '\n전부 통과');

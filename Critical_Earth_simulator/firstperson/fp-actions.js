@@ -8,7 +8,8 @@
 //
 // 정직한 규모(TASK_4차_F §0): 숫자는 모두 ActionsCore(js/actions-core.js)에서만 낸다 — 지점은 '찾아가는 맥락'일 뿐이고
 //   카드와 같은 함수(personalKg·cutGtC)를 쓴다. 효과를 부풀리는 배율도, 행동만으로 세계 모습을 바꾸는 연출도 없다.
-//   '나의 미래' 갈래(엔진 실행)는 F3 이 FPScenario.mineRun 으로 연다 — 이 파일은 고른 행동을 저장하고 onChange 로 알릴 뿐이다.
+//   '나의 미래' 갈래(엔진 실행)는 FPScenario.mineRun(fp-main.js, F3)이 맡는다 — 이 파일은 고른 행동을 저장하고 onChange 로 알릴 뿐이다.
+//   ③ 사회의 선택(F3, 마스터 D18)도 이 탭 위쪽에 그리지만 고른 값·경로는 FPScenario.setChoice 가 갖는다(fp.actions.society).
 //
 // 규칙
 //   - 현재(NOW_YEAR = 2026)에서만 고를 수 있다. 다른 해에는 카드가 잠기고 [현재로 가기], 지점 표지판은 흐려진다.
@@ -64,6 +65,16 @@ const FPActions = (() => {
       { key: 'off', label: '장거리 왕복 비행 (해외여행)', on: false },
       { key: 'on', label: '가까운 기차 여행', on: true }],
       note: '이 카드는 줄인 장거리 비행 1번의 크기만 셉니다 — 대신 가는 기차 여행에도 배출이 조금 있어요.' },
+  });
+
+  // ③ 사회의 선택 설명(4차 F3). SSP 세 줄은 조감 미래 예측 PRESET_DESC(js/tab-future.js)와 같은 글 — test_actions 가 같은지 본다
+  const SOCIETY_DESC = Object.freeze({
+    ssp245: '현재 정책이 유지될 때의 경로에 가장 가까운 SSP. 배출이 2050년 무렵까지 지금 수준에 머물다 천천히 줄어듭니다.',
+    ssp126: '기온 상승을 2 °C 아래로 억제하는 경로. 화석 배출이 빠르게 줄고 2070년대부터 순배출이 음수가 됩니다.',
+    ssp119: '1.5 °C 억제, 세기 중반 탄소중립 경로. 2050년 무렵 순배출 0, 그 뒤로는 대기에서 탄소를 거둬들입니다.',
+    ndc: '전 세계가 한국의 2035년 목표와 같은 비율(2018년 대비 53 %, 목표 범위의 낮은 끝)로 화석 CO₂를 줄이고 2050년에 0이 된다고 가정한 비교 경로입니다.',
+    custom: '시청 \'기후 정책 회의실\'에서 정책·기후테크 카드로 설계한 2050년의 사회를 따릅니다.',
+    aerial: '조감 모드 미래 예측에서 레버로 설계한 2050년의 사회를 따릅니다(이번 화면에서만).',
   });
 
   // ── 순수 계산 (DOM 없음 — node 검사) ────────────────────────────────────
@@ -215,11 +226,26 @@ const FPActions = (() => {
     </div>`;
   }
 
+  // ③ 사회의 선택(4차 F3) — 고르기만. 설계는 T2 회의실, 경로·갈래 계산은 FPScenario(fp-main.js)
+  function societyHtml() {
+    if (typeof FPScenario === 'undefined' || !FPScenario.choices) return '';
+    const list = FPScenario.choices(), cur = FPScenario.choice;
+    const btns = list.map(c => `<button class="btn btn--scen btn--sm act-soc${c.id === cur ? ' is-on' : ''}" type="button" data-society="${c.id}"`
+      + ` aria-pressed="${c.id === cur}"${isNow() && c.available ? '' : ' disabled'}><span data-icon="${c.icon}"></span>${esc(c.label)}</button>`).join('');
+    const c = list.find(x => x.id === cur) || list[0];
+    const noDesign = !list.find(x => x.id === 'custom').available;
+    return `<h3 class="sh-h">③ 사회의 선택 <span class="sub">배출 경로 — 미래를 가장 크게 바꾸는 층</span></h3>
+      <div class="act-society" role="group" aria-label="사회의 선택">${btns}</div>
+      <p class="act-line">${esc(SOCIETY_DESC[c.id] || '')}${srcButton(c.src)}</p>
+      ${noDesign ? `<p class="ac-wait">'우리가 설계한 사회'는 시청 '기후 정책 회의실'에서 만들어요 <button class="btn btn--nav btn--sm" type="button" id="actGoCouncil">회의실로 가기</button></p>` : ''}
+      <p class="sh-note"><b>기준 미래</b> = 이 경로 그대로, <b>나의 미래</b> = 같은 경로 − 아래 나의 행동 × 참여 규모. 2026년까지는 하나의 역사이고 2027년부터 갈라집니다.${srcButton('fp_now_join')}</p>`;
+  }
+
   function render() {
     if (!root) return;
     // 다시 그리면 초점이 사라진다 — 누르던 버튼을 기억했다가 같은 버튼에 되돌린다(키보드로 이어서 조작할 수 있게)
     const ae = document.activeElement, keep = ae && root.contains(ae)
-      ? ['data-toggle', 'data-scale', 'data-choice', 'data-try', 'id'].map(k => [k, ae.getAttribute(k)]).find(([, v]) => v) : null;
+      ? ['data-toggle', 'data-scale', 'data-choice', 'data-try', 'data-society', 'id'].map(k => [k, ae.getAttribute(k)]).find(([, v]) => v) : null;
 
     const c = chosen(), sum = AC.personalKg(c), sc = AC.SCALES.find(s => s.id === st.scale);
     const tonnes = scaleTonnes(c, st.scale);
@@ -233,7 +259,7 @@ const FPActions = (() => {
     const flightCap = st.scale === 'world' && has('flight')
       ? ` 비행은 국제선을 타는 사람 수(약 3.3억 명)까지만 셉니다.${srcButton('act_flight')}` : '';
 
-    root.innerHTML = `${lock}${contextHtml()}
+    root.innerHTML = `${lock}${contextHtml()}${societyHtml()}
       <h3 class="sh-h">① 나의 탄소 <span class="sub">1년에 줄이는 CO₂ — 여섯 막대가 같은 눈금입니다</span></h3>
       <p class="sh-note">도시의 멀티탭·자전거 거치대·버스 정류장·여행사 창문에 가서 <span class="key">E</span> 를 누르면 그 카드로 옵니다 — 숫자는 카드와 같은 계산입니다.${srcButton('fp_action_points')}</p>
       <div class="act-cards">${AC.ACTIONS.map(cardHtml).join('')}</div>
@@ -269,10 +295,17 @@ const FPActions = (() => {
       return;
     }
     if (b.dataset.try) { tryMinigame(b.dataset.try); return; }
+    if (b.dataset.society && typeof FPScenario !== 'undefined') { FPScenario.setChoice(b.dataset.society); return; }
+    if (b.id === 'actGoCouncil') {
+      // T2 회의실이 FPActions.councilHook = () => … 를 채운다. 그 전에는 안내만
+      if (typeof api.councilHook === 'function') api.councilHook();
+      else toast('시청 \'기후 정책 회의실\'은 아직 준비 중이에요', 2800);
+      return;
+    }
     if (b.id === 'actGoNow' && typeof FPScenario !== 'undefined') { FPScenario.goTo(NOW, FPScenario.branch); return; }
     if (b.id === 'actGoFuture' && typeof FPScenario !== 'undefined') {
-      // '나의 미래' 갈래는 F3 이 연다(FPTimeline.setMineEnabled). 열리기 전에는 goTo 가 기준 미래로 간다 — 그 사실을 알린다
-      if (typeof FPTimeline !== 'undefined' && !FPTimeline.mineEnabled) toast('\'나의 미래\' 갈래는 준비 중이에요 — 지금은 2100년 기준 미래로 갑니다', 3200);
+      // '나의 미래' 갈래는 행동이 하나라도 있을 때 열린다(fp-main syncMine → FPTimeline.setMineEnabled). 닫혀 있으면 goTo 가 기준 미래로 간다 — 그 사실을 알린다
+      if (typeof FPTimeline !== 'undefined' && !FPTimeline.mineEnabled) toast('행동을 하나 이상 고르면 \'나의 미래\'가 열려요 — 지금은 2100년 기준 미래로 갑니다', 3200);
       FPScenario.goTo(2100, 'mine');
     }
   }
@@ -597,7 +630,7 @@ const FPActions = (() => {
     // 상태
     chosen, get scale() { return st.scale; }, get free() { return free; }, has,
     setAction, toggle, setScale, setMinigameResult, onChange: fn => { listeners.push(fn); },
-    minigameHook: null,
+    minigameHook: null, councilHook: null, SOCIETY_DESC,
     // 화면
     init, build, update, interact, onYear, openFor, render,
     get focusPoint() { return focusPt ? focusPt.id : null; },
