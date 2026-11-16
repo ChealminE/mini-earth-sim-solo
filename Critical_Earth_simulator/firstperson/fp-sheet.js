@@ -35,7 +35,7 @@ const FPSheet = (() => {
     // 숨어 있던 캔버스는 폭이 0 이라 그리지 못했다 → 보일 때 다시 그린다
     if (name === 'records' && typeof FPField !== 'undefined') FPField.drawTransect();
     if (name === 'society' && typeof FPSociety !== 'undefined') FPSociety.render();
-    if (name === 'tasks' && typeof FPSociety !== 'undefined') FPSociety.renderTasks();   // 4차 T5: 회의실·미니게임 뒤 탐험 지도 진행도   // 4차 T4: 회의실에서 확정한 설계를 다시 읽는다
+    if (name === 'tasks' && typeof FPField !== 'undefined') FPField.renderTasks();   // 4차 F5: 측정·현장·행동 과제(⑥~⑪)·탐험 지도·사회 과제를 한 번에 — 미니게임·회의실 뒤 진행도(4차 T5 탐험 지도 포함)
     WorksheetStore.updateFp(fp => { fp.ui.tab = name; });
   }
 

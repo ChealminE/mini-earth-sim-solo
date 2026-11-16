@@ -268,6 +268,7 @@ FPField.init();
 FPSheet.init();   // 4차 D3: 오른쪽 학습지 패널(열고 닫기·탭). 내용은 위 FPField 가 이미 그려 두었다
 FPActions.init(); // 4차 F2: 학습지 [나의 행동] 카드(저장값 읽기 → 그리기). Icons.fill 앞이라 카드 속 아이콘도 채워진다
 FPSociety.init(); // 4차 T4: 학습지 [우리 사회] 탭 — 목표 비교·나와 사회·조감 연결(FPActions.onChange 를 쓰므로 그 뒤)
+FPField.refresh();  // 4차 F5: 행동 과제 ⑥~⑪·배지 숫자는 FPActions(저장값)·FPSociety(탐험 지도) 뒤에야 맞는다 — 위 FPField.init 때는 둘 다 빈 상태
 // 4차 F3: 행동·참여 규모가 바뀌면 '나의 미래' 실행을 버리고, 행동이 하나라도 있을 때만 갈래 [나의 미래]를 연다.
 //   행동은 현재에서만 바뀌므로(잠금) 미래에서 갈래가 갑자기 바뀌는 일은 없다 — 그래도 나의 미래에 있으면 세계를 다시 맞춘다
 function syncMine() {

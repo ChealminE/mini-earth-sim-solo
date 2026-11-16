@@ -408,5 +408,98 @@ check('④ 행동 없음 → 배출 함수가 기준과 모든 해에 같다', (
   }
 }
 
+// ── F5: 행동 과제 ⑥~⑪ (firstperson/fp-field.js — 학습지 [과제] 탭 2장) ─────────────────
+// 판정은 기록 수·글 유무·체험 여부로만(2차 이후 원칙) — 잰 값이 맞는지, 차이가 났는지는 보지 않는다(F §5).
+// fp-field.js 맨 위 코드는 상수·함수 정의뿐이라 DOM 없이 불러 순수 함수(actionTaskProgress·meanGap)만 본다.
+{
+  let store = { tasks: {}, actions: {} };
+  const fctx = vm.createContext({ FPModel: FM, console, Math, Map, Set, Object, Number, String, JSON, Array, isFinite,
+    WorksheetStore: { readFp: () => store } });
+  vm.runInContext(read('firstperson/fp-field.js'), fctx, { filename: 'firstperson/fp-field.js' });
+  const F = vm.runInContext('FPField', fctx);
+  const T = F.ACT_TASKS;
+  const soc = read('firstperson/fp-society.js'), field = read('firstperson/fp-field.js'), html = read('firstperson/index.html');
+  check('F5 과제 여섯 = act_size·act_future·act_city·act_society·act_cafe·act_recycle, 번호 ⑥~⑪ = 탐험 지도 2장 줄(FPSociety.CHAPTERS)',
+    T.map(t => t.id).join() === 'act_size,act_future,act_city,act_society,act_cafe,act_recycle' && T.map(t => t.no).join('') === '⑥⑦⑧⑨⑩⑪'
+    && T.every(t => t.title.startsWith(t.no + ' ')) && /role: '시민'[^\n]*nos: '⑥~⑪'/.test(soc), T.map(t => t.title).join(' · '));
+  const P = (fp, rows, n) => Object.fromEntries(F.actionTaskProgress(fp, rows, n).map(p => [p.task.id, p]));
+  const none = P({ tasks: {}, actions: {} }, [], 0);
+  check('F5 아무것도 안 했으면 여섯 다 미완료 · 진행 0', Object.values(none).every(p => !p.done && p.frac === 0));
+  // ⑥ 행동 3개 + 글 두 칸
+  const tx = { act_size: { obs: { '가장 큰 행동 · 가장 작은 행동': '비행 · 텀블러' }, diff: '약 286배' } };
+  check('F5 ⑥ 행동 2개면 글이 있어도 미완료, 3개 + 글 두 칸이면 완료',
+    !P({ tasks: tx }, [], 2).act_size.done && P({ tasks: tx }, [], 3).act_size.done && !P({ tasks: { act_size: { obs: {}, diff: 'x' } } }, [], 4).act_size.done);
+  // ⑦ 2100 · CO₂ · 같은 자리 · 같은 사회의 선택에서 기준 5 + 나의 5 + 글
+  const rows = [];
+  const add = (n, o) => { for (let i = 0; i < n; i++) rows.push({ kind: 'co2', spot: 'airCity', ...o, value: o.value != null ? o.value + (i % 2 ? 3 : -3) : 500 }); };
+  const MINE = 'mine:ssp245:korea:bike+flight+transit';
+  add(5, { year: 2100, branch: 'base', path: 'ssp245', value: 548 });
+  add(4, { year: 2100, branch: 'mine', path: MINE, value: 548 });
+  add(3, { year: 2100, branch: 'mine', path: 'mine:ssp245:world:bike+flight+transit', value: 543 });   // 다른 규모 = 다른 묶음
+  add(5, { year: 2100, branch: 'mine', path: MINE, spot: 'airGreen', value: 540 });                    // 다른 자리
+  add(5, { year: 2100, branch: 'mine', path: 'mine:ssp119:korea:bike', value: 400 });                  // 다른 사회의 선택
+  const fd = { tasks: { act_future: { obs: {}, diff: '구분 안 됨' } } };
+  let p7 = P(fd, rows, 3).act_future;
+  check('F5 ⑦ 같은 자리·같은 경로·같은 나의 행동 묶음만 센다 — 기준 5 · 나의 4 면 미완료', !p7.done && p7.subs[0].n === 5 && p7.subs[1].n === 4,
+    p7.subs.map(s => `${s.label} ${s.n == null ? (s.ok ? 'O' : 'X') : s.n}`).join(' · '));
+  add(1, { year: 2100, branch: 'mine', path: MINE, value: 600 });
+  p7 = P(fd, rows, 3).act_future;
+  check('F5 ⑦ 나의 미래 다섯째 기록 + 글이면 완료 (값이 기준보다 커도 — 판정은 수·글만)', p7.done && p7.subs[1].n === 5, `평균 차이 ${p7.gap.d.toFixed(2)} ppm`);
+  check('F5 ⑦ 글이 비면 미완료', !P({ tasks: {} }, rows, 3).act_future.done);
+  // §6-4 정직한 체감: 평균 차이 vs 계측 오차(2 × √(s²/na + s²/nb), s = max(σ, 표본표준편차))
+  const g0 = F.meanGap([548, 548, 548, 548, 548], [547.85, 547.85, 547.85, 547.85, 547.85], 8);
+  const g1 = F.meanGap([548, 548, 548, 548, 548], [357, 357, 357, 357, 357], 8);
+  check('F5 §6-4 대한민국 규모 차이(−0.15 ppm)는 5회씩이면 계측 오차(±10.1)보다 작아 "구분할 수 없어요", 사회의 선택(−191)은 구분됨',
+    !g0.distinct && Math.abs(g0.err - 2 * Math.sqrt(2 * 64 / 5)) < 1e-9 && g1.distinct, `±${g0.err.toFixed(2)} ppm`);
+  const g2 = F.meanGap([500, 520, 480], [500], 8);
+  check('F5 §6-4 흩어짐이 σ보다 크면 표본표준편차를 쓴다(보수적), 한쪽이 비면 null',
+    Math.abs(g2.err - 2 * Math.sqrt(400 / 3 + 64)) < 1e-9 && F.meanGap([], [1], 8) === null);
+  // ⑧ 현재 도심 CO₂ 참여 전 5 · 후 5 (path 끝 ':cityNN'), 다른 해·다른 자리는 세지 않음
+  const r8 = [];
+  const add8 = (n, o) => { for (let i = 0; i < n; i++) r8.push({ kind: 'co2', spot: 'airCity', year: FM.NOW_YEAR, branch: 'now', path: 'ssp245', value: 445, ...o }); };
+  add8(5, {}); add8(4, { path: 'ssp245:city42', value: 435 }); add8(3, { path: 'ssp245:city21', value: 440 });
+  add8(5, { spot: 'airGreen', path: 'ssp245:city42' }); add8(5, { year: 2100, branch: 'base', path: 'ssp245:city42' });
+  const f8 = { tasks: { act_city: { obs: {}, diff: '약 10 ppm' } } };
+  const p8a = P(f8, r8, 0).act_city;
+  add8(1, { path: 'ssp245:city42', value: 435 });
+  const p8b = P(f8, r8, 0).act_city;
+  check('F5 ⑧ 현재 도심 참여 전 5 · 후 5(같은 참여 비율) + 글 — 4/5 면 미완료, 녹지·2100 기록은 세지 않음',
+    !p8a.done && p8a.subs[1].n === 4 && p8b.done && p8b.subs.map(s => s.n).slice(0, 2).join() === '5,5', `차이 ${p8b.gap.d.toFixed(1)} ppm ±${p8b.gap.err.toFixed(1)}`);
+  // ⑨ 2100 기준 미래 · 같은 자리 · 현재 정책 1 + 1.5 °C 1 + 글
+  const f9 = { tasks: { act_society: { obs: {}, diff: '사회의 선택이 훨씬 크다' } } };
+  const r9 = [{ year: 2100, branch: 'base', path: 'ssp245', kind: 'co2', spot: 'airOcean', value: 548 },
+    { year: 2100, branch: 'base', path: 'ssp119', kind: 'co2', spot: 'airGreen', value: 357 }];
+  const p9a = P(f9, r9, 0).act_society;
+  r9.push({ year: 2100, branch: 'base', path: 'ssp119', kind: 'co2', spot: 'airOcean', value: 357 });
+  const p9b = P(f9, r9, 0).act_society;
+  check('F5 ⑨ 2100 같은 자리에서 현재 정책·1.5 °C 각 한 번 이상 + 글 (다른 자리끼리는 짝이 안 됨)', !p9a.done && p9b.done && p9b.gap.distinct);
+  // ⑩⑪ 체험 기록(minigameLog) + 글
+  const f10 = { tasks: { act_cafe: { obs: {}, diff: '주 3회' }, act_recycle: { obs: { '틀린 품목': '종이컵' }, diff: '코팅' } }, actions: { minigameLog: {} } };
+  const pa = P(f10, [], 0);
+  f10.actions.minigameLog = { cafe: [{ at: 't', cup: 'disposable' }], recycle: [{ at: 't', round: 1, accuracy: 0.6, items: [] }] };
+  const pb = P(f10, [], 0);
+  check('F5 ⑩ 카페 1회(일회용 컵이어도) + 글, ⑪ 분리배출 한 판 + 글 두 칸 — 체험 전에는 미완료',
+    !pa.act_cafe.done && !pa.act_recycle.done && pb.act_cafe.done && pb.act_recycle.done);
+  // 탐험 지도 2장 입구 FPField.actionProgress() — [{ task: {title}, done, frac }]
+  store = { tasks: tx, actions: { chosen: ['standby', 'bike', 'transit'] } };
+  F.rows = [];
+  const ap = F.actionProgress();
+  check('F5 FPField.actionProgress() → 여섯 줄 { task.title, done, frac } (FPSociety.chapterItems 2장이 읽음), 저장값만으로 ⑥ 완료',
+    ap.length === 6 && ap.every(p => typeof p.task.title === 'string' && typeof p.done === 'boolean' && p.frac >= 0 && p.frac <= 1) && ap[0].done
+    && /FPField\.actionProgress\(\)\.map\(p => \(\{ title: p\.task\.title, done: p\.done, frac: p\.frac \}\)\)/.test(soc));
+  check('F5 저장 모양 = 현장 과제와 같음 { id, title, link, obs, diff, scenario, time } (조감 renderFp, 함정 4)',
+    /fp\.tasks\[id\] \|\| \{ id, title: t\.title, link: ACT_LINK, obs: \{\} \}/.test(field) && /link: ACT_LINK, scenario: typeof FPScenario/.test(field));
+  const iF = html.indexOf('id="fieldTasks"'), iA = html.indexOf('id="actTasks"'), iS = html.indexOf('id="socTasks"');
+  check('F5 [과제] 탭 자리: 현장 과제(1장) → 행동 과제 #actTasks(2장) → 사회 과제(3·4장)', iF > 0 && iA > iF && iS > iA);
+  check('F5 배지·[과제] 탭 숫자 = 네 장 과제 전체(탐험 지도와 같은 목록) — 예전 ①②만 세던 것 고침',
+    /FPSociety\.CHAPTERS\.flatMap\(c => FPSociety\.chapterItems\(c\.n, fp, this\.rows\)\)/.test(field) && !/과제 \$\{doneN\}\/\$\{INQUIRY\.length\}/.test(field)
+    && /과제 0\/15/.test(html));
+  // 문구 점검(F §5, 3차 D2 방식): 무력감·과장·CO₂를 조작 대상으로 쓰는 말 0건 — 1인칭 화면 글 전체(주석 제외)
+  const fpFiles = fs.readdirSync(path.join(ROOT, 'firstperson')).filter(f => f.endsWith('.js')).map(f => 'firstperson/' + f);
+  const strs = fpFiles.map(f => (read(f).replace(/\/\/.*$/gm, '').match(/'[^'\n]*'|`[^`]*`/g) || []).join('\n')).join('\n') + '\n' + html.replace(/<!--[\s\S]*?-->/g, '');
+  const BAN = [/소용없|의미 없/, /지구를 구|해결된다|해결돼요/, /CO(₂|2)\s*(를|을|농도를)\s*(올리|올려|내리|내려|높이|높여|낮추|낮춰)/];
+  check('F5 문구 점검: 1인칭 화면 글에 무력감·과장·\'CO₂를 올리면/내리면\' 0건 (과제 ② \'CO₂를 높여 보세요\' 고침)', !BAN.some(re => re.test(strs)), BAN.filter(re => re.test(strs)).map(String).join(', '));
+}
+
 console.log(fails ? `\n실패 ${fails}건` : '\n전부 통과');
 process.exit(fails ? 1 : 0);

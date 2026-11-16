@@ -139,7 +139,8 @@ const INQUIRY = [
     concept: '열 스트레스와 산성화의 구분 (오개념 교정)',
     goal: '따뜻한 곳 산호와 차가운 곳 산호가 서로 다른 이유로 아프다는 것을 구분한다.',
     how: '산호 바로 곁(3 m 이내) 바다를 4번 해수분석기로 — 개방 해역 산호 3회, 냉수대 산호 3회 재시오.',
-    think: '화면 위 타임라인에서 연도를 2100년 이후로 옮겨 CO₂를 높여 보세요. 하얗게 바랜 산호(백화)와 회갈색으로 쪼그라든 산호(석회화 저해)는 각각 어디에 있나? 원인은 수온인가 Ω인가?',
+    // 4차 F5 문구 점검: 'CO₂를 높여 보세요'는 CO₂를 조작 대상으로 쓰는 말이라(3차 결정 9 — CO₂는 배출의 결과) 연도를 옮기는 말로만 둔다
+    think: '화면 위 타임라인에서 연도를 2100년 이후로 옮겨 배출이 쌓인 미래로 가 보세요. 하얗게 바랜 산호(백화)와 회갈색으로 쪼그라든 산호(석회화 저해)는 각각 어디에 있나? 원인은 수온인가 Ω인가?',
     subs: [
       { label: '개방 해역 산호', goal: 3, test: r => r.kind === 'sea' && r.nearCoral && r.seaClass === 'open' },
       { label: '냉수대 산호', goal: 3, test: r => r.kind === 'sea' && r.nearCoral && r.seaClass !== 'open' },
@@ -246,6 +247,221 @@ FPField.bindFieldTasks = function () {
   });
 };
 
+// ── 행동 과제 ⑥~⑪ (4차 F5 — 2장 '시민') ─────────────────────────────────────
+// 지시서(F §5)의 번호는 ⑧~⑬이지만 D3 에서 1장을 ①~⑤로 다시 매겨 빈 번호 없이 ⑥~⑪을 쓴다(번호는 FPSociety.CHAPTERS 2장 줄과 같다).
+// 판정은 기록 수·글 유무·체험 여부로만(2차 이후 원칙) — 잰 값이 맞는지, 차이가 났는지는 보지 않는다.
+// 저장 모양은 현장 과제와 같다: fp.tasks[id] = { id, title, link, obs: {칸 이름: 글}, diff, scenario, time } — 조감 [기록] 탭(renderFp)이 그대로 보인다(함정 4).
+// 측정 과제(⑦⑧⑨)는 '기록 평균의 차이'와 '계측 오차로 생길 수 있는 차이'를 나란히 적는다(F §6-4 정직한 체감):
+//   차이가 오차보다 작으면 "이 측정으로는 구분할 수 없어요"라고 그대로 말한다 — 행동의 효과를 부풀리지 않는다(F §0).
+const ACT_LINK = '나의 행동';
+const ACT_GOAL = 5;
+// 같은 자리 = 같은 지점(spot). 기준 미래 path = '경로[:cityNN]', 나의 미래 path = 'mine:경로:규모:행동[:cityNN]'(fp-main recordTag)
+const pathPart = (r, i) => String(r.path || '').split(':')[i] || '';
+const choiceOf = r => (r.branch === 'mine' ? pathPart(r, 1) : pathPart(r, 0));
+const isCity = r => /:city\d+$/.test(String(r.path || ''));
+const isCO2 = r => r.kind === 'co2';
+const ACT_TASKS = [
+  { id: 'act_size', no: '⑥', title: '⑥ 내 행동의 크기', concept: '① 나의 탄소 · 행동마다 크기가 다르다',
+    goal: '행동을 3개 이상 고르고 크기 막대를 본 뒤, 가장 큰 행동과 가장 작은 행동, 그 차이를 쓴다.',
+    how: '학습지 [나의 행동]에서 행동을 고르세요(도시의 멀티탭·자전거 거치대·버스 정류장·여행사 표지판에서 E 로도 갈 수 있어요). 여섯 막대는 같은 눈금이에요.',
+    btns: [{ act: 'sheet', label: '나의 행동 열기' }],
+    fields: [{ key: '가장 큰 행동 · 가장 작은 행동', ph: '어느 행동이 가장 크고, 어느 행동이 가장 작았나요?' },
+      { key: '그 차이', ph: '몇 kg, 몇 배쯤 차이 나나요?', diff: true }] },
+  { id: 'act_future', no: '⑦', title: '⑦ 미래가 달라졌나?', concept: '② 모두의 선택 · 나의 미래 갈래',
+    goal: '같은 사회의 선택에서 2100년 \'기준 미래\'와 \'나의 미래\'의 같은 자리 CO₂를 각각 5번 이상 재고, 두 평균의 차이를 견준다.',
+    how: '행동을 하나 이상 고르면 타임라인에 [나의 미래]가 열려요. 2100년의 한 자리에 선 채 갈래만 바꿔 가며 CO₂센서(3번)로 재세요.',
+    btns: [{ act: 'go', year: 2100, branch: 'base', label: '2100년 기준 미래로' }, { act: 'go', year: 2100, branch: 'mine', label: '2100년 나의 미래로' }],
+    fields: [{ key: '두 평균의 차이', ph: '평균 차이는 몇 ppm인가요? 계측 오차보다 큰가요?', diff: true }] },
+  { id: 'act_city', no: '⑧', title: '⑧ 도시 공기는 바로 바뀐다', concept: '현재의 국지 효과 · 도시 증가분',
+    goal: '현재(2026) 도심 대기 CO₂를 \'우리 도시\' 참여 전과 후에 각각 5번 이상 재고 견준다.',
+    how: '먼저 도심에서 CO₂센서로 5번 재세요(참여 전). 그다음 [나의 행동]에서 걷기·자전거나 대중교통을 고르고 \'우리 도시\' 참여 비율을 정한 뒤, 같은 자리에서 다시 5번 재세요.',
+    btns: [{ act: 'go', year: null, branch: 'base', label: '현재로 가기' }, { act: 'sheet', label: '나의 행동 열기' }],
+    fields: [{ key: '참여 전·후의 차이', ph: '두 평균은 몇 ppm 차이 났나요? 계측 오차보다 큰가요?', diff: true }] },
+  { id: 'act_society', no: '⑨', title: '⑨ 사회의 선택', concept: '③ 사회의 선택 · 배출 경로',
+    goal: '2100년 같은 자리 CO₂를 \'현재 정책\'과 \'1.5 °C 탄소중립\' 경로에서 재고, ⑦의 차이와 견준다.',
+    how: '사회의 선택은 현재(2026)에서만 바꿀 수 있어요 — [나의 행동] 맨 위 ③ 사회의 선택을 고른 뒤 2100년 기준 미래로 가서 재세요. 경로마다 한 번 이상.',
+    btns: [{ act: 'sheet', label: '사회의 선택 고르기' }, { act: 'go', year: 2100, branch: 'base', label: '2100년 기준 미래로' }],
+    fields: [{ key: '⑦과 견준 결과', ph: '사회의 선택이 만든 차이는 나의 행동이 만든 차이와 어떻게 다른가요?', diff: true }] },
+  { id: 'act_cafe', no: '⑩', title: '⑩ 텀블러는 몇 번 써야 할까', concept: '미니게임 · 초록잔 카페',
+    goal: '카페에서 음료를 한 번 받고 결과 카드의 \'본전 약 220번\'을 본 뒤, 내 텀블러 사용 습관을 쓴다.',
+    how: '[카페 위치 보기]를 누르면 미니맵에 카페가 표시돼요. 일회용 컵이든 텀블러든 한 번 받으면 돼요.',
+    btns: [{ act: 'minigame', id: 'tumbler', label: '카페 위치 보기' }], src: 'tumbler_breakeven',
+    fields: [{ key: '내 텀블러 사용 습관', ph: '텀블러를 몇 번쯤 썼나요? 220번을 넘기려면 어떻게 써야 할까요?', diff: true }] },
+  { id: 'act_recycle', no: '⑪', title: '⑪ 헷갈리는 분리배출', concept: '미니게임 · 분리배출장',
+    goal: '분리배출장에서 한 판을 하고, 틀린 품목 하나를 골라 왜 그런지 쓴다.',
+    how: '[분리배출장 위치 보기]를 누르면 미니맵에 표시돼요. 다 맞혔다면 가장 헷갈렸던 품목을 쓰세요.',
+    btns: [{ act: 'minigame', id: 'recycle', label: '분리배출장 위치 보기' }],
+    fields: [{ key: '틀린 품목', ph: '품목 이름' }, { key: '왜 그런지', ph: '왜 그 수거함이 아닌가요? 준비(헹구기·라벨 떼기)는?', diff: true }] },
+];
+// 두 묶음의 평균 차이와 '계측 오차로 생길 수 있는 차이'(두 평균, 약 95 % — 2 × √(sa²/na + sb²/nb)).
+//   s = max(계측기 재현성 σ, 그 묶음의 표본표준편차) — 자리마다 값이 조금씩 달라 흩어짐이 σ보다 크면 그쪽을 쓴다(보수적으로).
+//   기준은 F4 '재서 구분할 수 있나요?'(fp_detect_n)와 같은 2σ 어림이다.
+function meanGap(a, b, sigma) {
+  if (!a.length || !b.length) return null;
+  const st = v => {
+    const n = v.length, m = v.reduce((x, y) => x + y, 0) / n;
+    const sd = n > 1 ? Math.sqrt(v.reduce((x, y) => x + (y - m) ** 2, 0) / (n - 1)) : 0;
+    return { n, m, s: Math.max(sigma, sd) };
+  };
+  const A = st(a), B = st(b), d = B.m - A.m, err = 2 * Math.sqrt(A.s ** 2 / A.n + B.s ** 2 / B.n);
+  return { na: A.n, nb: B.n, ma: A.m, mb: B.m, d, err, distinct: Math.abs(d) > err };
+}
+// 같은 자리 두 묶음 고르기: rows 를 key(r) 로 묶어 (A 조건, B 조건) 을 함께 가장 많이 채운 자리를 고른다.
+//   ⑦은 나의 미래 path 전체(규모·행동)까지 같아야 한 묶음 — 행동을 바꾼 뒤의 기록이 앞 평균과 섞이지 않게(E3 summary 와 같은 규칙)
+function bestPair(rows, keyA, keyB, goal) {
+  const A = new Map(), B = new Map();
+  for (const r of rows) {
+    const ka = keyA(r), kb = ka == null ? keyB(r) : null;
+    if (ka != null) { if (!A.has(ka)) A.set(ka, []); A.get(ka).push(r); }
+    if (kb != null) { if (!B.has(kb.k)) B.set(kb.k, { join: kb.join, v: [] }); B.get(kb.k).v.push(r); }
+  }
+  let best = { a: [], b: [], score: -1 };
+  const cap = n => Math.min(n, goal);
+  for (const [ka, a] of A) {
+    const pairs = [...B.values()].filter(x => x.join === ka);
+    if (!pairs.length && cap(a.length) > best.score) best = { a, b: [], score: cap(a.length) };
+    for (const p of pairs) if (cap(a.length) + cap(p.v.length) > best.score) best = { a, b: p.v, score: cap(a.length) + cap(p.v.length) };
+  }
+  for (const p of B.values()) if (!A.has(p.join) && cap(p.v.length) > best.score) best = { a: [], b: p.v, score: cap(p.v.length) };
+  return best;
+}
+// 순수: 저장값(fp) + 측정 기록(rows) + 지금 고른 행동 수 → 과제마다 { task, a, subs[{label, ok, n?, goal?}], frac, done, gap? }
+//   chosenN 은 FPActions.chosen()(D13 체험 규칙을 거친 값)을 넘긴다 — 저장값 fp.actions.chosen 에는 꺼져야 할 행동이 남아 있을 수 있다
+function actionTaskProgress(fp, rows, chosenN, sigma = 8) {
+  const tasks = (fp && fp.tasks) || {}, log = (fp && fp.actions && fp.actions.minigameLog) || {};
+  rows = rows || [];
+  const nowY = FPModel.NOW_YEAR;
+  const cnt = (label, list, goal) => ({ label, n: list.length, goal, ok: list.length >= goal });
+  return ACT_TASKS.map(t => {
+    const a = tasks[t.id] || { obs: {} }, obs = a.obs || {};
+    let subs = [], gap = null;
+    if (t.id === 'act_size') subs.push({ label: '행동 3개 이상 고름', n: Math.min(chosenN || 0, 3), goal: 3, ok: (chosenN || 0) >= 3 });
+    if (t.id === 'act_future') {
+      // 2100 · CO₂ · 기준(같은 경로) / 나의(그 경로 위 나의 행동). 자리·경로가 같은 쌍
+      const r2 = rows.filter(r => r.year === 2100 && isCO2(r) && (r.branch === 'base' || r.branch === 'mine'));
+      const p = bestPair(r2, r => (r.branch === 'base' ? `${r.spot}|${choiceOf(r)}` : null),
+        r => (r.branch === 'mine' ? { k: `${r.spot}|${r.path}`, join: `${r.spot}|${choiceOf(r)}` } : null), ACT_GOAL);
+      subs.push(cnt('기준 미래 CO₂', p.a, ACT_GOAL), cnt('나의 미래 CO₂', p.b, ACT_GOAL));
+      gap = meanGap(p.a.map(r => r.value), p.b.map(r => r.value), sigma);
+    }
+    if (t.id === 'act_city') {
+      const r2 = rows.filter(r => r.year === nowY && isCO2(r) && r.spot === 'airCity');
+      const before = r2.filter(r => !isCity(r)), after = r2.filter(isCity);
+      // 참여 비율을 바꿔 가며 쟀으면 가장 많이 잰 비율 하나만(서로 다른 세계를 섞지 않게)
+      const byPct = new Map();
+      for (const r of after) { if (!byPct.has(r.path)) byPct.set(r.path, []); byPct.get(r.path).push(r); }
+      const af = [...byPct.values()].sort((x, y) => y.length - x.length)[0] || [];
+      subs.push(cnt('참여 전 도심 CO₂', before, ACT_GOAL), cnt('참여 후 도심 CO₂', af, ACT_GOAL));
+      gap = meanGap(before.map(r => r.value), af.map(r => r.value), sigma);
+    }
+    if (t.id === 'act_society') {
+      const r2 = rows.filter(r => r.year === 2100 && isCO2(r) && r.branch === 'base' && !isCity(r));
+      const p = bestPair(r2, r => (pathPart(r, 0) === 'ssp245' ? r.spot : null),
+        r => (pathPart(r, 0) === 'ssp119' ? { k: r.spot, join: r.spot } : null), 1);
+      subs.push(cnt('현재 정책 2100 CO₂', p.a, 1), cnt('1.5 °C 2100 CO₂', p.b, 1));
+      gap = meanGap(p.a.map(r => r.value), p.b.map(r => r.value), sigma);
+    }
+    if (t.id === 'act_cafe') subs.push({ label: '카페 1회', ok: Array.isArray(log.cafe) && log.cafe.length > 0 });
+    if (t.id === 'act_recycle') subs.push({ label: '분리배출 한 판', ok: Array.isArray(log.recycle) && log.recycle.length > 0 });
+    subs.push(...t.fields.map(f => ({ label: f.key, ok: !!String((f.diff ? a.diff : obs[f.key]) || '').trim() })));
+    const frac = subs.reduce((x, s) => x + (s.goal ? Math.min(s.n, s.goal) / s.goal : s.ok ? 1 : 0), 0) / subs.length;
+    return { task: t, a, subs, frac, done: subs.every(s => s.ok), gap };
+  });
+}
+FPField.ACT_TASKS = ACT_TASKS;
+FPField.actionTaskProgress = actionTaskProgress;
+FPField.meanGap = meanGap;
+// 탐험 지도 2장(FPSociety.chapterItems)이 [{ task: {title}, done, frac }] 로 읽는다
+FPField.actionProgress = function () {
+  let fp = {};
+  try { fp = WorksheetStore.readFp(); } catch (e) { fp = {}; }
+  const chosenN = typeof FPActions !== 'undefined' ? FPActions.chosen().ids.length
+    : (fp.actions && Array.isArray(fp.actions.chosen) ? fp.actions.chosen.length : 0);
+  const sigma = typeof TOOL_SPEC !== 'undefined' ? TOOL_SPEC.co2.sigma : 8;   // CO₂센서 재현성(fp-tools.js) — fp_detect_n 과 같은 σ
+  return actionTaskProgress(fp, this.rows, chosenN, sigma);
+};
+function setActTask(id, patch) {
+  const t = ACT_TASKS.find(x => x.id === id);
+  try {
+    WorksheetStore.updateFp(fp => {
+      const cur = fp.tasks[id] || { id, title: t.title, link: ACT_LINK, obs: {} };
+      Object.assign(cur, patch, { title: t.title, link: ACT_LINK, scenario: typeof FPScenario !== 'undefined' ? scenarioTag() : '', time: new Date().toISOString() });
+      fp.tasks[id] = cur;
+    });
+  } catch (e) { /* 저장이 막히면 이번 화면 동안만 */ }
+}
+// 측정 과제의 '기록 평균 차이 vs 계측 오차' 한 줄. 판정과 무관한 안내 — 차이가 오차보다 작으면 그대로 말한다
+function gapLine(t, g, ref) {
+  if (!g) return '';
+  const names = { act_future: ['기준 미래', '나의 미래'], act_city: ['참여 전', '참여 후'], act_society: ['현재 정책', '1.5 °C'] }[t.id];
+  const sg = v => (Math.abs(v) < 0.05 ? '0.0' : (v > 0 ? '+' : '−') + Math.abs(v).toFixed(1));
+  const verdict = g.distinct
+    ? '차이가 계측 오차보다 커요 — 이 측정으로 두 값을 구분할 수 있어요.'
+    : '차이가 계측 오차보다 작아요 — 이 측정으로는 두 값을 구분할 수 없어요.';
+  let more = '';
+  // 재는 횟수를 늘리면 오차가 줄어든다 — 몇 번이면 되는지는 F4 의 같은 어림(fp_detect_n)이 이미 보여 주므로 그쪽으로 안내한다
+  if (t.id === 'act_future' && !g.distinct) more = ' 재는 횟수를 늘리면 오차가 줄어요 — 몇 번이면 될지는 [나의 행동] 미래 비교 표의 \'재서 구분\' 칸을 보세요.';
+  if (t.id === 'act_city' && !g.distinct) more = ' 재는 횟수를 늘리면 오차가 줄어요 — 몇 번이면 될지는 [나의 행동] \'우리 도시 공기\' 줄을 보세요.';
+  if (t.id === 'act_society' && ref) more = ` ⑦의 기록 평균 차이는 ${sg(ref.d)} ppm(오차 ±${ref.err.toFixed(1)})이었어요.`;
+  return `<p class="t-line"><b>기록 평균</b> ${names[0]} ${g.ma.toFixed(1)} ppm(${g.na}회) · ${names[1]} ${g.mb.toFixed(1)} ppm(${g.nb}회) → 차이 <b>${sg(g.d)} ppm</b>,`
+    + ` 계측 오차로 생길 수 있는 차이 약 ±${g.err.toFixed(1)} ppm. ${verdict}${more}${typeof srcButton === 'function' ? srcButton('fp_detect_n') : ''}</p>`;
+}
+FPField.renderActionTasks = function () {
+  const box = document.getElementById('actTasks');
+  if (!box || box.contains(document.activeElement)) return;   // 글을 쓰는 중에는 다시 그리지 않는다(커서가 튄다)
+  const esc = v => String(v == null ? '' : v).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const prog = this.actionProgress(), ref = prog.find(p => p.task.id === 'act_future').gap;
+  const nowY = FPModel.NOW_YEAR;
+  box.innerHTML = `<h4 class="t-section">행동 과제 — 2장 시민 (현재의 행동 → 나의 미래)</h4>` + prog.map(p => {
+    const t = p.task, obs = p.a.obs || {};
+    const btns = t.btns.map(b => `<button class="btn ${b.act === 'go' ? 'btn--time' : 'btn--nav'} btn--sm" type="button" data-act-btn="${b.act}"`
+      + (b.act === 'go' ? ` data-year="${b.year == null ? nowY : b.year}" data-branch="${b.branch}"` : '') + (b.id ? ` data-mg="${b.id}"` : '') + `>${esc(b.label)}</button>`).join(' ');
+    let extra = gapLine(t, p.gap, t.id === 'act_society' ? ref : null);
+    if (t.id === 'act_recycle' && typeof FPActions !== 'undefined' && FPActions.lastLog) {
+      // 최근 판에서 첫 시도에 못 맞힌 품목 — 고를 거리를 바로 보인다
+      const last = FPActions.lastLog('recycle'), wrong = last ? (last.items || []).filter(x => x.score < 1).map(x => x.name) : [];
+      if (last) extra += `<p class="t-line">최근 판(${last.round}번째)에서 첫 시도에 못 맞힌 품목: ${wrong.length ? esc(wrong.join(' · ')) : '없어요 — 다 맞혔어요'}</p>`;
+    }
+    return `<div class="task-card field-task act-task${p.done ? ' done' : ''}" data-at="${t.id}">` +
+      `<div class="t-head"><span class="t-title">${esc(t.title)}</span><span class="t-badge">${p.done ? '✓ 완료' : Math.round(p.frac * 100) + '%'}</span></div>` +
+      `<div class="t-concept">2장 · 시민 — ${esc(t.concept)}</div>` +
+      `<p class="t-line"><b>목표</b> ${esc(t.goal)}${t.src && typeof srcButton === 'function' ? srcButton(t.src) : ''}</p>` +
+      `<p class="t-line"><b>방법</b> ${esc(t.how)} ${btns}</p>${extra}` +
+      t.fields.map(f => `<label class="ft-diff"><span>${esc(f.key)}</span><textarea rows="2" data-key="${esc(f.key)}"${f.diff ? ' data-diff' : ''} placeholder="${esc(f.ph)}">${esc(f.diff ? p.a.diff : obs[f.key])}</textarea></label>`).join('') +
+      `<div class="t-subs">${p.subs.map(s => `<span class="t-sub${s.ok ? ' ok' : ''}">${esc(s.label)}${s.goal ? ` ${Math.min(s.n, s.goal)}/${s.goal}` : ''}</span>`).join('')}</div></div>`;
+  }).join('');
+  if (typeof Icons !== 'undefined' && Icons.fill) Icons.fill(box);
+};
+// 글 칸·버튼 (한 번만 연결 — 카드는 다시 그려도 상자는 그대로)
+FPField.bindActionTasks = function () {
+  const box = document.getElementById('actTasks');
+  if (!box || box.dataset.atBound) return;
+  box.dataset.atBound = '1';
+  box.addEventListener('input', e => {
+    const card = e.target.closest('[data-at]');
+    if (!card || !e.target.dataset.key) return;
+    const id = card.dataset.at;
+    let a = { obs: {} };
+    try { a = WorksheetStore.readFp().tasks[id] || a; } catch (err) { /* 빈 답 */ }
+    if (e.target.hasAttribute('data-diff')) setActTask(id, { diff: e.target.value });
+    else setActTask(id, { obs: { ...(a.obs || {}), [e.target.dataset.key]: e.target.value } });
+  });
+  box.addEventListener('focusout', () => setTimeout(() => { if (!box.contains(document.activeElement)) this.renderTasks(); }, 0));
+  box.addEventListener('click', e => {
+    const b = e.target.closest('button[data-act-btn]');
+    if (!b) return;
+    const kind = b.dataset.actBtn;
+    if (kind === 'go' && typeof FPScenario !== 'undefined') {
+      const y = Number(b.dataset.year), br = b.dataset.branch;
+      // '나의 미래'는 행동을 하나 이상 골라야 열린다 — 닫혀 있으면 goTo 가 기준 미래로 가므로 그 사실을 알린다(F2 [미래 보러 가기]와 같은 말)
+      if (br === 'mine' && typeof FPTimeline !== 'undefined' && !FPTimeline.mineEnabled) this.toast('행동을 하나 이상 고르면 \'나의 미래\'가 열려요 — 지금은 기준 미래로 갑니다', 3200);
+      FPScenario.goTo(y, br);
+    }
+    if (kind === 'sheet' && typeof FPSheet !== 'undefined') FPSheet.show('actions', true);
+    if (kind === 'minigame' && typeof FPActions !== 'undefined' && typeof FPActions.minigameHook === 'function') FPActions.minigameHook(b.dataset.mg);
+  });
+};
+
 FPField.taskProgress = function () {
   return INQUIRY.map(t => {
     const subs = t.subs.map(s => {
@@ -271,8 +487,7 @@ FPField.renderTasks = function () {
   if (!box || box.contains(document.activeElement)) return;   // 현장 과제 글을 쓰는 중에는 다시 그리지 않는다
   const prog = this.taskProgress();
   const doneN = prog.filter(p => p.done).length;
-  const tally = document.getElementById('fieldTaskTally');
-  if (tally) tally.textContent = `${doneN}/${prog.length}`;
+  this.updateBadge();
   const intro = document.getElementById('fieldTaskIntro');
   if (intro) {
     intro.innerHTML = !this.rows.length
@@ -297,6 +512,7 @@ FPField.renderTasks = function () {
       `</div>`;
   }).join('');
   this.renderFieldTasks();   // 3차 E4 현장 과제 카드 (위)
+  this.renderActionTasks();  // 4차 F5 행동 과제 ⑥~⑪ (2장)
   if (typeof FPSociety !== 'undefined' && FPSociety.renderTasks) FPSociety.renderTasks();   // 4차 T5 탐험 지도 · 과제 ⑫~⑮ (기록이 쌓이면 ⑬ 진행도)
 };
 // ── 통계: 같은 지점 종류를 반복 측정했을 때의 평균과 표준편차 ────────────────
@@ -456,6 +672,9 @@ FPField.init = function () {
   });
   FieldStore.syncTitles();   // D3 번호 정리 전에 저장된 현장 과제 제목을 새 번호로
   this.bindFieldTasks();
+  this.bindActionTasks();    // 4차 F5 행동 과제 ⑥~⑪
+  // 행동·규모·우리 도시·미니게임 결과가 바뀌면 ⑥⑩⑪ 진행도와 배지 숫자를 고친다(FPActions 는 이 뒤에 저장값을 읽으므로 fp-main 이 한 번 더 refresh)
+  if (typeof FPActions !== 'undefined') FPActions.onChange(() => { this.renderActionTasks(); this.updateBadge(); });
   this.refresh();
 };
 
@@ -490,12 +709,29 @@ function yearCell(r) {
   if (cm) extra += ` (우리 도시 −${cm[1]} %)`;
   return `${r.year} ${r.branchKo || ''}${extra}`;
 }
+// 4차 F5: 화면 구석 배지·[과제] 탭 숫자 = 네 장 과제 전체(①~⑮)의 완료 수. 예전에는 측정 과제 ①②만 셌다(B5·D3 때 과제가 둘뿐이던 흔적).
+//   탐험 지도와 같은 목록(FPSociety.chapterItems)으로 세어 두 곳의 숫자가 어긋나지 않게 한다. 지도가 없으면(검사 등) 측정 과제만
+FPField.taskTally = function () {
+  if (typeof FPSociety !== 'undefined' && FPSociety.chapterItems && FPSociety.CHAPTERS) {
+    let fp = {};
+    try { fp = WorksheetStore.readFp(); } catch (e) { fp = {}; }
+    const items = FPSociety.CHAPTERS.flatMap(c => FPSociety.chapterItems(c.n, fp, this.rows));
+    return { done: items.filter(x => x.done).length, total: items.length };
+  }
+  const prog = this.taskProgress();
+  return { done: prog.filter(p => p.done).length, total: prog.length };
+};
+FPField.updateBadge = function () {
+  const t = this.taskTally();
+  if (this.badge) this.badge.textContent = `기록 ${this.rows.length} · 과제 ${t.done}/${t.total}`;
+  const tally = document.getElementById('fieldTaskTally');
+  if (tally) tally.textContent = `${t.done}/${t.total}`;
+};
 FPField.refresh = function () {
   if (!this.el) return;
   const cnt = document.getElementById('fieldCount');
   if (cnt) cnt.textContent = this.rows.length;
-  const doneN = this._doneTasks.size;
-  if (this.badge) this.badge.textContent = `기록 ${this.rows.length} · 과제 ${doneN}/${INQUIRY.length}`;
+  this.updateBadge();
   this.renderTasks();
   const tb = document.getElementById('fieldTBody');
   if (tb) {

@@ -361,9 +361,10 @@ for (const p of PATHS) {
   check('D3 저장소: 읽기까지 막혀도 오류 없이 빈 묶음', (() => { try { WA.open(); WA.updateFp(fp => { fp.ui.tab = 'actions'; }); return WA.readFp().ui.tab === 'actions'; } catch (e) { return false; } })());
 
   // 과제 번호: 건너뜀 없이 ①② (측정) · ③④⑤ (현장), 저장된 옛 제목은 1인칭을 열 때 새 번호로(syncTitles)
+  // 4차 F5: 같은 파일에 행동 과제 ⑥~⑪(2장)이 이어 붙는다 — 여전히 빈 번호 없이
   const fc = read('firstperson/fp-field.js');
   const titles = [...fc.matchAll(/title: '([①-⑳])/g)].map(m => m[1]).join('');
-  check('D3 과제 번호 건너뜀 없음 (①②③④⑤)', titles === '①②③④⑤', titles);
+  check('D3·F5 과제 번호 건너뜀 없음 (①②③④⑤ + 행동 ⑥~⑪)', titles === '①②③④⑤⑥⑦⑧⑨⑩⑪', titles);
   check('D3 저장된 현장 과제 제목을 새 번호로 고침 (FieldStore.syncTitles, init 에서)', /syncTitles\(\)\s*\{/.test(fc) && /FieldStore\.syncTitles\(\)/.test(fc));
   check('D3 fp-field 는 저장소를 WorksheetStore 로만 (localStorage 직접 접근 없음)', !/localStorage/.test(fc.replace(/\/\/.*$/gm, '')));
   // 패널: 오른쪽 40 % · 탭 4개 WAI-ARIA · 옛 야장·설정창 없음 · Esc 처리 · 캔버스 칸 크기

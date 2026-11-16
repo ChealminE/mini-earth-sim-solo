@@ -239,7 +239,7 @@ const FPSociety = (() => {
     { n: 4, role: '성찰', time: '—', what: '나 · 우리 사회 · 목표를 한 표에, 학습지 내보내기', nos: '⑮' },
   ]);
   // 장마다 과제 목록 [{ title, done, frac }]. 1장 = 측정 ①② + 현장 ③④⑤(fp-field), 3·4장 = 위 SOC_TASKS.
-  //   2장은 F5 의 행동 과제(FPField.actionProgress)가 생기면 그것을, 그 전에는 체험 여부 셋(행동 고르기·카페·분리배출)으로 대신한다.
+  //   2장은 F5 의 행동 과제 ⑥~⑪(FPField.actionProgress). 그 함수가 없을 때(예전 파일 조합)만 체험 여부 셋(행동 고르기·카페·분리배출)으로 대신한다.
   function chapterItems(n, fp, rows) {
     if (n === 1 && typeof FPField !== 'undefined' && FPField.taskProgress) {
       return [...FPField.taskProgress(), ...FPField.fieldProgress()].map(p => ({ title: p.task.title, done: p.done, frac: p.frac }));
@@ -269,6 +269,8 @@ const FPSociety = (() => {
         <p class="soc-ch-what">${esc(c.what)} · 과제 ${c.nos}</p>
         <ul class="soc-ch-items">${items.map(x => `<li class="${x.done ? 'ok' : ''}">${x.done ? '✓ ' : ''}${esc(x.title)}</li>`).join('')}</ul></details>`;
     }).join('');
+    // 4차 F5: 구석 배지·[과제] 탭 숫자도 같은 목록으로 센다(③ 과제 글을 쓰고 나온 뒤에도 맞게)
+    if (typeof FPField !== 'undefined' && FPField.updateBadge) FPField.updateBadge();
   }
   function renderTasks() {
     renderMap();
