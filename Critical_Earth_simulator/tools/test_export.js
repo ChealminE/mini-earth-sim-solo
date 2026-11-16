@@ -223,6 +223,30 @@ const S1 = FX.sheetRecords(recs);
     && typeof empty.find(r => r[0] === 2100 && /^기온/.test(r[1]))[3] === 'number');
 }
 
+// ── G2: 학습지 표 모양은 LAYOUT 한 곳에서 (시트 이름 · 열 이름 · 순서 · 빼기) ───────────────────────────
+{
+  const L = FX.LAYOUT;
+  check('G2 시트 이름 = LAYOUT 의 sheet (시트 7장 순서 ORDER)', FX.ORDER.length === 7 && FX.SHEET_NAMES.join('|') === FX.ORDER.map(k => L[k].sheet).join('|'));
+  check('G2 ①~⑤ 머리줄 = LAYOUT cols 이름 그대로', ['records', 'summary', 'actions', 'future', 'tasks'].every(k => {
+    const rows = { records: FX.sheetRecords(recs), summary: FX.sheetSummary(recs), actions: FX.sheetActions({ ids: ['bike'], recycleAccuracy: 0 }, 'me'),
+      future: FX.sheetFuture({ chosen: { ids: [] }, scale: 'me', preset: 'ssp245', levers: null }), tasks: FX.sheetTasks({}) }[k];
+    return rows[0].join('|') === L[k].cols.map(c => c[1]).join('|');
+  }));
+  // 동료 양식에 맞춘다고 치고: ① 열 순서 바꾸기 · 열 하나 빼기 · 이름 바꾸기 → 표와 CSV 가 그대로 따른다 (끝나면 되돌린다)
+  const saved = L.records.cols.slice();
+  L.records.cols = [saved[9], saved[8], saved[0]].map(c => c.slice());
+  L.records.cols[0][1] = '측정값';
+  const S = FX.sheetRecords(recs), C = FX.toCSV(recs).replace(/^\uFEFF/, '').split('\r\n');
+  L.records.cols = saved;
+  check('G2 LAYOUT 만 고치면 ① 열 순서 · 빼기 · 이름이 엑셀 · CSV 에 그대로 (값은 열 키로 따라감)', S[0].join('|') === '측정값|측정 항목|번호' && S[1].join('|') === '440|CO₂|1'
+    && C[0] === '측정값,측정 항목,번호' && C[1] === '440,CO₂,1' && FX.sheetRecords(recs)[0].length === 14);
+  const savedRn = L.minigame.rename;
+  L.minigame.rename = { 컵: '고른 컵' };
+  const M = FX.sheetMinigame({ cafe: [], recycle: [] });
+  L.minigame.rename = savedRn;
+  check('G2 ⑥ 미니게임 열 이름 바꾸기(rename) — 열은 M4 minigameTable 그대로', M[0].join('|') === '카페 — 날짜|음료|고른 컵|주당 잔 수');
+}
+
 // ── 엑셀 파일을 zip 으로 열기 ─────────────────────────────────────────────────
 // xlsx-lite 는 압축 없는(STORE) zip — 로컬 파일 머리(PK\x03\x04)를 차례로 읽으면 파일 이름과 내용이 그대로 나온다
 function unzipStore(buf) {
