@@ -273,7 +273,7 @@ FPPlayer.currentZone = function () {
 // ── 입력 바인딩 ─────────────────────────────────────────────────────────────
 function bindInput(P, canvas) {
   // 4차 D3: E키 설정창(#settingsPanel)과 F키 야장(#fieldPanel)을 오른쪽 학습지 패널 하나(firstperson/fp-sheet.js)로 합쳤다.
-  // 패널이 열려 있는 동안은 P.uiOpen 이 걷기·도구 조작을 막는다(FPSheet 가 세우고 내린다). E 는 D4·F2 에서 '상호작용' 키가 된다.
+  // 패널이 열려 있는 동안은 P.uiOpen 이 걷기·도구 조작을 막는다(FPSheet 가 세우고 내린다). E 는 4차 F2 부터 행동 지점 '상호작용' 키다.
   P.uiOpen = false;
 
   window.addEventListener('keydown', e => {
@@ -295,6 +295,8 @@ function bindInput(P, canvas) {
       if (!e.repeat) FPTimeline.step(e.code === 'BracketLeft' ? -1 : 1);
       e.preventDefault(); return;
     }
+    // 4차 F2: E = 겨눈 행동 지점과 상호작용(fp-actions.js). e.code 라 한글 자판 ㄷ 이어도 같다. 겨눈 지점이 없으면 아무 일도 없다
+    if (e.code === 'KeyE') { if (!e.repeat) FPActions.interact(); e.preventDefault(); return; }
     if (e.code === 'Space') e.preventDefault();   // 스페이스로 페이지가 스크롤되는 것 방지
     // 숫자키 1~4로 단축바 선택 (칸 수는 fp-tools.js HOTBAR_N)
     if (e.code.startsWith('Digit')) {

@@ -18,6 +18,8 @@
 
 <!-- 화면 정중앙 크로스헤어 -->
 <div id="crosshair"><span></span><span></span></div>
+<!-- 4차 F2: 행동 지점(멀티탭·거치대·정류장·여행사)을 가까이서 겨누면 십자선 아래 'E 플러그 뽑기' (firstperson/fp-actions.js) -->
+<div id="actHint" role="status" aria-live="polite" hidden></div>
 
 <!-- 포인터락이 풀려 있을 때 뜨는 시작/재개 안내 -->
 <div id="startOverlay">
@@ -55,7 +57,7 @@
     <section class="ob-card" data-ob="2" hidden>
       <h2>3. 시간과 행동</h2>
       <p>같은 자리를 <b>다른 해</b>에서 재 보세요. 연도는 화면 위 <b>타임라인</b>에서 바꿉니다 — 탐험 중에는 <span class="key">[</span> · <span class="key">]</span> 키로 정거장(1850 ~ 2100)을 오갑니다.</p>
-      <p>도시의 카페·분리배출장·정류장에서 하는 탄소중립 행동(<span class="key">E</span>)과 그 행동이 만든 미래는 학습지 [나의 행동]에 쌓입니다. (준비 중)</p>
+      <p>도시의 멀티탭·자전거 거치대·버스 정류장·여행사에서 하는 탄소중립 행동(<span class="key">E</span>)은 학습지 [나의 행동]에 쌓입니다. 행동은 <b>현재(2026년)</b>에서만 고를 수 있습니다.</p>
       <p class="ob-sub">조작법은 언제든 <span class="key">H</span> 또는 학습지 [과제] 맨 아래 '조작법'에서 다시 볼 수 있습니다.</p>
     </section>
     <div class="ob-actions">
@@ -177,7 +179,7 @@
       <tr><td><span class="key">W</span><span class="key">A</span><span class="key">S</span><span class="key">D</span> · <span class="key">Shift</span> · <span class="key">Space</span></td><td>이동 · 달리기 · 점프 / 물에서 헤엄쳐 오르기</td></tr>
       <tr><td>마우스 · 좌클릭</td><td>시점 · 든 도구로 바라보는 지점 측정</td></tr>
       <tr><td><span class="key">1</span>~<span class="key">4</span></td><td>도구 (온도계 · pH미터 · CO₂센서 · 해수분석기)</td></tr>
-      <tr><td><span class="key">E</span></td><td>가까운 행동 지점·카페·분리배출장·시청과 상호작용 (준비 중)</td></tr>
+      <tr><td><span class="key">E</span></td><td>가까운 행동 지점(멀티탭·자전거 거치대·버스 정류장·여행사)과 상호작용 — 표지판을 겨누면 안내가 뜬다</td></tr>
       <tr><td><span class="key">F</span></td><td>학습지 열기/닫기 (열린 상태에서는 <span class="key">Esc</span> 도)</td></tr>
       <tr><td><span class="key">[</span> · <span class="key">]</span></td><td>타임라인 정거장 이전/다음 (마우스로 누르려면 <span class="key">F</span> 로 학습지를 열어 잠금을 푼다)</td></tr>
       <tr><td><span class="key">M</span> · <span class="key">R</span></td><td>미니맵 크기 · 출발점으로</td></tr>
@@ -233,9 +235,10 @@
     <p class="field-note">CSV는 엑셀에서 바로 열립니다(한글 깨짐 방지 BOM 포함). 학습지와 맞춘 .xlsx 내보내기는 준비 중입니다.</p>
   </section>
 
-  <!-- [나의 행동]: F(행동과 미래)·M(미니게임)이 채운다 -->
+  <!-- [나의 행동]: 4차 F2 행동 카드(firstperson/fp-actions.js 가 #actRoot 를 그린다) — ① 나의 탄소 · ② 모두의 선택.
+       ③ 사회의 선택 고르기는 F3 이 이 위에 얹는다. 텀블러·분리배출 카드는 미니게임(M4) 결과로 켜진다(마스터 D13) -->
   <section class="sheet-panel" role="tabpanel" id="shPanelActions" aria-labelledby="shTabActions" tabindex="0" hidden>
-    <p class="sheet-empty">도시의 카페·분리배출장·멀티탭·정류장·여행사에서 탄소중립 행동을 해 보면 여기에 쌓이고, 그 행동이 만든 미래를 볼 수 있습니다. (준비 중)</p>
+    <div id="actRoot"><p class="sheet-empty">행동 카드를 불러오는 중입니다.</p></div>
   </section>
 
   <!-- [우리 사회]: T5(사회의 선택)가 채운다 -->
@@ -277,6 +280,8 @@
 <script src="fp-onboard.js"></script>
 <!-- 4차 E1: 화면 위 타임라인(정거장·세밀 조정·갈래). fp-player([ · ] 키)·fp-main(연도 바꾸기)이 부르므로 그 앞 -->
 <script src="fp-timeline.js"></script>
+<!-- 4차 F2: 행동 카드 + 세계 속 행동 지점. FPSheet·FPField·FPScenario 는 함수 안에서만 읽는다 -->
+<script src="fp-actions.js"></script>
 <script src="fp-tools.js"></script>
 <script src="fp-player.js"></script>
 <script src="fp-main.js"></script>

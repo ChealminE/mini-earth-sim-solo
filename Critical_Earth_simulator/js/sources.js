@@ -1364,6 +1364,21 @@ const SOURCES = {
     note: '프리셋 경로가 2024년부터 갈라지는 것은 엔진 조화 규칙(2023년 역사 배출에서 경로로 서서히 넘어감) 때문이다. 조감 미래 예측은 엔진 값을 그대로 보여 주므로 파리협약·1.5 °C 경로의 2024~2026년은 조감과 1인칭이 1 ppm 남짓 다르다. 2027년부터는 같은 해 같은 값.',
     related: ['model_co2'],
   },
+  // 4차 F2: 세계 속 행동 지점 — 찾아가는 맥락(연출). 숫자는 카드와 같은 ActionsCore 계산
+  fp_action_points: {
+    label: '1인칭 세계 속 행동 지점 (멀티탭·자전거 거치대·버스 정류장·여행사, 연출)',
+    summary: '도시의 행동 지점은 행동을 \'찾아가는 맥락\'일 뿐입니다. 지점에서 고른 행동도 학습지 [나의 행동] 카드와 똑같은 계산(1인 kg/년 × 참여 규모)으로 셉니다. 지점의 모양·자리·크기는 연출입니다.',
+    kind: 'assumption',
+    org: '이 프로그램',
+    dataset: '지점 4개(집 앞 멀티탭 → standby, 자전거 거치대 → bike, 버스 정류장 → transit, 여행사 창문 → flight) — firstperson/fp-actions.js POINTS. 계산은 ActionsCore.personalKg·cutGtC 하나',
+    version: '-',
+    cite: '이 프로그램의 화면 규칙(TASK_4차_F §2)',
+    url: REPO_URL + 'firstperson/fp-actions.js',
+    license: '-',
+    status: 'verified',
+    note: '여행사에서 \'가까운 기차 여행\'을 고르면 장거리 왕복 비행 1번 줄이기(1,000 kg)가 켜진다 — 대신 가는 기차 여행의 배출은 빼지 않았다(값을 지어내지 않으려고). 카페·분리배출장(텀블러·분리배출)은 미니게임(M)이 맡는다.',
+    related: ['act_standby', 'act_bike', 'act_transit', 'act_flight'],
+  },
   climatetech_guide: {
     label: '기후테크 도감 (숫자 없음)',
     summary: '대체육·화학적 재활용·블루카본·기후 금융·그린수소·차세대 배터리가 무엇이고 왜 이 프로그램의 엔진이 계산하지 않는지 설명하는 카드입니다. 설명 문장의 공식 출처를 확인하는 중입니다.',

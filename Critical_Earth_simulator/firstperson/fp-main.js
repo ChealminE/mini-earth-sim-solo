@@ -15,6 +15,7 @@ const camera = new THREE.PerspectiveCamera(75, 1, 0.002, 60);
 
 buildFirstPersonWorld(renderer);
 FPTechWorld.build();   // 4차 T3: 세계 속 기후테크 소품(처음엔 숨김 — applyWorldState 가 그해 사회 모습대로 켠다)
+FPActions.build(camera);   // 4차 F2: 도시의 행동 지점 4개(멀티탭·거치대·정류장·여행사) — 지점마다 Mesh 하나(드로우콜 +4)
 
 // ── 배출 경로 + 연도 → 전 지구 CO₂ (3차 E4) ─────────────────────────────────
 // 예전에는 CO₂ 슬라이더로 농도를 직접 넣었다. 조감 모드에서는 CO₂가 배출을 쌓은 '결과'라(3차 마스터 결정 9)
@@ -118,6 +119,7 @@ function applyScenarioYear() {
   const s = FPScenario.sample();
   applyWorldState(s, FPScenario.society(s));   // 도시·차·굴뚝·산호·유빙 (C5) — 하늘·파도는 연도와 무관
   FPTimeline.show(FPScenario.year, FPScenario.branch, FPScenario.timelineInfo());
+  FPActions.onYear(FPScenario.year);   // 4차 F2: 현재가 아니면 행동 카드 잠금·지점 표지판 흐림
 }
 
 // ── 연도 → 세계 상태 한 통로 (4차 E2) ───────────────────────────────────────
@@ -179,6 +181,7 @@ applyScenarioYear();
 // ── 야장 ────────────────────────────────────────────────────────────────────
 FPField.init();
 FPSheet.init();   // 4차 D3: 오른쪽 학습지 패널(열고 닫기·탭). 내용은 위 FPField 가 이미 그려 두었다
+FPActions.init(); // 4차 F2: 학습지 [나의 행동] 카드(저장값 읽기 → 그리기). Icons.fill 앞이라 카드 속 아이콘도 채워진다
 FPOnboard.init(); // 4차 D4: 첫 진입 안내 3장(본 적 없으면 바로 띄운다). Icons.fill 앞이라 안내 속 아이콘도 채워진다
 // 4차 D1: 정적 마크업의 <span data-icon=…> 을 조감과 같은 SVG 아이콘으로 채운다(이모지는 기기마다 모양이 달라서 안 씀)
 Icons.fill();
@@ -212,6 +215,7 @@ function animate() {
 
   FPPlayer.update(dt, t);
   FPTools.update(dt);          // 측정 중인 계측기의 값이 안정되어 가는 과정
+  FPActions.update(dt);        // 4차 F2: 행동 지점을 겨눴는지(초당 10번) → 'E 플러그 뽑기' 안내
   FPMinimap.update(dt);        // 초당 10회만 다시 그린다
   updateSunShadow(FPPlayer.pos.x, FPPlayer.pos.z);
 

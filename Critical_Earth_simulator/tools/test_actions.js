@@ -307,5 +307,53 @@ check('④ 행동 없음 → 배출 함수가 기준과 모든 해에 같다', (
     before - after > 8 && before - after < 12, `${before.toFixed(1)} → ${after.toFixed(1)} ppm (−${(before - after).toFixed(1)})`);
 }
 
+// ── F2: 행동 카드·지점의 순수 계산 (firstperson/fp-actions.js) ─────────────────────
+// fp-actions.js 는 읽는 순간 DOM·three.js 를 건드리지 않는다(함정 10) — 그래서 DOM 없이 불러와 계산 부분만 본다.
+// 카드·지점이 ActionsCore 와 다른 숫자를 내면 '같은 행동이 곳곳에서 다른 숫자'가 된다(F §2 '같은 함수만').
+{
+  const actx = vm.createContext({ console, Math, ActionsCore: AC, URLSearchParams, location: { search: '' }, window: {} });
+  vm.runInContext(read('firstperson/fp-actions.js'), actx, { filename: 'firstperson/fp-actions.js' });
+  const FA = vm.runInContext('FPActions', actx);
+  check('F2 지점 4개 → 행동 standby·bike·transit·flight (카페·분리배출장은 M)', FA.POINTS.map(p => p.action).join() === 'standby,bike,transit,flight');
+  check('F2 텀블러 약 286년 = 장거리 왕복 비행 1번 (문헌값 1-5 아래 286년)', Math.round(FA.tumblerYearsPerFlight()) === 286, FA.tumblerYearsPerFlight().toFixed(1));
+  // D13: 미니게임 행동은 체험해야(또는 ?free=1) 켜진다
+  const st0 = { chosen: [], minigames: {} };
+  check('F2 D13 텀블러·분리배출은 체험 전 카드에서 못 켠다, 나머지 넷은 켠다',
+    !FA.canToggle('tumbler', st0, false) && !FA.canToggle('recycle', st0, false)
+    && ['standby', 'bike', 'transit', 'flight'].every(id => FA.canToggle(id, st0, false)));
+  check('F2 D13 ?free=1 이면 카드에서 바로 켠다, 체험하면 켠다',
+    FA.canToggle('tumbler', st0, true) && FA.canToggle('recycle', { minigames: { recycle: { done: true, accuracy: 0.7 } } }, false));
+  // 분리배출 정확도: 해 본 값 그대로 · 안 해 봤으면 0 · 교사용으로 켰으면 1(안내서 88 kg)
+  const stR = { chosen: ['recycle'], minigames: { recycle: { done: true, accuracy: 0.7 } } };
+  check('F2 분리배출 정확도 0.7 → 카드 88 × 0.7 kg = personalKg', Math.abs(FA.cardKg('recycle', stR, false) - 61.6) < 1e-9
+    && Math.abs(AC.personalKg(FA.chosenOf(stR, false)) - 61.6) < 1e-9, `${FA.cardKg('recycle', stR, false)}`);
+  check('F2 분리배출 안 해 봄: 정확도 0(합계에 0), 카드 막대는 안내서 88 kg', FA.recycleAccuracy(st0, false) === 0
+    && FA.cardKg('recycle', st0, false) === 88 && FA.recycleAccuracy(st0, true) === 1);
+  // 비교 줄·참여 규모 합계가 ActionsCore 와 같은 식인가
+  const c3 = FA.chosenOf({ chosen: ['standby', 'bike', 'transit', 'nope', 'bike'] }, false);
+  check('F2 chosenOf: 모르는 id·중복 제거', c3.ids.join() === 'standby,bike,transit', c3.ids.join());
+  const pct = FA.footprintPct(c3);
+  check('F2 합계 % = personalKg ÷ 9,460 kg (footprint_kr)', Math.abs(pct - (37 + 147 + 285.4) / 9460 * 100) < 1e-9, `${pct.toFixed(2)} %`);
+  const tK = FA.scaleTonnes(c3, 'korea');
+  check('F2 참여 규모 합계 t/년 = cutGtC × 3.664 × 10⁹ (대한민국 = 469.4 kg × 5,170만)',
+    Math.abs(tK - 469.4 * 5.17e7 / 1000) / tK < 1e-9, FA.fmtTonnes(tK));
+  check('F2 세계 규모 비행은 3.3억 명으로 자른다(카드 합계도)', Math.abs(FA.scaleTonnes({ ids: ['flight'] }, 'world') - 1000 * 3.3e8 / 1000) < 1);
+  check('F2 숫자 글: 1명 37 kg · 30명 1.1 t · 5,170만 명', FA.fmtTonnes(FA.scaleTonnes({ ids: ['standby'] }, 'me')) === '37 kg'
+    && FA.fmtTonnes(FA.scaleTonnes({ ids: ['standby'] }, 'class')) === '1.1 t' && FA.fmtPeople(5.17e7) === '5,170만 명',
+    `${FA.fmtTonnes(FA.scaleTonnes({ ids: ['standby'] }, 'class'))} · ${FA.fmtPeople(5.17e7)}`);
+  // 문구 점검(F §0·§5): 무력감 · 과장 · CO₂를 조작 대상으로 쓰는 말 0건. 문헌값 1-5 표의 '여섯 가지 모두 1,445.4 kg'(걷기 31.5 kg 기준)을
+  // 앱 행동 목록(자전거 147 kg) 화면에 섞지 않는다(F1 메모)
+  const texts = read('firstperson/fp-actions.js') + read('firstperson/index.html');
+  const banned = ['소용없', '소용 없', '의미 없', '의미없', '지구를 구', '해결된다', 'CO₂를 올리', 'CO₂를 내리', '1,445', '1445'].filter(w => texts.includes(w));
+  check('F2 문구 점검: 무력감·과장·CO₂ 조작·표 합계 섞기 0건', banned.length === 0, banned.join(', '));
+  check('F2 등록부 fp_action_points (assumption)', SOURCES.fp_action_points && SOURCES.fp_action_points.kind === 'assumption');
+  // 로드 순서: fp-timeline 뒤, fp-tools 앞 — HTML 과 빌더 목록이 같은가
+  const fpHtml = read('firstperson/index.html'), bld = read('tools/build_single_html.py');
+  check('F2 로드 순서: fp-timeline → fp-actions → fp-tools (HTML · 빌더 FP_JS)',
+    /fp-timeline\.js"><\/script>\s*(<!--[^]*?-->\s*)?<script src="fp-actions\.js"><\/script>\s*<script src="fp-tools\.js">/.test(fpHtml)
+    && /"firstperson\/fp-timeline\.js",\s*"firstperson\/fp-actions\.js", "firstperson\/fp-tools\.js"/.test(bld));
+  check('F2 E 키는 e.code 로 받는다(한글 자판 ㄷ, 함정 5)', /e\.code === 'KeyE'/.test(read('firstperson/fp-player.js')));
+}
+
 console.log(fails ? `\n실패 ${fails}건` : '\n전부 통과');
 process.exit(fails ? 1 : 0);

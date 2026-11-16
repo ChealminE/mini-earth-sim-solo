@@ -16,7 +16,7 @@ html, body {
 canvas#gl { position: fixed; inset: 0; width: 100%; height: 100%; display: block; cursor: pointer; }
 
 /* ── 3D 위 종이 패널 (공통 바탕) ─────────────────────────────────────────── */
-#hud, #timeline, #keyLine, #hotbar, #fieldBadge, #toast, .start-box, .resume-box, .ob-box {
+#hud, #timeline, #keyLine, #hotbar, #fieldBadge, #toast, #actHint, .start-box, .resume-box, .ob-box {
   background: color-mix(in srgb, var(--paper-2) var(--fp-panel-mix), transparent);
   border: 1px solid var(--rule);
   color: var(--ink);
@@ -369,3 +369,51 @@ body.sheet-open #hotbar, body.sheet-open #keyLine, body.sheet-open #fieldBadge {
 .ob-card[hidden] { display: none; }
 .ob-actions { display: flex; gap: var(--sp-2); align-items: center; margin-top: var(--sp-4); }
 .ob-actions #obSkip { margin-right: auto; }
+
+/* ============================================================================
+   4차 F2: 행동 지점 안내 + 학습지 [나의 행동] 카드 (firstperson/fp-actions.js)
+   ============================================================================ */
+/* 십자선 아래 'E 플러그 뽑기' — 겨눈 동안만. 현재가 아닌 해에는 '현재로 가야 해요'(잠금, 보조 글자색) */
+#actHint {
+  position: fixed; left: 50%; top: calc(50% + 26px); transform: translateX(-50%); z-index: 7;
+  padding: 5px var(--sp-3); border-radius: 999px; white-space: nowrap; pointer-events: none;
+  font-size: var(--fs-2); font-weight: 700; color: var(--ink); border-color: var(--ctl-scen);
+}
+#actHint[hidden] { display: none; }
+#actHint .key { margin: 0 6px 0 0; }
+#actHint .ah-sub { font-weight: 500; color: var(--ink-2); margin-left: 4px; }
+#actHint.is-locked { color: var(--ink-2); border-color: var(--rule); }
+body.sheet-open #actHint { display: none; }
+
+/* 다른 해: 잠금 띠 + [현재로 가기] */
+.act-lock {
+  display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; margin: 0 0 var(--sp-3);
+  padding: var(--sp-2) var(--sp-3); border-radius: var(--radius);
+  background: var(--ctl-time-bg); border: 1px solid var(--ctl-time); color: var(--ink); font-size: var(--fs-2);
+}
+/* 지점에서 열었을 때의 고르기 카드(정류장·거치대·여행사) */
+.act-context { margin: 0 0 var(--sp-3); padding: var(--sp-2) var(--sp-3) var(--sp-3); border-radius: 10px;
+  background: var(--paper-2); border: 1.5px solid var(--ctl-scen); }
+.act-context .ac-ctx-title { margin: 0 0 var(--sp-2); font-size: var(--fs-3); font-weight: 700; color: var(--ink); }
+.act-context .ac-choices { display: flex; gap: var(--sp-2); flex-wrap: wrap; }
+.act-context .ac-choice { flex: 1 1 12em; }
+
+/* 행동 카드 6장 — 크기 막대는 여섯 장이 같은 선형 눈금(가장 큰 행동 = 칸 폭). 작은 행동이 거의 안 보이는 것 자체가 내용(F §2) */
+.act-cards { display: grid; grid-template-columns: 1fr; gap: var(--sp-2); }
+.act-card { background: var(--paper); border: 1px solid var(--rule); border-radius: 10px; padding: var(--sp-2) var(--sp-3); }
+.act-card.is-on { border-color: var(--ctl-scen); background: var(--ctl-scen-bg); }
+.act-card.is-focus, .act-card:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.act-card .ac-head { display: flex; align-items: center; gap: var(--sp-1); }
+.act-card .ac-name { font-size: var(--fs-3); font-weight: 700; color: var(--ink); }
+.act-card .ac-toggle { margin-left: auto; white-space: nowrap; }
+.act-card .ac-bar { height: 10px; margin: 6px 0 4px; background: var(--paper-3); border-radius: 3px; overflow: hidden; }
+.act-card .ac-bar i { display: block; height: 100%; min-width: 1px; background: var(--data-co2); }
+.act-card .ac-num { margin: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px var(--sp-2);
+  font-size: var(--fs-2); color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.act-card .ac-num b { color: var(--ink); font-size: var(--fs-3); }
+.act-card .ac-where { margin-left: auto; font-size: var(--fs-1); color: var(--ink-3); }
+.act-card .ac-wait { margin: 6px 0 0; display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; font-size: var(--fs-2); color: var(--ink-2); }
+.ac-sub { font-size: var(--fs-1); color: var(--ink-3); font-weight: 400; }
+.act-line { margin: var(--sp-2) 0; font-size: var(--fs-2); line-height: 1.6; color: var(--ink-2); }
+.act-line b { color: var(--ink); }
+.act-scales { display: flex; gap: var(--sp-1); flex-wrap: wrap; }
