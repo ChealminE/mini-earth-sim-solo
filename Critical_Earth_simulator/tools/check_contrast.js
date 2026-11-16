@@ -45,6 +45,8 @@ for (const bg of ['fp패널(검은 장면 위)', 'fp패널(흰 하늘 위)']) {
   pairs.push(['--ctl-rec', bg, '1인칭 야장 제목 기록 수']);
   pairs.push(['--warn', bg, '1인칭 HUD 경고(산호)']);
 }
+// 학습지 패널(4차 D3): 불투명 종이 위 — 머리줄(--paper-2)의 기록 수, 고른 탭 글자
+pairs.push(['--ctl-rec', '--paper-2', '1인칭 학습지 머리 기록 수']);
 // 완료한 과제 카드(--ctl-scen-bg) 위 글자, 과제 안내 상자
 for (const fg of ['--ink', '--ink-2', '--ink-3']) pairs.push([fg, '--ctl-scen-bg', '1인칭 완료 과제 카드·안내']);
 // 계측기 표시창(LCD) — 어두운 기기 화면 위 숫자·단위·상태 글자

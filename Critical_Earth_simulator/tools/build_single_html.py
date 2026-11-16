@@ -127,17 +127,18 @@ CSS = {
 BODY = {"aerial": body_of(aerial_html), "fp": body_of(fp_html)}
 
 AERIAL_JS = ["js/earth-model.js", "js/earth-data.js", "js/sources.js", "js/theme.js", "js/icons.js",
-             "js/source-tip.js", "js/earth-system.js", "js/earth-visual.js", "js/common.js", "js/ir-scope.js", "js/data-catalog.js", "js/graph-workspace.js", "js/worksheet.js", "js/tab-current.js",
+             "js/source-tip.js", "js/earth-system.js", "js/earth-visual.js", "js/common.js", "js/ir-scope.js", "js/data-catalog.js", "js/graph-workspace.js", "js/worksheet-store.js", "js/worksheet.js", "js/tab-current.js",
              "js/tab-future.js", "js/inquiry-steps.js", "js/inquiry.js", "js/xlsx-lite.js", "js/main.js"]
 # 4차 A3: 직접 실험 스크립트 5개(live-fit·tab-live·live-analysis·live-setup·live-file)를 뺐다.
 # xlsx-lite.js 는 남긴다 — downloadBlob 을 tab-future.js·inquiry.js·worksheet.js 가 쓴다(마스터 §6-2).
 # 4차 B2: fp-weather.js·fp-audio.js 를 뺐다(날씨·환경음 삭제, 마스터 D4).
 # 4차 C1: earth-visual(조감과 같은 시각 언어 식)·fp-model(1인칭 값 계산)을 fp-world 앞에 넣었다.
 # 4차 D1: 조감과 같은 공용 부품 넷(sources·theme·icons·source-tip)을 earth-data 뒤, earth-system 앞에 넣었다.
+# 4차 D3: 학습지 공용 저장소(worksheet-store)를 공용 부품 뒤에, 학습지 패널(fp-sheet)을 fp-field 뒤에 넣었다.
 FP_JS = ["js/earth-model.js", "js/earth-data.js", "js/sources.js", "js/theme.js", "js/icons.js",
-         "js/source-tip.js", "js/earth-system.js", "js/earth-visual.js",
+         "js/source-tip.js", "js/worksheet-store.js", "js/earth-system.js", "js/earth-visual.js",
          "js/society-core.js", "js/actions-core.js", "firstperson/fp-model.js", "firstperson/fp-world.js", "firstperson/fp-tech-world.js",
-         "firstperson/fp-minimap.js", "firstperson/fp-field.js",
+         "firstperson/fp-minimap.js", "firstperson/fp-field.js", "firstperson/fp-sheet.js",
          "firstperson/fp-tools.js", "firstperson/fp-player.js", "firstperson/fp-main.js"]
 
 

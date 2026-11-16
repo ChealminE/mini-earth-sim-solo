@@ -54,37 +54,10 @@ const Worksheet = (() => {
   function setTitle(tabTitle, paper = true) { $('wsTitle').textContent = `${tabTitle} 학습지`; pageOn = paper; syncEvidence(); }
 
   // ── 학습지 공용 저장소 (3차 E1) ──
-  // localStorage['worksheet.v1'] = { answers: { 경로 id: { saveAs: 응답 } }, evidence: [...], fp: {...}, ui: {...},
-  //                                  inquiry: { on, pathId, idx, records } }
-  //   answers  탐구 응답(js/inquiry.js) · evidence 나의 증거(아래) · fp 1인칭 야장 현장 기록(3차 E4) · ui 화면 상태 · inquiry 탐구 진행 상태·기록 줄
-  // 처음 읽을 때 2차의 'inquiry.v1'이 있으면 한 번 옮겨 담는다. 옛 키는 되돌리기 대비로 지우지 않는다.
-  // 모든 읽기·쓰기 try/catch — file:// 단일 HTML 등 저장소가 막힌 환경이면 이번 화면 동안만 메모리에 둔다(마스터 §6-8).
-  // 그림(dataURL)은 넣지 않는다(용량 약 5 MB).
-  const store = (() => {
-    const KEY = 'worksheet.v1', OLD = 'inquiry.v1';
-    let d = null;
-    try { d = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { d = null; }
-    d = d && typeof d === 'object' ? d : {};
-    for (const [k, v] of Object.entries({ answers: {}, evidence: [], fp: {}, ui: {}, inquiry: {} })) if (!d[k] || typeof d[k] !== typeof v) d[k] = v;
-    if (!d.migratedInquiryV1) {
-      try {
-        const o = JSON.parse(localStorage.getItem(OLD) || 'null');
-        if (o) {
-          // 2차 응답은 saveAs → 응답 하나의 평평한 묶음이었다 → 경로별로 나눈다
-          for (const [saveAs, r] of Object.entries(o.answers || {})) (d.answers[r.path] = d.answers[r.path] || {})[saveAs] = r;
-          d.inquiry = { on: !!o.on, pathId: o.pathId || null, idx: o.idx || 0, records: o.records || [] };
-        }
-      } catch (e) { /* 옛 기록을 못 읽으면 새로 시작 */ }
-      d.migratedInquiryV1 = true;
-    }
-    // fp 는 1인칭(firstperson/fp-field.js)이 쓰는 몫 — 조감은 읽기만 하므로, 쓰기 전에 저장소의 최신 fp 를 가져와 덮어쓰지 않게 한다
-    const save = () => {
-      try { const cur = JSON.parse(localStorage.getItem(KEY) || 'null'); if (cur && cur.fp) d.fp = cur.fp; } catch (e) { /* 그대로 */ }
-      try { localStorage.setItem(KEY, JSON.stringify(d)); } catch (e) { /* 저장소를 못 쓰면 이번 화면에서만 */ }
-    };
-    save();
-    return { data: d, save };
-  })();
+  // 4차 D3: 저장소(localStorage['worksheet.v1'] 읽기·쓰기·inquiry.v1 옮기기·try/catch·메모리 대체)는 js/worksheet-store.js 로 옮겼다 —
+  // 1인칭 학습지(firstperson/fp-sheet.js)도 같은 저장소를 써야 하는데 이 파일은 조감 DOM·Chart.js 에 묶여 있어서다(마스터 §6-3).
+  // 묶음 구조와 동작은 3차 그대로: answers · evidence · fp(1인칭 몫, 조감은 읽기만) · ui · inquiry.
+  const store = WorksheetStore.open();
 
   // ── 나의 증거 (3차 C4) ──
   // 그래프 작업대·미래 예측 그래프의 [학습지로 보내기]가 '구성'을 여기에 쌓는다. 저장소 localStorage['worksheet.v1'] = { evidence: [...] }
@@ -251,7 +224,7 @@ const Worksheet = (() => {
   const PRESET_KO = { ssp245: '현재 정책', ssp126: '파리협약 2 °C', ssp119: '1.5 °C 탄소중립', custom: '직접 설계' };
   function renderFp() {
     let fp = {};
-    try { fp = (JSON.parse(localStorage.getItem('worksheet.v1') || 'null') || {}).fp || {}; } catch (e) { fp = store.data.fp || {}; }
+    try { fp = WorksheetStore.readFp(); } catch (e) { fp = store.data.fp || {}; }
     const rows = Object.values(fp.tasks || {});
     $('recFp').hidden = !rows.length && !singleFile;
     $('recFpCount').textContent = rows.length;

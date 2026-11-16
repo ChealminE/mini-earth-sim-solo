@@ -49,15 +49,19 @@ FPMinimap.init();
 // 4차 C4: 바다(해수 pCO₂·산호·유빙)는 그해 엔진 표층 상태라 연도·경로가 바뀔 때만 갱신한다(applyScenarioYear).
 // 예전 0.2초 틱(FPAir)·해수 평형 적분(stepSeaCO2)은 지웠다.
 
+// 4차 D3: 학습지를 열면 3D 캔버스가 왼쪽 60 %로 줄어든다(CSS body.sheet-open). 그래서 창 크기가 아니라 캔버스 칸 크기를 따른다.
+// setSize(…, false): 렌더러가 캔버스 style 폭·높이를 px 로 덮어쓰지 않게 — 덮어쓰면 CSS 의 60 %/100 % 가 듣지 않는다.
 function fit() {
-  const w = window.innerWidth, h = window.innerHeight;
-  renderer.setSize(w, h);
+  const w = glCanvas.clientWidth || window.innerWidth, h = glCanvas.clientHeight || window.innerHeight;
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setSize(w, h, false);
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
   FPTools.resize(w / h);
 }
-window.addEventListener('resize', fit);
+// 칸 크기가 바뀌는 길이 둘(창 크기 변경 · 학습지 열고 닫기)이라 캔버스 자체를 지켜본다
+if (typeof ResizeObserver !== 'undefined') new ResizeObserver(fit).observe(glCanvas);
+else window.addEventListener('resize', fit);
 fit();
 
 // ── 설정창 요소 ──
@@ -85,6 +89,7 @@ applyScenarioYear();
 
 // ── 야장 ────────────────────────────────────────────────────────────────────
 FPField.init();
+FPSheet.init();   // 4차 D3: 오른쪽 학습지 패널(열고 닫기·탭). 내용은 위 FPField 가 이미 그려 두었다
 // 4차 D1: 정적 마크업의 <span data-icon=…> 을 조감과 같은 SVG 아이콘으로 채운다(이모지는 기기마다 모양이 달라서 안 씀)
 Icons.fill();
 // 계측기가 값을 '확정'했을 때만 기록한다 (수렴 중인 값은 아직 못 믿는 값이라서)

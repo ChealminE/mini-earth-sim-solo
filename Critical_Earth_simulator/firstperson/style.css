@@ -16,7 +16,7 @@ html, body {
 canvas#gl { position: fixed; inset: 0; width: 100%; height: 100%; display: block; cursor: pointer; }
 
 /* ── 3D 위 종이 패널 (공통 바탕) ─────────────────────────────────────────── */
-#hud, #helpPanel, #hotbar, #fieldBadge, #toast, .start-box, .settings-box, .field-box {
+#hud, #helpPanel, #hotbar, #fieldBadge, #toast, .start-box, .resume-box {
   background: color-mix(in srgb, var(--paper-2) var(--fp-panel-mix), transparent);
   border: 1px solid var(--rule);
   color: var(--ink);
@@ -47,6 +47,12 @@ canvas#gl { position: fixed; inset: 0; width: 100%; height: 100%; display: block
 .start-box p b { color: var(--ink); }
 /* 시작 단추는 상자 전체가 눌리는 곳이라 실제 <button> 은 아니고 모양만 버튼(.btn.is-on) */
 .start-btn { margin-top: var(--sp-4); padding: 0 var(--sp-5); font-size: var(--fs-3); min-height: 44px; pointer-events: none; }
+/* 4차 D3: 학습지를 닫은 뒤의 짧은 안내 '3D를 클릭해 계속'(포인터 잠금은 클릭에서만 다시 걸린다, 마스터 §6-6) */
+.resume-box { display: none; padding: var(--sp-3) var(--sp-4); border-radius: 14px; }
+.resume-box .start-btn { margin-top: 0; }
+#startOverlay[data-mode="resume"] { background: none; }
+#startOverlay[data-mode="resume"] .start-box { display: none; }
+#startOverlay[data-mode="resume"] .resume-box { display: block; }
 
 /* ── 수중 틴트: 화면 전체를 덮되 마우스 이벤트는 통과 (3D 연출 — 종이 색 아님) ── */
 #waterOverlay {
@@ -127,30 +133,10 @@ canvas#gl { position: fixed; inset: 0; width: 100%; height: 100%; display: block
 /* 예전 8.5 px → --fs-1(13.2 px). '해수분석기' 다섯 글자가 한 줄에 들어가게 칸을 84 px 로 넓혔다 */
 #hotbar .slot .nm { font-size: var(--fs-1); font-weight: 600; white-space: nowrap; }
 
-/* ── E키 설정창 ─────────────────────────────────────────────────────────── */
-#settingsPanel {
-  position: fixed; inset: 0; z-index: 60;
-  display: flex; align-items: center; justify-content: center;
-  background: var(--fp-scrim);
-}
-#settingsPanel.hidden { display: none; }
-.settings-box {
-  padding: var(--sp-5) 28px; border-radius: 13px; width: min(92vw, 520px); box-sizing: border-box;
-}
-.settings-box h3 { margin: 0 0 var(--sp-4); font-size: var(--fs-4); font-weight: 700; }
-.settings-box .row { display: flex; align-items: center; gap: var(--sp-3); margin-bottom: var(--sp-3); font-size: var(--fs-2); }
-.settings-box .row .lbl { width: 76px; color: var(--ink-2); font-weight: 600; }
-.settings-box .row select { flex: 1; }
-.settings-box .row input[type="range"] { flex: 1; }
-.settings-box .row .val { width: 80px; text-align: right; color: var(--ink); font-size: var(--fs-2); font-variant-numeric: tabular-nums; }
-.settings-box .note { font-size: var(--fs-1); color: var(--ink-2); line-height: 1.6; margin: var(--sp-1) 0 var(--sp-4); }
-.settings-box .note b { color: var(--ink); }
-.settings-actions { display: flex; gap: var(--sp-2); }
-.settings-actions .btn { flex: 1; }
 /* 배출 경로 고르기 = 시나리오 영역(초록). theme.css 에는 select--time 만 있어 여기서 같은 규칙으로 더한다 */
 select.select--scen { --c: var(--ctl-scen); --c-bg: var(--ctl-scen-bg); }
 
-/* ── 야장(野帳) ─────────────────────────────────────────────────────────── */
+/* ── 기록 배지 (오른쪽 위 — 학습지가 닫혀 있어도 기록이 쌓이는 걸 보이게) ── */
 #fieldBadge {
   position: fixed; right: 14px; top: 14px; z-index: 6;
   padding: var(--sp-1) var(--sp-3); border-radius: var(--radius);
@@ -161,24 +147,6 @@ select.select--scen { --c: var(--ctl-scen); --c-bg: var(--ctl-scen-bg); }
 /* 기록된 순간 잠깐 '기록' 영역색으로 번쩍 */
 #fieldBadge.on { background: var(--ctl-rec-bg); color: var(--ctl-rec); border-color: var(--rec-flash); }
 
-#fieldPanel {
-  position: fixed; inset: 0; z-index: 20;
-  display: flex; align-items: center; justify-content: center;
-  background: var(--fp-scrim);
-}
-#fieldPanel.hidden { display: none; }
-.field-box {
-  width: min(94vw, 820px); max-height: 92vh; overflow-y: auto; box-sizing: border-box;
-  padding: var(--sp-4) 22px var(--sp-4);
-  border-radius: 12px;
-}
-.field-box h3 { margin: 0 0 var(--sp-3); font-size: var(--fs-4); font-weight: 700; }
-.field-box h3 b { color: var(--ctl-rec); }
-.field-box h4 { margin: var(--sp-4) 0 6px; font-size: var(--fs-2); font-weight: 700; color: var(--ink); }
-.field-box h4 .sub { font-weight: 400; font-size: var(--fs-1); color: var(--ink-3); margin-left: 6px; }
-.field-cols { display: flex; gap: var(--sp-4); flex-wrap: wrap; }
-.field-col { flex: 1 1 340px; min-width: 0; }
-.field-col h4 { margin-top: 0; }
 .field-table { width: 100%; border-collapse: collapse; font-size: var(--fs-1); }
 .field-table th {
   text-align: left; font-weight: 600; color: var(--ink-3);
@@ -195,25 +163,13 @@ select.select--scen { --c: var(--ctl-scen); --c-bg: var(--ctl-scen-bg); }
 .field-note { margin: 6px 0 0; font-size: var(--fs-1); color: var(--ink-2); line-height: 1.5; }
 .field-note b { color: var(--ink); }
 .field-actions { display: flex; gap: var(--sp-2); flex-wrap: wrap; margin-top: var(--sp-3); }
-#fieldTasksView.hidden, #fieldRecordsView.hidden { display: none; }
 
-/* ── 야장: 탭 (WAI-ARIA 탭 패턴은 D3 학습지 패널에서) ── */
-.field-tabs { display: flex; gap: 6px; margin: -4px 0 var(--sp-3); border-bottom: 1px solid var(--rule); }
-.field-tabs button {
-  background: none; border: none; border-bottom: 3px solid transparent; color: var(--ink-3);
-  font: inherit; font-size: var(--fs-2); font-weight: 700; padding: 6px 10px 8px; cursor: pointer; margin-bottom: -1px;
-}
-.field-tabs button:hover { color: var(--ink); }
-.field-tabs button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-.field-tabs button.on { color: var(--ink); border-bottom-color: var(--ctl-nav); }
-.field-tabs button span { font-weight: 500; color: var(--ink-3); margin-left: 4px; }
-
-/* ── 야장: 탐구 과제 ── */
+/* ── 학습지 [과제]: 탐구 과제 카드 ── */
 .task-intro {
   margin: 0 0 var(--sp-3); font-size: var(--fs-2); line-height: 1.6; color: var(--ink);
   background: var(--ctl-scen-bg); border: 1px solid var(--ctl-scen); border-radius: var(--radius); padding: 9px 12px;
 }
-.task-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 10px; }
+.task-grid { display: grid; grid-template-columns: 1fr; gap: 10px; }   /* 학습지 칸(40 %)은 좁아 한 줄에 카드 하나 */
 .task-card { background: var(--paper); border: 1px solid var(--rule); border-radius: 10px; padding: 11px 13px 12px; }
 .task-card.done { border-color: var(--ctl-scen); background: var(--ctl-scen-bg); }
 .task-card .t-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-2); }
@@ -278,3 +234,60 @@ select.select--scen { --c: var(--ctl-scen); --c-bg: var(--ctl-scen-bg); }
 .field-task textarea:focus { outline: 2px solid var(--focus); outline-offset: 0; }
 .field-task .ft-go { white-space: nowrap; }
 .field-task .ft-diff { margin: 4px 0 6px; }
+
+/* ============================================================================
+   학습지 패널 (4차 D3) — 오른쪽 40 %, 3D 는 왼쪽 60 % (firstperson/fp-sheet.js)
+   3D 위에 겹치지 않는 칸이라 불투명 종이(--paper). 패널 안 세로 스크롤만 허용, 문서 전체 스크롤은 없다.
+   ============================================================================ */
+.sheet {
+  position: fixed; top: 0; right: 0; bottom: 0; width: 40%; z-index: 30;
+  display: flex; flex-direction: column; box-sizing: border-box;
+  background: var(--paper); color: var(--ink); border-left: 1px solid var(--rule);
+  box-shadow: -4px 0 18px var(--fp-shadow);
+}
+.sheet[hidden] { display: none; }
+.sheet-head {
+  display: flex; align-items: center; gap: var(--sp-3); flex: none;
+  padding: var(--sp-3) var(--sp-4) var(--sp-2); border-bottom: 1px solid var(--rule); background: var(--paper-2);
+}
+.sheet-head h2 { margin: 0; font-family: var(--font-title); font-size: var(--fs-4); font-weight: 700; }
+.sheet-count { color: var(--ink-2); font-size: var(--fs-2); }
+.sheet-count b { color: var(--ctl-rec); }
+.sheet-head .btn { margin-left: auto; }
+.sheet-head .btn .key { margin: 0 0 0 2px; }
+
+/* 탭 (WAI-ARIA 탭 패턴 — 조감 학습지와 같은 모양 규칙: 고른 탭은 아래 굵은 선) */
+.sheet-tabs { display: flex; gap: 2px; flex: none; padding: 0 var(--sp-3); border-bottom: 1px solid var(--rule); background: var(--paper-2); }
+.sheet-tabs [role="tab"] {
+  background: none; border: none; border-bottom: 3px solid transparent; margin-bottom: -1px;
+  padding: var(--sp-2) var(--sp-3); font: inherit; font-size: var(--fs-2); font-weight: 700; color: var(--ink-3); cursor: pointer;
+}
+.sheet-tabs [role="tab"]:hover { color: var(--ink); }
+.sheet-tabs [role="tab"][aria-selected="true"] { color: var(--ink); border-bottom-color: var(--ctl-nav); }
+.sheet-tabs [role="tab"]:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.sheet-tabs .tab-sub { font-weight: 500; color: var(--ink-3); margin-left: 4px; font-variant-numeric: tabular-nums; }
+
+.sheet-panel { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: var(--sp-3) var(--sp-4) var(--sp-5); }
+.sheet-panel[hidden] { display: none; }
+.sheet-panel:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.sheet-empty { color: var(--ink-2); font-size: var(--fs-2); line-height: 1.6; }
+
+.sh-h { margin: var(--sp-4) 0 6px; font-size: var(--fs-2); font-weight: 700; color: var(--ink); }
+.sh-h .sub { font-weight: 400; font-size: var(--fs-1); color: var(--ink-3); margin-left: 6px; }
+.sheet-panel > .sh-h:first-child { margin-top: 0; }
+.sh-row { display: flex; align-items: center; gap: var(--sp-3); margin-bottom: var(--sp-2); font-size: var(--fs-2); }
+.sh-row .lbl { width: 76px; flex: none; color: var(--ink-2); font-weight: 600; }
+.sh-row select, .sh-row input[type="range"] { flex: 1; min-width: 0; }
+.sh-row .val { width: 72px; flex: none; text-align: right; color: var(--ink); font-variant-numeric: tabular-nums; }
+.sh-note { font-size: var(--fs-1); color: var(--ink-2); line-height: 1.6; margin: var(--sp-1) 0 var(--sp-2); }
+.sh-note b { color: var(--ink); }
+.sh-links { margin: var(--sp-3) 0 0; }
+#fieldChart { height: 200px; }
+
+/* 학습지가 열린 동안: 3D(캔버스·수중 틴트)는 왼쪽 60 %, 화면 가운데 기준 요소는 그 60 % 의 가운데로.
+   단축바·도움말·기록 배지는 숨긴다 — 패널이 열린 동안은 걷기·도구 조작이 막혀 있고(fp-player P.uiOpen),
+   1280 px 에서 단축바(가운데 384 px)가 미니맵(왼쪽 아래)과 겹친다. 기록 수는 패널 머리에 있다 */
+body.sheet-open canvas#gl, body.sheet-open #waterOverlay { width: 60%; right: auto; }
+body.sheet-open #crosshair { left: 30%; }
+body.sheet-open #toast { left: 30%; }
+body.sheet-open #hotbar, body.sheet-open #helpPanel, body.sheet-open #fieldBadge { display: none; }

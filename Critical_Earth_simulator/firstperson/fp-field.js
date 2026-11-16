@@ -12,13 +12,15 @@
 //
 // CSV는 조감 모드 '실시간 실험' 탭과 같은 모양으로 뽑는다. 학생이 아두이노 실측과
 // 1인칭 조사 결과를 같은 표에 놓고 비교할 수 있어야 하기 때문이다.
+//
+// 4차 D3: 야장 패널(#fieldPanel)은 오른쪽 학습지 패널(firstperson/fp-sheet.js)의 [과제]·[기록] 탭으로 옮겼다.
+// 이 파일은 내용(기록·통계·횡단 조사·과제 카드)만 그리고, 열고 닫기·탭은 FPSheet 가 맡는다.
+// 현장 과제 답은 학습지 공용 저장소(js/worksheet-store.js)의 fp.tasks 에 둔다.
 // ============================================================================
 
 const FPField = {
   rows: [],          // {n, kind, label, spot, zone, value, unit, x, z, co2, hour, iso}
   transect: null,    // 진행 중인 횡단 조사
-  panelOpen: false,
-  tab: 'tasks',      // 야장을 열면 먼저 보이는 탭 - 처음 온 학생에게는 '무엇을 할지'가 먼저다
   _doneTasks: new Set(),
 };
 
@@ -108,8 +110,9 @@ FPField.clear = function () {
 // 계측 노이즈 때문에 판정이 흔들리면 안 되고, 결론은 학생이 평균·표준편차로 내야 하기 때문이다.
 // 바다 기록의 '냉수대/개방 해역'·'산호 곁'은 값이 아니라 잰 위치로 나눈 것이다(record 참고).
 // 4차 B5: ② 밤바람(낮밤·해륙풍이 없어짐)과 ④ 상자 속 바다(직접 실험 탭이 없음)를 뺐다.
-// 제목 번호(①③, 아래 현장 과제 ⑤~⑦)는 그대로 둔다 — 현장 과제 제목은 조감 [기록] 탭이 저장된 값으로 보여 주므로
-// 번호를 바꾸면 이미 쓴 기록과 어긋난다. 번호 정리는 학습지를 다시 짜는 D에서 한다.
+// 4차 D3: 건너뛴 번호(①③ · ⑤⑥⑦)를 측정 과제 ①② · 현장 과제 ③④⑤ 로 다시 매겼다. 현장 과제 제목은 저장소(fp.tasks[id].title)에도
+// 들어 있고 조감 [기록] 탭이 그 저장값을 보여 주므로, 1인칭을 열 때 FieldStore.syncTitles 가 저장된 제목을 새 번호로 고친다
+// (id 는 coral·shell·glacier 그대로 — 답은 id 로 찾으므로 이미 쓴 관찰 글은 그대로 이어진다).
 // ③의 '생각해 볼 것'은 예전에 "CO₂를 600 ppm 이상으로 올려 보세요"였다. B4에서 교사용 직접 입력을 빼
 // 기본 경로로는 600 ppm에 못 닿아(현재 정책 2200년 ≈ 576 ppm) 연도를 옮기라는 말로 바꿨다.
 const INQUIRY = [
@@ -127,11 +130,11 @@ const INQUIRY = [
     ],
   },
   {
-    id: 3, title: '③ 백화인가, 석회화 저해인가',
+    id: 2, title: '② 백화인가, 석회화 저해인가',
     concept: '열 스트레스와 산성화의 구분 (오개념 교정)',
     goal: '따뜻한 곳 산호와 차가운 곳 산호가 서로 다른 이유로 아프다는 것을 구분한다.',
     how: '산호 바로 곁(3 m 이내) 바다를 4번 해수분석기로 — 개방 해역 산호 3회, 냉수대 산호 3회 재시오.',
-    think: '설정(E)에서 연도를 2100년 이후로 옮겨 CO₂를 높여 보세요. 하얗게 바랜 산호(백화)와 회갈색으로 쪼그라든 산호(석회화 저해)는 각각 어디에 있나? 원인은 수온인가 Ω인가?',
+    think: '학습지 [과제] 맨 아래 「연도 · 배출 경로」에서 연도를 2100년 이후로 옮겨 CO₂를 높여 보세요. 하얗게 바랜 산호(백화)와 회갈색으로 쪼그라든 산호(석회화 저해)는 각각 어디에 있나? 원인은 수온인가 Ω인가?',
     subs: [
       { label: '개방 해역 산호', goal: 3, test: r => r.kind === 'sea' && r.nearCoral && r.seaClass === 'open' },
       { label: '냉수대 산호', goal: 3, test: r => r.kind === 'sea' && r.nearCoral && r.seaClass !== 'open' },
@@ -146,38 +149,43 @@ const INQUIRY = [
 // 유빙 크기는 고정이다(4차 B3) — 그래서 ⑥은 냉수대 산호 골격으로, ⑦은 빙하 곁 온도로 본다.
 // 답은 localStorage['worksheet.v1'].fp.tasks 에 둔다(조감 학습지 공용 저장소와 같은 키 — js/worksheet.js).
 const FIELD_TASKS = [
-  { id: 'coral', link: 'C3', title: '⑤ 산호 — 해수온', concept: '해수온 상승 · 산호 백화', years: [2023, 2100],
+  { id: 'coral', link: 'C3', title: '③ 산호 — 해수온', concept: '해수온 상승 · 산호 백화', years: [2023, 2100],
     goal: '같은 산호를 지금과 2100년에 보고 색이 어떻게 달라지는지 비교한다.',
-    how: '설정(E)에서 배출 경로를 고르고, 아래 [이 연도로 가기]로 연도를 바꿔 개방 해역 산호를 가까이서 보시오. 4번 해수분석기로 수온도 재 보세요.',
+    how: '아래 「연도 · 배출 경로」에서 배출 경로를 고르고, [O년으로 가기]로 연도를 바꿔 개방 해역 산호를 가까이서 보시오. 4번 해수분석기로 수온도 재 보세요.',
     think: '산호가 하얗게 바래는(백화) 까닭은 무엇일까? 배출 경로를 바꾸면 2100년의 산호는 어떻게 다를까?' },
-  { id: 'shell', link: 'C3', title: '⑥ 껍데기·골격 — pH · Ω', concept: '해양 산성화 · 아라고나이트 포화도', years: [2023, 2100],
+  { id: 'shell', link: 'C3', title: '④ 껍데기·골격 — pH · Ω', concept: '해양 산성화 · 아라고나이트 포화도', years: [2023, 2100],
     goal: '유빙 옆 차가운 바다(냉수대) 산호의 탄산칼슘 골격을 지금과 2100년에 보고 비교한다. (조개 껍데기와 같은 재료)',
-    how: '유빙 바로 옆 냉수대로 가서 [이 연도로 가기]로 연도를 바꿔 보시오. 2번 pH미터와 4번 해수분석기(Ω)로 재 보세요. HUD 산호 줄에 냉수대 Ω가 있습니다.',
+    how: '유빙 바로 옆 냉수대로 가서 [O년으로 가기]로 연도를 바꿔 보시오. 2번 pH미터와 4번 해수분석기(Ω)로 재 보세요.',
     think: 'Ω가 1보다 작아지면 껍데기·골격에 무슨 일이 생길까? 차가운 바다가 먼저 위험한 까닭은?' },
-  { id: 'glacier', link: 'C2', title: '⑦ 빙하 — 기온', concept: '기온 상승 · 빙하', years: [2023, 2100],
+  { id: 'glacier', link: 'C2', title: '⑤ 빙하 — 기온', concept: '기온 상승 · 빙하', years: [2023, 2100],
     goal: '빙하(유빙) 곁의 온도를 지금과 2100년에 재고 비교한다.',
     // 4차 C4: 유빙 크기가 그해 기온을 따르게 됐다(glacierFrac, 조감 빙하와 같은 연출) — '크기는 안 바뀐다'는 괄호를 바꿨다.
-    how: '유빙 곁에서 1번 온도계로 빙하 표면과 해양 대기 온도를 재시오. [이 연도로 가기]로 연도를 바꿔 다시 재세요. (유빙 크기도 그해 기온을 따라 바뀝니다 — 크기는 연출, 온도는 측정값입니다)',
+    how: '유빙 곁에서 1번 온도계로 빙하 표면과 해양 대기 온도를 재시오. [O년으로 가기]로 연도를 바꿔 다시 재세요. (유빙 크기도 그해 기온을 따라 바뀝니다 — 크기는 연출, 온도는 측정값입니다)',
     think: '빙하 표면이 0 °C에 가까워지면 무슨 일이 생길까? 조감 모드에서 고른 경로의 2100년 기온과 견주어 보세요.' },
 ];
-// 공용 저장소의 fp 묶음 읽기·쓰기. file:// 등에서 저장소가 막히면 조용히 넘어간다(이번 화면 동안만 메모리)
+// 공용 저장소의 fp 묶음 읽기·쓰기 (4차 D3: js/worksheet-store.js — try/catch·메모리 대체는 그쪽이 맡는다)
+// fp.tasks[id] = { id, title, link, obs: {연도: 글}, diff, scenario, time } — 조감 [기록] 탭 renderFp 가 이 모양을 읽는다(마스터 §6-4)
 const FieldStore = {
-  key: 'worksheet.v1',
-  mem: null,
-  read() {
-    try { const d = JSON.parse(localStorage.getItem(this.key) || 'null') || {}; d.fp = d.fp || {}; d.fp.tasks = d.fp.tasks || {}; return d; }
-    catch (e) { return this.mem || (this.mem = { fp: { tasks: {} } }); }
-  },
+  read: () => WorksheetStore.readFp(),
   setTask(id, patch) {
-    const d = this.read(), t = FIELD_TASKS.find(x => x.id === id);
-    const cur = d.fp.tasks[id] || { id, title: t.title, link: t.link, obs: {} };
-    Object.assign(cur, patch, { title: t.title, link: t.link, scenario: typeof FPScenario !== 'undefined' ? FPScenario.preset : '', time: new Date().toISOString() });
-    d.fp.tasks[id] = cur;
-    try { localStorage.setItem(this.key, JSON.stringify(d)); } catch (e) { this.mem = d; }
+    const t = FIELD_TASKS.find(x => x.id === id);
+    WorksheetStore.updateFp(fp => {
+      const cur = fp.tasks[id] || { id, title: t.title, link: t.link, obs: {} };
+      Object.assign(cur, patch, { title: t.title, link: t.link, scenario: typeof FPScenario !== 'undefined' ? FPScenario.preset : '', time: new Date().toISOString() });
+      fp.tasks[id] = cur;
+    });
+  },
+  // 저장된 제목·연결 단계가 지금 과제 정의와 다르면(D3 번호 정리 전 기록) 고친다. 다를 때만 쓴다
+  syncTitles() {
+    const old = this.read().tasks;
+    if (!FIELD_TASKS.some(t => old[t.id] && (old[t.id].title !== t.title || old[t.id].link !== t.link))) return;
+    WorksheetStore.updateFp(fp => {
+      for (const t of FIELD_TASKS) if (fp.tasks[t.id]) Object.assign(fp.tasks[t.id], { title: t.title, link: t.link });
+    });
   },
 };
 FPField.fieldProgress = function () {
-  const saved = FieldStore.read().fp.tasks;
+  const saved = FieldStore.read().tasks;
   return FIELD_TASKS.map(t => {
     const a = saved[t.id] || { obs: {} };
     const subs = [...t.years.map(y => ({ label: `${y}년 관찰`, ok: !!(a.obs && String(a.obs[y] || '').trim()) })),
@@ -212,7 +220,7 @@ FPField.bindFieldTasks = function () {
   box.addEventListener('input', e => {
     const card = e.target.closest('[data-ft]');
     if (!card) return;
-    const id = card.dataset.ft, a = FieldStore.read().fp.tasks[id] || { obs: {} };
+    const id = card.dataset.ft, a = FieldStore.read().tasks[id] || { obs: {} };
     if (e.target.dataset.obs) FieldStore.setTask(id, { obs: { ...(a.obs || {}), [e.target.dataset.obs]: e.target.value } });
     else if (e.target.hasAttribute('data-diff')) FieldStore.setTask(id, { diff: e.target.value });
   });
@@ -240,7 +248,7 @@ FPField.checkTasks = function () {
   for (const p of this.taskProgress()) {
     if (p.done && !this._doneTasks.has(p.task.id)) {
       this._doneTasks.add(p.task.id);
-      this.toast(`✅ 탐구 과제 ${p.task.title} 완료 — 야장(F) '기록 · 통계'에서 평균을 비교해 보세요.`, 6500);
+      this.toast(`✅ 탐구 과제 ${p.task.title} 완료 — 학습지(F) [기록] 탭에서 평균을 비교해 보세요.`, 6500);
     }
   }
 };
@@ -255,9 +263,9 @@ FPField.renderTasks = function () {
   if (intro) {
     intro.innerHTML = !this.rows.length
       ? '<b>어디서부터?</b> ①부터 시작하세요. 키 <b>4</b>로 해수분석기를 들고, 바다 위 흰 얼음(유빙) <b>바로 옆 바다</b>를 겨눠 좌클릭합니다. ' +
-        '표시창 아래 막대가 다 차면 값이 야장에 자동으로 기록되고, 아래 카드의 진행도가 올라갑니다. 그다음 유빙에서 멀리 떨어진 바다에서도 똑같이 재세요.'
+        '표시창 아래 막대가 다 차면 값이 학습지 [기록]에 자동으로 기록되고, 아래 카드의 진행도가 올라갑니다. 그다음 유빙에서 멀리 떨어진 바다에서도 똑같이 재세요.'
       : (doneN === prog.length
-        ? '<b>측정 과제를 모두 마쳤습니다.</b> \'기록 · 통계\' 탭의 평균·표준편차로 각 과제의 질문에 답해 보세요.'
+        ? '<b>측정 과제를 모두 마쳤습니다.</b> [기록] 탭의 평균·표준편차로 각 과제의 질문에 답해 보세요.'
         : `<b>${doneN}/${prog.length} 완료.</b> 회색 칸이 남은 조건입니다. 같은 지점을 여러 번 재야 하는 이유는 계측기 오차 때문입니다 — 한 번 잰 값은 못 믿습니다.`);
   }
   box.innerHTML = prog.map(p => {
@@ -276,15 +284,6 @@ FPField.renderTasks = function () {
   }).join('');
   this.renderFieldTasks();   // 3차 E4 현장 과제 카드 (위)
 };
-FPField.setTab = function (tab) {
-  this.tab = tab;
-  document.querySelectorAll('.field-tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
-  const tv = document.getElementById('fieldTasksView'), rv = document.getElementById('fieldRecordsView');
-  if (tv) tv.classList.toggle('hidden', tab !== 'tasks');
-  if (rv) rv.classList.toggle('hidden', tab !== 'records');
-  if (tab === 'records') this.drawTransect();
-};
-
 // ── 통계: 같은 지점 종류를 반복 측정했을 때의 평균과 표준편차 ────────────────
 // 계측기에 재현성 오차를 넣어 둔 이유가 여기 있다. 한 번 잰 값은 못 믿고,
 // 여러 번 재서 평균을 내야 참값에 가까워진다는 걸 표로 보게 하려는 것이다.
@@ -422,7 +421,8 @@ FPField.download = function () {
 
 // ── 화면 ────────────────────────────────────────────────────────────────────
 FPField.init = function () {
-  this.el = document.getElementById('fieldPanel');
+  // 4차 D3: 내용이 그려질 자리는 학습지 패널(#sheet) — 열고 닫기·탭 전환은 FPSheet(fp-sheet.js)
+  this.el = document.getElementById('sheet');
   this.badge = document.getElementById('fieldBadge');
   document.getElementById('fieldCsvBtn').addEventListener('click', () => this.download());
   document.getElementById('fieldClearBtn').addEventListener('click', () => this.clear());
@@ -432,23 +432,10 @@ FPField.init = function () {
   document.getElementById('fieldCoastBtn').addEventListener('click', () => {
     if (this.transect) this.endTransect(); else this.startCoastTransect();
   });
-  document.getElementById('fieldCloseBtn').addEventListener('click', () => this.close());
-  document.querySelectorAll('.field-tabs button').forEach(b =>
-    b.addEventListener('click', () => this.setTab(b.dataset.tab)));
+  FieldStore.syncTitles();   // D3 번호 정리 전에 저장된 현장 과제 제목을 새 번호로
   this.bindFieldTasks();
-  this.setTab(this.tab);
   this.refresh();
 };
-FPField.open = function () {
-  this.panelOpen = true;
-  this.el.classList.remove('hidden');
-  this.refresh();
-};
-FPField.close = function () {
-  this.panelOpen = false;
-  this.el.classList.add('hidden');
-};
-FPField.toggle = function () { this.panelOpen ? this.close() : this.open(); };
 
 // 짧은 안내 문구. 이스터에그를 처음 발견했을 때 한 번만 띄운다.
 FPField.toast = function (msg, ms) {
@@ -473,7 +460,7 @@ FPField.refresh = function () {
   const cnt = document.getElementById('fieldCount');
   if (cnt) cnt.textContent = this.rows.length;
   const doneN = this._doneTasks.size;
-  if (this.badge) this.badge.textContent = `야장 ${this.rows.length} · 과제 ${doneN}/${INQUIRY.length}`;
+  if (this.badge) this.badge.textContent = `기록 ${this.rows.length} · 과제 ${doneN}/${INQUIRY.length}`;
   this.renderTasks();
   const tb = document.getElementById('fieldTBody');
   if (tb) {
@@ -522,6 +509,11 @@ FPField.refresh = function () {
 FPField.drawTransect = function () {
   const cv = document.getElementById('fieldChart');
   if (!cv) return;
+  // 4차 D3: 학습지 칸 폭(40 %)이 화면마다 달라 캔버스 해상도를 보이는 폭에 맞춘다 — 늘이거나 줄이면 13 px 글자가 작아진다.
+  // 숨은 탭(폭 0)일 때는 다시 그리지 않는다(탭을 열 때 FPSheet 가 다시 부른다)
+  const cssW = Math.round(cv.clientWidth);
+  if (!cssW) return;
+  if (cv.width !== cssW) cv.width = cssW;
   const c = cv.getContext('2d');
   const W = cv.width, H = cv.height;
   c.clearRect(0, 0, W, H);

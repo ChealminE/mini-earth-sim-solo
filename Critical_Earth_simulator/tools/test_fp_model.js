@@ -333,6 +333,50 @@ for (const p of PATHS) {
   check('D2 미니맵 캔버스에 글자를 그리지 않음 (범례는 HTML #minimapLegend)', !/fillText/.test(mm) && /id="minimapLegend"/.test(html));
 }
 
+// ── D3 학습지 공용 저장소(js/worksheet-store.js) + 1인칭 학습지 패널 ─────────────────
+{
+  // 가짜 localStorage 로 저장소 규칙을 본다(마스터 §6-4): 조감은 fp 를 덮어쓰지 않고, 1인칭은 fp 만 고치며, 막히면 메모리로
+  const mkLS = (init = {}, broken = false) => {
+    const S = { ...init };
+    return { getItem: k => (broken === 'all' ? (() => { throw new Error('막힘'); })() : (k in S ? S[k] : null)),
+      setItem: (k, v) => { if (broken) throw new Error('막힘'); S[k] = String(v); }, removeItem: k => { delete S[k]; }, _S: S };
+  };
+  const load = ls => { const c = vm.createContext({ localStorage: ls, JSON, console }); vm.runInContext(read('js/worksheet-store.js'), c); return vm.runInContext('WorksheetStore', c); };
+  const tasks0 = { coral: { id: 'coral', title: '⑤ 산호 — 해수온', link: 'C3', obs: { 2023: '하얗다' }, diff: '', scenario: 'ssp245', time: 't' } };
+  const ls = mkLS({ 'worksheet.v1': JSON.stringify({ answers: { A: { a1: { v: 1 } } }, evidence: [], fp: { tasks: tasks0 } }) });
+  const WS = load(ls);
+  const aerial = WS.open();
+  WS.updateFp(fp => { fp.tasks.coral.diff = '백화'; });       // 1인칭이 쓴 뒤
+  aerial.data.answers.B = { b1: { v: 2 } }; aerial.save();     // 조감이 들고 있던 옛 묶음으로 저장해도
+  const after = JSON.parse(ls._S['worksheet.v1']);
+  check('D3 저장소: 조감 save 가 1인칭이 나중에 쓴 fp 를 덮어쓰지 않음', after.fp.tasks.coral.diff === '백화' && after.answers.B && after.answers.A);
+  check('D3 저장소: fp.tasks 형태 그대로 (조감 renderFp 가 읽는 id·title·link·obs·diff·scenario)',
+    ['id', 'title', 'link', 'obs', 'diff', 'scenario'].every(k => k in after.fp.tasks.coral));
+  check('D3 저장소: fp 기본 묶음 records·actions·society·ui(grade high, D15)', Array.isArray(after.fp.records) && after.fp.ui.grade === 'high' && after.fp.ui.tab === 'tasks');
+  const lsB = mkLS({}, true), WB = load(lsB);
+  WB.updateFp(fp => { fp.ui.tab = 'records'; });
+  check('D3 저장소: 쓰기가 막히면 이번 화면 동안 메모리 (오류 없음)', WB.readFp().ui.tab === 'records');
+  const WA = load(mkLS({}, 'all'));
+  check('D3 저장소: 읽기까지 막혀도 오류 없이 빈 묶음', (() => { try { WA.open(); WA.updateFp(fp => { fp.ui.tab = 'actions'; }); return WA.readFp().ui.tab === 'actions'; } catch (e) { return false; } })());
+
+  // 과제 번호: 건너뜀 없이 ①② (측정) · ③④⑤ (현장), 저장된 옛 제목은 1인칭을 열 때 새 번호로(syncTitles)
+  const fc = read('firstperson/fp-field.js');
+  const titles = [...fc.matchAll(/title: '([①-⑳])/g)].map(m => m[1]).join('');
+  check('D3 과제 번호 건너뜀 없음 (①②③④⑤)', titles === '①②③④⑤', titles);
+  check('D3 저장된 현장 과제 제목을 새 번호로 고침 (FieldStore.syncTitles, init 에서)', /syncTitles\(\)\s*\{/.test(fc) && /FieldStore\.syncTitles\(\)/.test(fc));
+  check('D3 fp-field 는 저장소를 WorksheetStore 로만 (localStorage 직접 접근 없음)', !/localStorage/.test(fc.replace(/\/\/.*$/gm, '')));
+  // 패널: 오른쪽 40 % · 탭 4개 WAI-ARIA · 옛 야장·설정창 없음 · Esc 처리 · 캔버스 칸 크기
+  const html = read('firstperson/index.html'), css = read('firstperson/style.css'), sh = read('firstperson/fp-sheet.js');
+  const tabs = [...html.matchAll(/role="tab" id="(\w+)" aria-controls="(\w+)"/g)];
+  check('D3 학습지 탭 4개 [과제][기록][나의 행동][우리 사회] — role=tab·aria-controls·tabpanel', tabs.length === 4
+    && tabs.every(m => new RegExp(`role="tabpanel" id="${m[2]}" aria-labelledby="${m[1]}"`).test(html)));
+  check('D3 패널 폭 40 %·3D 60 %', /\.sheet \{[^}]*width: 40%/.test(css) && /body\.sheet-open canvas#gl[^{]*\{[^}]*width: 60%/.test(css));
+  check('D3 옛 야장·설정창(#fieldPanel·#settingsPanel) 없음', !/id="fieldPanel"|id="settingsPanel"/.test(html));
+  check('D3 화살표·Home·End 로 탭 이동, Esc 로 닫기(ⓘ 상자가 열려 있으면 양보)', /ArrowRight[\s\S]*Home[\s\S]*End/.test(sh) && /'Escape'[\s\S]*SourceTip\.current/.test(sh));
+  check('D3 닫으면 "3D를 클릭해 계속" (자동으로 잠그지 않음)', /3D를 클릭해 계속/.test(html) && !/requestPointerLock/.test(sh));
+  check('D3 렌더러는 캔버스 칸 크기를 따른다 (setSize(…, false) + ResizeObserver)', /setSize\(w, h, false\)/.test(read('firstperson/fp-main.js')) && /ResizeObserver/.test(read('firstperson/fp-main.js')));
+}
+
 // ── 표 (세이브포인트에 붙인다) ───────────────────────────────────────────────
 console.log('\n      경로     연도   CO₂ppm   T°C    sst°C   pH      Ω      화석GtC  누적최대GtC');
 for (const p of PATHS) {

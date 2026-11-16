@@ -272,64 +272,17 @@ FPPlayer.currentZone = function () {
 
 // ── 입력 바인딩 ─────────────────────────────────────────────────────────────
 function bindInput(P, canvas) {
-  const settingsPanel = document.getElementById('settingsPanel');
-  const overlayEl = document.getElementById('startOverlay');
-
-  // E키 설정창: 포인터락 상태에서는 마우스 커서가 없어서 슬라이더를 못 만진다.
-  // E를 누르면 포인터락을 풀어 커서를 돌려주고, 다시 E(또는 닫기)로 게임에 복귀한다.
-  function openSettings() {
-    P.settingsOpen = true;
-    settingsPanel.classList.remove('hidden');
-    overlayEl.classList.add('hidden');
-    P.keys = Object.create(null);              // 열린 동안 이동 입력 정리
-    if (document.pointerLockElement) document.exitPointerLock();
-  }
-  function closeSettings() {
-    P.settingsOpen = false;
-    settingsPanel.classList.add('hidden');
-    // 브라우저가 포인터락 재요청을 잠깐 막을 수 있으므로, 실패하면 시작 오버레이로 폴백
-    if (canvas.requestPointerLock) canvas.requestPointerLock();
-    setTimeout(() => {
-      if (document.pointerLockElement !== canvas && !P.settingsOpen) overlayEl.classList.remove('hidden');
-    }, 350);
-  }
-  P.openSettings = openSettings;
-  P.closeSettings = closeSettings;
-  P.toggleSettings = () => (P.settingsOpen ? closeSettings() : openSettings());
-  document.getElementById('settingsCloseBtn').addEventListener('click', closeSettings);
-
-  // 야장도 설정창과 똑같이 커서를 돌려줘야 표를 읽고 버튼을 누를 수 있다.
-  // 두 창이 동시에 열리면 서로 가리므로 하나를 열면 다른 하나는 닫는다.
-  function openField() {
-    if (P.settingsOpen) closeSettings();
-    P.settingsOpen = true;                     // 게임 조작 차단은 설정창과 같은 플래그를 쓴다
-    FPField.open();
-    overlayEl.classList.add('hidden');
-    P.keys = Object.create(null);
-    if (document.pointerLockElement) document.exitPointerLock();
-  }
-  function closeField() {
-    FPField.close();
-    P.settingsOpen = false;
-    if (canvas.requestPointerLock) canvas.requestPointerLock();
-    setTimeout(() => {
-      if (document.pointerLockElement !== canvas && !P.settingsOpen) overlayEl.classList.remove('hidden');
-    }, 350);
-  }
-  P.toggleField = () => (FPField.panelOpen ? closeField() : openField());
-  document.getElementById('fieldCloseBtn').addEventListener('click', closeField);
+  // 4차 D3: E키 설정창(#settingsPanel)과 F키 야장(#fieldPanel)을 오른쪽 학습지 패널 하나(firstperson/fp-sheet.js)로 합쳤다.
+  // 패널이 열려 있는 동안은 P.uiOpen 이 걷기·도구 조작을 막는다(FPSheet 가 세우고 내린다). E 는 D4·F2 에서 '상호작용' 키가 된다.
+  P.uiOpen = false;
 
   window.addEventListener('keydown', e => {
-    // 야장 현장 과제의 글 칸·설정창 목록 상자에 글을 쓰는 중이면 단축키를 쓰지 않는다(3차 E4).
-    // 한글 자판에서 E = ㄷ, F = ㄹ 이라 이 검사가 없으면 글을 쓰다 야장·설정창이 닫혔다
+    // 학습지 현장 과제의 글 칸·목록 상자에 글을 쓰는 중이면 단축키를 쓰지 않는다(3차 E4, 마스터 §6-5).
+    // 한글 자판에서 E = ㄷ, F = ㄹ 이라 이 검사가 없으면 글을 쓰다 학습지가 닫혔다
     if (e.target && e.target.closest && e.target.closest('input[type="text"], textarea, select')) return;
     // e.repeat 가드: 키를 누르고 있으면 keydown이 연속으로 들어와 창이 깜빡인다
-    if (e.code === 'KeyE') {
-      if (!e.repeat) { if (FPField.panelOpen) closeField(); else P.toggleSettings(); }
-      e.preventDefault(); return;
-    }
-    if (e.code === 'KeyF') { if (!e.repeat) P.toggleField(); e.preventDefault(); return; }
-    if (P.settingsOpen) return;                // 설정창·야장이 열려 있으면 게임 조작 차단
+    if (e.code === 'KeyF') { if (!e.repeat) FPSheet.toggle(); e.preventDefault(); return; }
+    if (P.uiOpen) return;                      // 학습지가 열려 있으면 게임 조작 차단 (Tab·화살표는 패널 안 초점 이동에 쓴다)
     P.keys[e.code] = true;
     if (e.code === 'KeyM' && !e.repeat) FPMinimap.toggle();
     if (e.code === 'KeyR') P.respawn();
@@ -364,7 +317,7 @@ function bindInput(P, canvas) {
   P.enterGame = enterGame;
   overlay.addEventListener('click', enterGame);
   canvas.addEventListener('click', () => {
-    if (document.pointerLockElement !== canvas && !P.settingsOpen) enterGame();
+    if (document.pointerLockElement !== canvas && !P.uiOpen) enterGame();
   });
 
   // 시점 튐 방지. Windows Chrome은 포인터락 중에 movementX/Y가 가끔 한 번씩 수백 픽셀로
@@ -395,12 +348,13 @@ function bindInput(P, canvas) {
   });
 
   // 포인터락이 풀리면(ESC) 다시 안내 오버레이를 띄운다.
-  // 단, E키로 설정창을 연 경우는 의도된 해제이므로 오버레이를 띄우지 않는다.
+  // 단, F키로 학습지를 연 경우는 의도된 해제이므로 오버레이를 띄우지 않는다.
   document.addEventListener('pointerlockchange', () => {
     const locked = document.pointerLockElement === canvas;
     if (locked) { lockedAt = performance.now(); lastMove = 0; }
-    if (locked) overlay.classList.add('hidden');
-    else if (!P.settingsOpen) overlay.classList.remove('hidden');
+    // 다시 잠기면 안내는 처음 모양('클릭해서 시작' 설명)으로 — 학습지를 닫은 뒤의 짧은 '3D를 클릭해 계속'은 그때 한 번만
+    if (locked) { overlay.classList.add('hidden'); delete overlay.dataset.mode; }
+    else if (!P.uiOpen) overlay.classList.remove('hidden');
     if (!locked) P.keys = Object.create(null);
   });
 }

@@ -22,8 +22,12 @@
     <h2>미니 지구 · 1인칭 탐험</h2>
     <p>화면을 클릭하면 전체화면으로 전환되고 마우스로 시점을 조작합니다.</p>
     <p class="sub"><b>ESC</b> 를 누르면 마우스가 풀립니다.</p>
-    <p class="sub"><b>F</b> 를 누르면 야장의 <b>탐구 과제</b>에서 무엇을 조사할지 볼 수 있습니다. (<b>H</b> 조작법)</p>
+    <p class="sub"><b>F</b> 를 누르면 오른쪽 <b>학습지</b>의 [과제]에서 무엇을 조사할지 볼 수 있습니다. (<b>H</b> 조작법)</p>
     <span class="btn btn--nav is-on start-btn">클릭해서 시작</span>
+  </div>
+  <!-- 4차 D3: 학습지를 닫은 뒤에는 짧은 안내만. 브라우저는 클릭에서만 포인터 잠금을 다시 걸어 준다(마스터 §6-6) -->
+  <div class="resume-box">
+    <span class="btn btn--nav is-on start-btn">3D를 클릭해 계속</span>
   </div>
 </div>
 
@@ -35,7 +39,7 @@
   <div class="hud-row"><span class="hud-year" id="hudYear">2023년 · 과거</span></div>
   <div class="hud-row"><span class="hud-lbl">도구</span><b id="hudTool">온도계</b></div>
   <!-- 늘 보이는 짧은 키 안내는 D4 에서 화면 아래 한 줄로 옮긴다 — 그때까지 여기 둔다 -->
-  <div class="hud-keys"><span class="key">H</span>조작법 <span class="key">E</span>설정 <span class="key">F</span>야장 <span class="key">M</span>지도 <span class="key">1~4</span>도구</div>
+  <div class="hud-keys"><span class="key">H</span>조작법 <span class="key">F</span>학습지 <span class="key">M</span>지도 <span class="key">1~4</span>도구</div>
 </div>
 
 <!-- 기본은 숨김: 펼쳐두면 우하단 도구의 표시창을 가려서 측정값을 못 읽는다 (H로 토글) -->
@@ -48,8 +52,7 @@
     <tr><td><span class="key">Shift</span></td><td>달리기</td></tr>
     <tr><td><span class="key">Space</span></td><td>점프 / 물에서 헤엄쳐 오르기</td></tr>
     <tr><td><span class="key">R</span></td><td>출발 지점으로 되돌아가기</td></tr>
-    <tr><td><span class="key">E</span></td><td>설정창 열기/닫기 (배출 경로·연도)</td></tr>
-    <tr><td><span class="key">F</span></td><td>야장 열기/닫기 (탐구 과제·측정 기록·통계·횡단 조사·CSV)</td></tr>
+    <tr><td><span class="key">F</span></td><td>학습지 열기/닫기 — 오른쪽 40 % (과제·기록·연도와 배출 경로). 열린 상태에서는 <span class="key">Esc</span> 로도 닫힘</td></tr>
     <tr><td><span class="key">M</span></td><td>미니맵 크기 (보통 → 크게 → 끄기)</td></tr>
     <tr><td><span class="key">1</span>~<span class="key">4</span></td><td>단축바에서 도구 선택</td></tr>
     <tr><td>좌클릭</td><td>든 도구로 바라보는 지점 측정</td></tr>
@@ -72,10 +75,9 @@
     <b>나무 근처</b>는 광합성 때문에 낮게 나옵니다(이 값은 연출 — 정량 문헌을 찾는 중)<button class="src-i" type="button" data-src="fp_tree_co2" aria-label="출처 보기: 1인칭 나무 밑 CO₂ (연출)" aria-expanded="false">ⓘ</button>. (수중에서는 측정 불가)</p>
   <p class="note"><b>계측기에는 오차가 있습니다.</b> 좌클릭하면 값이 바로 뜨지 않고 실제 센서처럼
     수렴합니다(막대가 다 차야 확정). 같은 자리를 다시 재도 값이 조금씩 다르니, 여러 번 재서
-    평균을 내세요. 평균과 표준편차는 <b>야장(F)</b>이 자동으로 계산합니다.</p>
-  <p class="note"><b>야장 (F)</b> — 측정할 때마다 자동 기록됩니다. 지점별 평균·표준편차,
-    횡단 조사 그래프, CSV 내보내기가 있습니다. CSV는 조감 모드 '실시간 실험' 탭과 같은
-    형식이라 아두이노 실측값과 같은 표에서 비교할 수 있습니다.</p>
+    평균을 내세요. 평균과 표준편차는 <b>학습지(F)</b> [기록] 탭이 자동으로 계산합니다.</p>
+  <p class="note"><b>학습지 (F)</b> — 측정할 때마다 [기록] 탭에 자동 기록됩니다. 지점별 평균·표준편차,
+    횡단 조사 그래프, CSV 내보내기가 있습니다. 연도·배출 경로는 [과제] 탭 맨 아래에서 바꿉니다.</p>
   <p class="note">눈높이 기준 1유닛 = 약 50m로 환산했습니다. 나무는 약 10m, 가장 높은 건물은 약 24m(8층)로 보입니다.</p>
   <p class="note">서쪽(왼쪽) 해안 절벽에서 바다로 뛰어내리면 헤엄칠 수 있습니다.</p>
 </div>
@@ -91,70 +93,38 @@
 </div>
 
 <!-- 기록된 측정 개수. 패널을 안 열어둬도 뭔가 남고 있다는 걸 알게 한다 -->
-<div id="fieldBadge">야장 0 · 과제 0/2</div>
+<div id="fieldBadge">기록 0 · 과제 0/2</div>
 
 <!-- 짧은 안내. 몇 초 뜨고 사라진다. -->
 <div id="toast" role="status" aria-live="polite"></div>
 
-<!-- 야장(野帳): 측정 기록 · 반복측정 통계 · 횡단 조사 그래프 · CSV 내보내기 (F키) -->
-<div id="fieldPanel" class="hidden">
-  <div class="field-box">
-    <h3>야외조사 야장 <span class="hint-key">F</span> 로 닫기 · 기록 <b id="fieldCount">0</b>건</h3>
-
-    <!-- 탭: 탐구 과제(무엇을 조사할지) / 기록·통계(잰 값) -->
-    <div class="field-tabs">
-      <button type="button" data-tab="tasks" class="on">탐구 과제 <span id="fieldTaskTally">0/2</span></button>
-      <button type="button" data-tab="records">기록 · 통계</button>
-    </div>
-
-    <div id="fieldTasksView">
-      <p class="task-intro" id="fieldTaskIntro"></p>
-      <div class="task-grid" id="fieldTasks"></div>
-      <p class="field-note">완료 여부는 <b>야장에 쌓인 기록 수</b>로만 판정합니다 — 값이 맞고 틀리고가 아니라,
-        조건을 채울 만큼 재었는지를 봅니다. 결론은 '기록 · 통계' 탭의 평균과 표준편차로 내리세요.</p>
-    </div>
-
-    <div id="fieldRecordsView" class="hidden">
-    <div class="field-cols">
-      <div class="field-col">
-        <h4>최근 측정</h4>
-        <table class="field-table">
-          <thead><tr><th>#</th><th>항목</th><th>지점</th><th>값</th><th>X, Z (m)</th></tr></thead>
-          <tbody id="fieldTBody"></tbody>
-        </table>
-      </div>
-      <div class="field-col">
-        <h4>지점별 반복측정 <span class="sub">계측기에는 재현성 오차가 있어 한 번 잰 값은 못 믿습니다</span></h4>
-        <table class="field-table">
-          <thead><tr><th>항목</th><th>지점</th><th>n</th><th>평균</th><th>표준편차</th></tr></thead>
-          <tbody id="fieldSummary"></tbody>
-        </table>
-      </div>
-    </div>
-
-    <h4>횡단 조사 <span class="sub">해안 → 녹지 → 도심을 일직선으로 걸으며 재면 도시 열섬이 그래프 한 장에 나옵니다</span></h4>
-    <p class="field-note" id="fieldTransectState"></p>
-    <canvas id="fieldChart" width="620" height="180"></canvas>
-    </div>
-
-    <div class="field-actions">
-      <button id="fieldTransectBtn" class="btn btn--rec" type="button">횡단 조사 시작</button>
-      <button id="fieldCoastBtn" class="btn btn--rec" type="button">해안선 평행 조사</button>
-      <button id="fieldCsvBtn" class="btn btn--rec" type="button"><span data-icon="download"></span>CSV 내보내기</button>
-      <button id="fieldClearBtn" class="btn btn--rec" type="button"><span data-icon="trash"></span>기록 지우기</button>
-      <button id="fieldCloseBtn" class="btn btn--nav" type="button"><span data-icon="back"></span>돌아가기</button>
-    </div>
-    <p class="field-note">CSV는 조감 모드 '실시간 실험' 탭과 같은 형식입니다. 아두이노 실측값과 같은 표에 놓고 비교해 보세요.</p>
+<!-- 4차 D3: 1인칭 학습지 패널 — 화면 오른쪽 40 %, 3D 는 왼쪽 60 %(firstperson/fp-sheet.js). F 로 열고 F·Esc 로 닫는다.
+     예전 야장(#fieldPanel, 가운데 덮개)과 설정창(#settingsPanel, E)을 이 패널로 합쳤다. 탭은 WAI-ARIA 탭 패턴(←/→/Home/End) -->
+<aside id="sheet" class="sheet" hidden aria-labelledby="sheetTitle">
+  <header class="sheet-head">
+    <h2 id="sheetTitle">탐험 학습지</h2>
+    <span class="sheet-count">기록 <b id="fieldCount">0</b>건</span>
+    <button id="sheetClose" class="btn btn--nav btn--sm" type="button" aria-label="학습지 닫기 (F 또는 Esc)"><span data-icon="close"></span>닫기 <span class="key">F</span></button>
+  </header>
+  <div class="sheet-tabs" role="tablist" aria-label="학습지 탭">
+    <button type="button" role="tab" id="shTabTasks" aria-controls="shPanelTasks" aria-selected="true" tabindex="0">과제 <span class="tab-sub" id="fieldTaskTally">0/2</span></button>
+    <button type="button" role="tab" id="shTabRecords" aria-controls="shPanelRecords" aria-selected="false" tabindex="-1">기록</button>
+    <button type="button" role="tab" id="shTabActions" aria-controls="shPanelActions" aria-selected="false" tabindex="-1">나의 행동</button>
+    <button type="button" role="tab" id="shTabSociety" aria-controls="shPanelSociety" aria-selected="false" tabindex="-1">우리 사회</button>
   </div>
-</div>
 
-<!-- E키로 여는 설정창. 열려 있는 동안은 마우스 커서가 돌아온다. -->
-<div id="settingsPanel" class="hidden">
-  <div class="settings-box">
-    <h3>설정 <span class="hint-key">E</span> 로 닫기</h3>
+  <!-- [과제]: 측정 과제(기록 수로 판정) + 현장 과제(두 연도 관찰 글) + 연도·배출 경로 -->
+  <section class="sheet-panel" role="tabpanel" id="shPanelTasks" aria-labelledby="shTabTasks" tabindex="0">
+    <p class="task-intro" id="fieldTaskIntro"></p>
+    <div class="task-grid" id="fieldTasks"></div>
+    <p class="field-note">측정 과제의 완료 여부는 <b>학습지에 쌓인 기록 수</b>로만 판정합니다 — 값이 맞고 틀리고가 아니라,
+      조건을 채울 만큼 재었는지를 봅니다. 결론은 [기록] 탭의 평균과 표준편차로 내리세요.</p>
+
+    <!-- 예전 설정창(E)에 있던 것: 연도·배출 경로. E 의 타임라인(E1)이 들어오면 그쪽으로 옮긴다 -->
+    <h3 class="sh-h" id="shTimeHead">연도 · 배출 경로</h3>
     <!-- 3차 E4: CO₂는 직접 정하지 않는다(배출의 결과 — 3차 마스터 결정 9). 배출 경로와 연도를 고르면 조감 미래 예측과 같은 모형이 계산한다 -->
-    <div class="row">
-      <span class="lbl">배출 경로</span>
+    <div class="sh-row">
+      <label class="lbl" for="fpScenario">배출 경로</label>
       <select id="fpScenario" class="select select--scen">
         <option value="ssp245">현재 정책 (SSP2-4.5)</option>
         <option value="ssp126">파리협약 2 °C (SSP1-2.6)</option>
@@ -162,24 +132,55 @@
         <option value="custom" hidden>직접 설계 (조감에서 가져옴)</option>
       </select>
     </div>
-    <label class="row">
-      <span class="lbl">연도</span>
+    <div class="sh-row">
+      <label class="lbl" for="fpYear">연도</label>
       <input type="range" class="range range--time" id="fpYear" min="1750" max="2200" step="1" value="2023">
       <span class="val"><span id="fpYearOut">2023</span>년</span>
-    </label>
-    <p class="note">전 지구 평균 CO₂ <b><span id="fpGlobalCo2">418</span> ppm</b> — 조감 모드 미래 예측과 <b>같은 모형</b>으로 계산한 값입니다(2023년까지는 실제 배출, 그 뒤는 고른 경로).<button class="src-i" type="button" data-src="model_co2" aria-label="출처 보기: 대기 CO₂ (모형 계산)" aria-expanded="false">ⓘ</button>
+    </div>
+    <p class="sh-note">전 지구 평균 CO₂ <b><span id="fpGlobalCo2">418</span> ppm</b> — 조감 모드 미래 예측과 <b>같은 모형</b>으로 계산한 값입니다(2023년까지는 실제 배출, 그 뒤는 고른 경로).<button class="src-i" type="button" data-src="model_co2" aria-label="출처 보기: 대기 CO₂ (모형 계산)" aria-expanded="false">ⓘ</button>
       <!-- 4차 C5: CO₂는 무색 — 하늘·안개·파도는 연도와 무관(조감 EarthVisual 규칙). 도시는 배출 역사를 따른다(연출) -->
       CO₂는 눈에 보이지 않으므로 하늘·바다의 모습은 연도와 상관없이 같습니다.
       도시의 건물·자동차·굴뚝 연기는 그때까지의 화석연료 배출을 따라 달라집니다(연출 — 조감 모드와 같은 규칙).<button class="src-i" type="button" data-src="fp_city" aria-label="출처 보기: 1인칭 도시 건물·자동차·굴뚝 (연출)" aria-expanded="false">ⓘ</button></p>
     <!-- 4차 C4: '즉시 평형' 버튼·해수 평형 상태를 뺐다 — 바다는 그해 엔진 표층 상태다 -->
-    <p class="note">바다(수온·pH·Ω)도 조감 모드와 <b>같은 모형의 그해 값</b>입니다.<button class="src-i" type="button" data-src="model_sst" aria-label="출처 보기: 표층 해수온 (모형 계산)" aria-expanded="false">ⓘ</button><button class="src-i" type="button" data-src="model_ph" aria-label="출처 보기: 해수 pH (모형 계산)" aria-expanded="false">ⓘ</button> 바다는 대기 CO₂를 몇 해에 걸쳐
+    <p class="sh-note">바다(수온·pH·Ω)도 조감 모드와 <b>같은 모형의 그해 값</b>입니다.<button class="src-i" type="button" data-src="model_sst" aria-label="출처 보기: 표층 해수온 (모형 계산)" aria-expanded="false">ⓘ</button><button class="src-i" type="button" data-src="model_ph" aria-label="출처 보기: 해수 pH (모형 계산)" aria-expanded="false">ⓘ</button> 바다는 대기 CO₂를 몇 해에 걸쳐
       늦게 따라가므로, 해수 pCO₂는 대기와 조금 다릅니다(배출이 늘 때는 대기보다 낮고, 크게 줄면 거꾸로 높아집니다).</p>
-    <div class="settings-actions">
-      <button id="settingsCloseBtn" class="btn btn--nav" type="button"><span data-icon="back"></span>돌아가기</button>
-      <a class="btn btn--nav" href="/"><span data-icon="globe"></span>전체 조감 모드로</a>
+    <p class="sh-links"><a class="btn btn--nav btn--sm" href="/"><span data-icon="globe"></span>전체 조감 모드로</a></p>
+  </section>
+
+  <!-- [기록]: 최근 측정 · 지점별 평균/표준편차 · 횡단 조사 그래프. 내보내기(.xlsx·.csv)는 G 가 채운다 -->
+  <section class="sheet-panel" role="tabpanel" id="shPanelRecords" aria-labelledby="shTabRecords" tabindex="0" hidden>
+    <h3 class="sh-h">지점별 반복측정 <span class="sub">계측기에는 재현성 오차가 있어 한 번 잰 값은 못 믿습니다</span></h3>
+    <table class="field-table">
+      <thead><tr><th>항목</th><th>지점</th><th>n</th><th>평균</th><th>표준편차</th></tr></thead>
+      <tbody id="fieldSummary"></tbody>
+    </table>
+    <h3 class="sh-h">최근 측정</h3>
+    <table class="field-table">
+      <thead><tr><th>#</th><th>항목</th><th>지점</th><th>값</th><th>X, Z (m)</th></tr></thead>
+      <tbody id="fieldTBody"></tbody>
+    </table>
+    <h3 class="sh-h">횡단 조사 <span class="sub">해안 → 녹지 → 도심을 일직선으로 걸으며 재면 도시 열섬이 그래프 한 장에 나옵니다</span></h3>
+    <p class="field-note" id="fieldTransectState"></p>
+    <canvas id="fieldChart" width="480" height="200"></canvas>
+    <div class="field-actions">
+      <button id="fieldTransectBtn" class="btn btn--rec" type="button">횡단 조사 시작</button>
+      <button id="fieldCoastBtn" class="btn btn--rec" type="button">해안선 평행 조사</button>
+      <button id="fieldCsvBtn" class="btn btn--rec" type="button"><span data-icon="download"></span>CSV 내보내기</button>
+      <button id="fieldClearBtn" class="btn btn--rec" type="button"><span data-icon="trash"></span>기록 지우기</button>
     </div>
-  </div>
-</div>
+    <p class="field-note">CSV는 엑셀에서 바로 열립니다(한글 깨짐 방지 BOM 포함). 학습지와 맞춘 .xlsx 내보내기는 준비 중입니다.</p>
+  </section>
+
+  <!-- [나의 행동]: F(행동과 미래)·M(미니게임)이 채운다 -->
+  <section class="sheet-panel" role="tabpanel" id="shPanelActions" aria-labelledby="shTabActions" tabindex="0" hidden>
+    <p class="sheet-empty">도시의 카페·분리배출장·멀티탭·정류장·여행사에서 탄소중립 행동을 해 보면 여기에 쌓이고, 그 행동이 만든 미래를 볼 수 있습니다. (준비 중)</p>
+  </section>
+
+  <!-- [우리 사회]: T5(사회의 선택)가 채운다 -->
+  <section class="sheet-panel" role="tabpanel" id="shPanelSociety" aria-labelledby="shTabSociety" tabindex="0" hidden>
+    <p class="sheet-empty">시청 '기후 정책 회의실'에서 정책·기후테크 카드로 2050년 사회를 설계하면 여기에 담깁니다. (준비 중)</p>
+  </section>
+</aside>
 
 <!-- three.js는 조감과 같은 vendor/three.min.js(r160)를 쓴다. CDN이면 학교 인터넷이 막혔을 때 1인칭만 뜨지 않고,
      IR 보기 코드를 두 화면이 나눠 쓰려면 같은 파일이어야 한다. 절대 경로: /firstperson/ 아래에서도 server.py /vendor 마운트로 간다
@@ -193,6 +194,8 @@
 <script src="/js/theme.js"></script>
 <script src="/js/icons.js"></script>
 <script src="/js/source-tip.js"></script>
+<!-- 4차 D3: 학습지 공용 저장소(DOM 없음) — 조감 학습지와 같은 localStorage['worksheet.v1'] 를 쓴다 -->
+<script src="/js/worksheet-store.js"></script>
 <script src="/js/earth-system.js"></script>
 <!-- 4차 C1: 1인칭 값 계산은 fp-model.js 한 곳. 도시 규모(cumFossilMax)·산호·유빙을 조감과 같은 식으로 쓰려고 earth-visual 을 같이 부른다 -->
 <script src="/js/earth-visual.js"></script>
@@ -206,6 +209,8 @@
 <script src="fp-tech-world.js"></script>
 <script src="fp-minimap.js"></script>
 <script src="fp-field.js"></script>
+<!-- 4차 D3: 학습지 패널 껍데기(열고 닫기·탭). FPPlayer 는 함수 안에서만 읽으므로 fp-player 보다 앞이어도 된다 -->
+<script src="fp-sheet.js"></script>
 <script src="fp-tools.js"></script>
 <script src="fp-player.js"></script>
 <script src="fp-main.js"></script>
