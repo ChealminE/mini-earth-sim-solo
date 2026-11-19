@@ -387,7 +387,9 @@ function bestPair(rows, keyA, keyB, goal) {
   for (const [ka, a] of A) {
     const pairs = [...B.values()].filter(x => x.join === ka);
     if (!pairs.length && cap(a.length) > best.score) best = { a, b: [], score: cap(a.length) };
-    for (const p of pairs) if (cap(a.length) + cap(p.v.length) > best.score) best = { a, b: p.v, score: cap(a.length) + cap(p.v.length) };
+    // 점수가 같으면 나중에 잰 묶음(Map 에 늦게 들어온 쪽)을 고른다 — 대한민국으로 5번 잰 뒤 세계로 5번 다시 재면 세계 쪽을 보인다
+    // (예전 '>' 는 먼저 잰 묶음에 머물러 '세계 규모로 다시 재기'가 화면에 안 바뀌었다. 2026-11-19 사람 결정 '최근 묶음 우선')
+    for (const p of pairs) if (cap(a.length) + cap(p.v.length) >= best.score) best = { a, b: p.v, score: cap(a.length) + cap(p.v.length) };
   }
   for (const p of B.values()) if (!A.has(p.join) && cap(p.v.length) > best.score) best = { a: [], b: p.v, score: cap(p.v.length) };
   return best;
@@ -734,10 +736,15 @@ FPField.flash = function () {
 // 4차 F3: 사회의 선택 다섯(+ 조감에서 가져온 직접 설계). 나의 미래 path = 'mine:선택:규모:행동' — 선택 부분으로 이름을 붙인다
 const PATH_KO = { ssp245: '현재 정책', ssp126: '파리협약 2 °C', ssp119: '1.5 °C 탄소중립', ndc: '국가 목표(NDC)',
   custom: '우리가 설계한 사회', aerial: '직접 설계(조감)', mine: '' };
+// 참여 규모 짧은 이름(ActionsCore.SCALES 의 id). 40 % 패널 표 칸이라 '세계 — 비슷한 생활을 하는 사람' 대신 '세계'
+const SCALE_KO = { me: '나', class: '우리 반', school: '우리 학교', korea: '대한민국', world: '세계' };
 function yearCell(r) {
   if (r.year == null) return '';
   const p = r.branch === 'mine' && r.path ? String(r.path).split(':')[1] : String(r.path || '').split(':')[0];
   let extra = (r.branch === 'base' || r.branch === 'mine') && p && p !== 'ssp245' && PATH_KO[p] ? ` (${PATH_KO[p]})` : '';
+  // 나의 미래는 참여 규모마다 다른 세계다 — 규모를 안 붙이면 '대한민국'과 '세계'로 잰 두 묶음이 같은 이름으로 나란히 보였다
+  // (2026-11-19 사람 확인 F 묶음, 사람 결정 '규모를 붙임'). 화면 표에만 쓰고 저장·내보내기 구조는 그대로다
+  if (r.branch === 'mine' && r.path) { const sk = SCALE_KO[String(r.path).split(':')[2]]; if (sk) extra += ` (${sk})`; }
   // 4차 F4: '우리 도시' 참여 중에 잰 기록(path 끝 ':city42')
   const cm = /:city(\d+)$/.exec(String(r.path || ''));
   if (cm) extra += ` (우리 도시 −${cm[1]} %)`;
