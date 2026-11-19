@@ -327,7 +327,13 @@ function bindInput(P, canvas) {
       // 실패해도(권한/브라우저 정책) 포인터락만으로 플레이는 가능해야 하므로 무시하고 진행
       root.requestFullscreen().catch(() => {});
     }
-    if (canvas.requestPointerLock) canvas.requestPointerLock();
+    // 요즘 Chrome 의 requestPointerLock 은 Promise 를 돌려주고, 거절되면(Esc 로 푼 직후 1초 안에 다시 누름,
+    // 잠금을 막는 내장 브라우저 등) 받는 곳이 없어 콘솔에 빨간 'Uncaught (in promise)'가 남았다.
+    // 거절돼도 '클릭해서 시작' 안내가 그대로 있어 다시 누르면 되므로 조용히 받는다(2026-11-19 사람 확인 E 묶음).
+    if (canvas.requestPointerLock) {
+      const p = canvas.requestPointerLock();
+      if (p && typeof p.catch === 'function') p.catch(() => {});
+    }
   }
   P.enterGame = enterGame;
   overlay.addEventListener('click', enterGame);
