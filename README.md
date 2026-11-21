@@ -1,20 +1,11 @@
-# 미니지구 시뮬레이션 (mini-earth-sim)
+# 미니 지구 시뮬레이션 (단독판)
 
-아크릴 상자(해양·습지·도시) 모형에 아두이노/ESP32 센서를 연동하고, 실측·시나리오 데이터를 3D 미니 지구와 실시간 그래프로 시각화하는 프로젝트입니다.
+CO₂ 배출이 대기·기온·바다(pH·포화도 Ω)를 어떻게 바꾸는지 3D 미니 지구와 그래프로 탐구하는 교육용 시뮬레이션입니다.
+관측 자료로 보는 **현재 실태**, 배출 경로를 골라 2200년까지 재생하는 **미래 예측**, 그 지구 안을 걸어 다니며 재 보는 **1인칭 탐험** 세 모드가 있습니다.
 
-## 구성
+- 앱: [`Critical_Earth_simulator/`](Critical_Earth_simulator/) — 학생용 실행 가이드와 개발 안내는 그 폴더의 README
+- 받기: [Releases](https://github.com/ChealminE/mini-earth-sim-solo/releases/latest)의 `MiniEarth.html` 한 파일 (설치·인터넷 불필요, 더블클릭)
+- `sync.bat` — 변경사항을 GitHub에 올리는 동기화 스크립트 (더블클릭 실행)
 
-- **`Critical_Earth_simulator.html`** — Three.js 기반 3D 시뮬레이터. SSP 기후 시나리오 예측 그래프, 복사강제력 물리식(ΔF=5.35·ln(C/280)) 반영, 파도·연기·응결·빙하 파티클 애니메이션 포함.
-- **`app/`** — 위 시뮬레이터를 Next.js 대시보드 형태로 재구성한 웹앱 (`app/page.tsx`).
-- **`extract_nc.py`** — SSP 시나리오별 기후 모델 `.nc` 파일에서 대한민국 격자를 추출해 연도별 CSV(기온·강수량·CO₂ 농도)로 변환하는 스크립트.
-- **`mini_earth_plan.md`** — 아크릴 상자 + 아두이노 센서 + ESP32 실측값을 시뮬레이터에 연동하기 위한 구현 계획서 (데이터 흐름, 입력 소스 추상화 설계 등).
-- **`sync.bat`** — 변경사항을 GitHub에 올리는 동기화 스크립트 (더블클릭 실행).
-
-## 개발 환경 실행 (Next.js 대시보드)
-
-```bash
-npm install
-npm run dev
-```
-
-[http://localhost:3000](http://localhost:3000) 에서 확인.
+> 아두이노·ESP32 센서를 쓰는 **직접 실험**이 들어 있던 2인 협동판(논문 「디지털 기반 탐구를 활용한 기후변화 교육 프로그램 개발」 대상판)은
+> 협동판 저장소의 태그 [`v2.0-collab-final`](https://github.com/ChealminE/mini-earth-sim/releases/tag/v2.0-collab-final)에 그대로 있습니다.

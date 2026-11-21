@@ -1,7 +1,7 @@
 // ============================================================================
 // 1인칭 모드 - 단축바(핫바) / 손에 든 도구 / 실측 도구
 // ----------------------------------------------------------------------------
-// 마인크래프트식 9칸 단축바(숫자키 1~9)로 도구를 고르면 화면 우하단에 오른손이 나타나고
+// 단축바 4칸(숫자키 1~4)으로 도구를 고르면 화면 우하단에 오른손이 나타나고
 // 그 손이 도구를 들고 있다. 좌클릭하면 화면 중앙(크로스헤어)이 가리키는 지점을 측정해서
 // 도구의 표시창(캔버스 텍스처)에 수치를 띄운다.
 //
@@ -9,8 +9,11 @@
 // 씬 그래프를 따라 렌더링하므로 카메라 자체를 씬에 넣어줘야 카메라의 자식이 그려진다.
 // ============================================================================
 
+// 4차 B4: 9칸 → 4칸(온도계·pH미터·CO₂센서·해수분석기). 빈 칸 5개는 쓰는 도구가 없었다.
+// F(행동)에서 칸이 더 필요하면 이 수와 아래 HOTBAR_LABELS·HOTBAR_ICONS 를 같이 늘린다.
+const HOTBAR_N = 4;
 const FPTools = {
-  slots: new Array(9).fill(null),
+  slots: new Array(HOTBAR_N).fill(null),
   selected: -1,     // -1 = 맨손
   handGroup: null,
   camera: null,
@@ -18,123 +21,47 @@ const FPTools = {
 };
 
 // ── 측정 지점 종류 ──────────────────────────────────────────────────────────
-// 온도계는 어디를 겨눠도 값이 나와야 하므로, 크로스헤어가 닿은 것이 무엇인지
-// 8가지로 나눈다. 하늘/허공을 겨누면 그 지점의 '대기'를 잰다.
-// base = 산업화 이전(280ppm)의 온도 [°C]
-// amp  = 전 지구 승온에 대한 그 표면의 증폭계수.
-//        실제 온도 = base + amp × warmingSince280(ppm)
-//        warmingSince280()은 js/earth-model.js에 있는 공유 기후 모델이다. 즉 여기 온도는
-//        조감 모드 '미래 예측' 탭의 기온편차와 같은 곡선을 타고 움직인다.
-//        예전엔 (1000ppm에서 +N도) 식으로 직접 박아 놔서 두 모드가 따로 놀았다.
-// day = 일교차 진폭 [°C]. 하루 중 최저(새벽 5시)와 최고(오후 2시)의 차이가 이 값의 2배다.
-//       base는 '정오' 기준으로 맞춰 두었으므로 정오에는 이 항이 0이 된다.
+// 온도계는 어디를 겨눠도 값이 나와야 하므로, 크로스헤어가 닿은 것을 5가지로 나눈다.
+// 4차 C2(마스터 D9): 지면 3종(해변 모래·녹지 지면·도시 지면)을 뺐다 — 연평균 기준 문헌값이 없다.
+//   땅을 겨눠도 그 구역의 '대기'를 잰다. 하늘·허공을 겨눠도 그 구역 대기다.
+// 값은 전부 '그해 연평균(하루 평균)'이고 fp-model.js(FPModel)에서만 낸다(마스터 D2). 화면이 낮이어도 일교차·계절 항은 없다.
+//   대기  : airTemp(구역) = AIR_T0 + 증폭 × 엔진 T (+ 도심 열섬)   — 증폭은 AR6 육지 1.46 · 해양 0.81
+//   해수  : seaTemp(냉수대 근접도) = 엔진 o.sst (개방 해역) … 유빙 옆 −12 °C
+//   빙하  : iceSurfaceTemp = min(0, −6 + 0.81 T)                  — 융해 잠열로 0 °C 상한
+// 예전 표(base·amp·day: 여름 정오 기준값 + 근거 없는 증폭 1.30/1.00/0.75 + 일교차)는 지웠다.
 const SPOT = {
-  sea:      { base: SEA_BASE_T, amp: SEA_WARM_AMP, day: 0.6, label: '해수' },
-  ice:      { base: -6, amp: SEA_WARM_AMP, day: 1.2, label: '빙하', cap: 0 },
-  beach:    { base: 28, amp: 1.15, day: 7.0, label: '해변 모래' },
-  green:    { base: 24, amp: 1.00, day: 6.5, label: '녹지 지면' },
-  city:     { base: 32, amp: 1.30, day: 4.5, label: '도시 지면' },
-  airOcean: { base: 17, amp: SEA_WARM_AMP, day: 0.6, label: '해양 대기' },
-  airGreen: { base: 22, amp: 0.95, day: 5.0, label: '녹지 대기' },
-  airCity:  { base: 29, amp: 1.20, day: 3.5, label: '도심 대기' },
+  sea:      { label: '해수' },
+  ice:      { label: '빙하' },
+  airOcean: { label: '해양 대기', zone: 'ocean' },
+  airGreen: { label: '녹지 대기', zone: 'green' },
+  airCity:  { label: '도심 대기', zone: 'city' },
 };
-// 일교차 진폭의 근거 - 그리고 이 값들이 '도시 열섬'의 핵심이다.
-//   도시(4.5)가 녹지(6.5)보다 일교차가 작다. 콘크리트·아스팔트가 낮에 받은 열을 품고
-//   있다가 밤에 천천히 내놓고, 증발산으로 식지도 않기 때문이다.
-//   그래서 도시-녹지 기온차(열섬 강도)는 낮보다 밤에 훨씬 커진다:
-//     정오  도시 32.0 - 녹지 24.0 = 8.0°C
-//     새벽  도시 23.6 - 녹지 11.9 = 11.7°C   <- 열섬은 밤에 심하다
-//   정오에 고정된 세계에서는 이 사실을 보여줄 방법이 아예 없었다.
-//   바다(0.6)가 거의 안 변하는 건 물의 열용량이 크기 때문이다.
-//   모래(7.0)가 가장 크게 흔들린다 - 사막의 밤이 추운 이유와 같다.
-// 증폭계수의 근거:
-//  - 바다·빙하 0.75 : 물의 열용량이 커서 육지보다 천천히 데워진다. 실제로도 해양 표층은
-//    전 지구 평균보다 덜 오른다. 해수 온도는 fp-world.js와 상수를 공유해서, 온도계로 잰
-//    값과 산호가 반응하는 값이 반드시 같다.
-//  - 녹지 1.00 : 기준.
-//  - 도시 1.30 : 열섬. 포장면이 낮에 열을 더 받고 증발산으로 식지도 않는다.
-//  - 해변 1.15 : 마른 모래는 아스팔트만큼은 아니어도 풀밭보다 훨씬 잘 달궈진다.
-//  - 대기는 그 아래 지면보다 조금 낮다. 낮에 데워지는 건 지면이고 공기는 전달받는 쪽이라서.
-//    바다 위 대기만 해수와 같은 계수인데, 물이 대기 온도를 붙잡기 때문이다.
-//
-// 빙하의 cap: 얼음 표면은 녹는점 위로 못 올라간다. 들어온 열을 녹는 데 다 쓰기 때문
-// (융해 잠열). CO2가 아무리 높아도 0°C에서 멈추게 상한을 걸었다.
+// 구역 → 대기 지점 이름 (땅·허공을 겨눴을 때)
+const AIR_SPOT = { ocean: 'airOcean', green: 'airGreen', city: 'airCity' };
 
-// ── 살아 있는 것의 체온 ─────────────────────────────────────────────────────
-// 동물을 겨누면 체온이 나온다. 그냥 재미 요소로 둘 수도 있었지만, 한 걸음 더 나가면
-// 여기가 이 도구 전체에서 가장 좋은 교육 소재가 된다:
-//   포유류는 정온동물이라 CO2·계절·시간이 아무리 변해도 체온이 일정하다 (amp=0, day=0).
-//   어류는 변온동물이라 체온이 곧 수온이다 - 바다가 더워지면 물고기 체온도 오른다.
-// 둘을 나란히 재면 그 차이가 그대로 드러난다. "환경이 변해도 안 변하는 값"과
-// "환경을 그대로 따라가는 값"을 같은 도구로 비교하게 하는 것이 요점이다.
-const BODY_TEMPS = {
-  bodyRabbit: { base: 39.0, amp: 0, day: 0, label: '토끼 체온' },
-  bodyDeer:   { base: 38.5, amp: 0, day: 0, label: '사슴 체온' },
-  bodyWolf:   { base: 38.5, amp: 0, day: 0, label: '늑대 체온' },
-  bodyBear:   { base: 37.5, amp: 0, day: 0, label: '곰 체온' },
-  bodyFish:   { base: 0,    amp: 0, day: 0, label: '어류 체온 (변온)' },
-};
-Object.assign(SPOT, BODY_TEMPS);
-const ANIMAL_SPOT = { '토끼': 'bodyRabbit', '사슴': 'bodyDeer', '늑대': 'bodyWolf', '곰': 'bodyBear' };
-// 곰은 겨울에 동면한다. 동면 중에는 대사를 낮춰 체온이 크게 떨어진다(실제로 31°C 근처).
-const BEAR_HIBERNATE_T = 31.0;
-const AIR_MIX_H = 0.06;        // 지면에서 이 높이(실척 3m) 안쪽은 지면 열의 영향을 받는다
+// 4차 B4(마스터 D8): 동물·어류 체온 측정을 뺐다. 동물·어류는 풍경으로 남고, 광선은 그들을 지나쳐
+// 뒤의 땅·물·대기를 잰다(측정 대상 목록에서 뺐다).
 const AIR_SAMPLE_DIST = 0.3;   // 허공을 겨눴을 때 대기를 뜨는 거리 (실척 15m)
-// 대기 -> 그 아래 지면의 대응 관계 (지면 열 섞임 계산용)
-const SPOT_GROUND = { airOcean: 'sea', airGreen: 'green', airCity: 'city' };
 
-// 바다·빙하 계열은 계절 진폭이 훨씬 작다 (물의 열용량)
-const SEA_SPOTS = { sea: 1, ice: 1, airOcean: 1 };
-// SPOT.base 값들은 계절이 없던 시절 '여름 정오' 기준으로 맞춰 둔 값이다.
-// 그래서 여름을 0점으로 삼아 그 차이만 더한다 (여름에는 이 항이 0).
-function seasonTempOffset(spot) {
-  const S = seasonDef(), SUM = SEASONS.summer;
-  return SEA_SPOTS[spot] ? (S.seaT - SUM.seaT) : (S.temp - SUM.temp);
-}
-function spotBaseTemp(spot, ppm, hour) {
-  const S = SPOT[spot];
-  const h = hour == null ? FPWorld.hour : hour;
-  // (diurnal(h) - 정오값)이라 정오에는 일교차 항이 0이 된다.
-  // 일교차 진폭에 날씨 계수를 곱하는 게 이 모형의 요점 중 하나다:
-  // 안개·구름은 낮의 복사가열과 밤의 복사냉각을 둘 다 막아 밤낮 차이를 죽인다.
-  const wDay = typeof weatherDiurnalK === 'function' ? weatherDiurnalK() : 1;
-  const wTemp = typeof weatherTempOffset === 'function' ? weatherTempOffset(spot) : 0;
-  return S.base + S.amp * warmingSince280(ppm)
-       + S.day * wDay * (diurnal(h) - DIURNAL_AT_NOON)
-       + seasonTempOffset(spot) + wTemp;
-}
-function measureTemperature(spot, x, z, ppm, aboveGround) {
-  const S = SPOT[spot];
+// s = 지금 연도·경로의 엔진 표본(fp-world.js fpSample). 4차 C2에서 ppm 인자 대신 받는다 —
+// 기온은 그해 엔진 상태(T·sst)가 정하지 그 자리 CO₂ 농도가 정하지 않는다.
+function measureTemperature(spot, x, z, s) {
   // 해수는 fp-world.js의 seaTempAt() 하나만 쓴다. 해수 분석기·pH미터·산호가 읽는 수온과
-  // 반드시 같아야 하므로 여기서는 지점 흔들림·일교차·날씨 보정을 얹지 않는다.
-  // (바다는 열용량이 커서 원래 일교차가 0.6°C뿐이었고, 지점 간 차이는 이제 냉수대가 만든다.)
-  // 어류는 변온동물이라 체온이 곧 그 자리의 수온이다.
-  if (spot === 'sea' || spot === 'bodyFish') return seaTempAt(x, z, ppm);
-  // 곰은 겨울에 동면해 체온이 크게 내려간다
-  if (spot === 'bodyBear' && FPWorld.season === 'winter') {
-    return BEAR_HIBERNATE_T + Math.sin(x * 37.1 + z * 21.7) * 0.3;
-  }
-  // 같은 구역 안에서도 지점마다 조금씩 다르게 (측정하는 맛)
-  const jitter = Math.sin(x * 37.1 + z * 21.7) * 0.5 + Math.sin(x * 11.3 - z * 53.9) * 0.35;
-  // 정온동물은 개체차만 있고 환경에는 반응하지 않는다 (흔들림도 훨씬 작다)
-  let v = spotBaseTemp(spot, ppm) + (S.amp === 0 && S.day === 0 ? jitter * 0.4 : jitter);
-  // 대기를 잴 때 지면 바로 위면 지면 온도 쪽으로 끌어당긴다.
-  // 뜨거운 아스팔트 바로 위 공기가 뜨거운 건 실제로 그렇고, 위로 갈수록 옅어진다.
-  if (aboveGround != null && SPOT_GROUND[spot]) {
-    const w = 1 - Math.min(1, Math.max(0, aboveGround) / AIR_MIX_H);
-    v += (spotBaseTemp(SPOT_GROUND[spot], ppm) - spotBaseTemp(spot, ppm)) * w * 0.6;
-  }
-  if (S.cap != null) v = Math.min(S.cap, v);
-  return v;
+  // 반드시 같아야 하므로 여기서는 지점 흔들림을 얹지 않는다(지점 간 차이는 냉수대가 만든다).
+  if (spot === 'sea') return seaTempAt(x, z);
+  // 같은 구역 안에서도 지점마다 조금씩 다르게 (측정하는 맛, ±0.3 °C — 등록부 fp_jitter, 연출)
+  const jitter = FPModel.tempJitter(x, z);
+  if (spot === 'ice') return Math.min(FPModel.K.ICE_CAP, FPModel.iceSurfaceTemp(s) + jitter);
+  return FPModel.airTemp(SPOT[spot].zone, s) + jitter;
 }
 
 // 해양 pH: 예전엔 슬라이더 CO2 하나만 넣어서 바다 어디서 재도 같은 값이었다.
-// 이제 그 지점의 해수 상태(seaStateAt: 수온 + 해수 pCO2)에서 읽는다.
+// 이제 그 지점의 해수 상태(seaStateAt: 수온 + 그해 엔진 해수 pCO2 — 4차 C4)에서 읽는다.
 // 산호·해수 분석기와 같은 함수라 측정값과 세계 상태가 어긋나지 않는다.
 // TA 일정 모형에서는 수온이 pH를 거의 못 움직인다(냉수대와 개방 해역 차이 ≈ 0.02).
 // 온도 효과의 주 신호는 용존 CO2와 Ω이고, 그건 4번 해수 분석기가 맡는다.
-function measurePH(ppm, x, z) {
-  return seaStateAt(x, z, ppm).pH;
+function measurePH(x, z) {
+  return seaStateAt(x, z).pH;
 }
 // 바다를 겨눴는가. pH미터·해수 분석기 공통 - 해양 구역이면서 수면 아래인 지점만 유효.
 function isSeaHit(hit) {
@@ -143,111 +70,13 @@ function isSeaHit(hit) {
 }
 
 // ── 대기 CO2 ────────────────────────────────────────────────────────────────
-// 슬라이더 값은 '전 지구 평균'이고, 실제로 재는 값은 서 있는 자리에 따라 달라진다.
-//  - 도심: 배기·난방·건물이 몰려 있고 바람이 막혀 늘 평균보다 높다(도시 CO2 돔).
-//  - 녹지: 광합성이 낮 동안 공기 중 CO2를 빨아들여 평균보다 낮다. CO2가 높을수록
-//    흡수량 자체도 커져서(CO2 비료 효과) 낮아지는 폭이 함께 커진다.
-//  - 해양: 바닷물이 CO2를 녹여 흡수하므로 역시 평균보다 낮다.
-//    이 흡수가 바로 해수 pH를 떨어뜨리는 원인이라, pH 측정값과 같은 이야기를 한다.
-// 낮에는 이 값, 밤에는 night 쪽 값으로 옮겨 간다.
-//  - 녹지: 낮에는 광합성이 CO2를 빨아들여 평균보다 낮지만, 밤에는 광합성이 멎고
-//    호흡만 남아 오히려 평균보다 높아진다. 부호가 뒤집히는 이 지점이
-//    "식물은 CO2를 먹기만 한다"는 흔한 오개념을 깨는 자리다.
-//  - 도심: 밤에는 지표 부근 대기가 얇게 갇혀(야간 안정층) 배출된 CO2가 흩어지지 못한다.
-//    교통량이 줄어드는데도 도심 CO2는 밤에 더 높게 잡히는 이유다.
-//  - 해양: 밤낮 차이가 거의 없다. 흡수가 물리·화학 과정이라 빛과 무관하기 때문이다.
-const CO2_ZONE = {
-  city:  { off: 55,  rise: 120,  nightOff: 110, nightRise: 150 },
-  green: { off: -30, rise: -40,  nightOff: 35,  nightRise: 45 },
-  ocean: { off: -15, rise: -30,  nightOff: -10, nightRise: -25 },
-};
-// ── 구역 대기 CO2를 상태 변수로 (해륙풍 이류) ──────────────────────────────────
-// 위 CO2_ZONE은 원래 측정값에 바로 더하는 고정 오프셋이었다. 구역마다 차이(공간 변이)는
-// 있어도 서로 주고받는 흐름(상호작용)이 없었다. 이제 그 오프셋을 '국지 평형값(목표)'으로
-// 다시 읽고, 실제 값은 그 목표를 향해 다가가면서 바람을 타고 이웃 구역과 섞이게 한다.
-//
-//   dC_z/dt = (C_bg + off_z(t) − C_z) / τ_z            국지 평형으로 수렴 (기존 오프셋 재현)
-//           + w(t) · (C_upwind(z) − C_z) / τ_adv       해륙풍에 의한 이류
-//
-// C_bg는 슬라이더(전 지구 평균) + 계절 진동이다. 공간적으로 균일하므로 이류항에서는 빠지고,
-// 실제로 상태로 들고 있는 건 '배경에서 벗어난 몫' D_z = C_z − C_bg 이다. 식은 같고
-// 정상 상태도 같다. 다른 점은 슬라이더를 옮겼을 때뿐인데, 슬라이더는 배출 사건이 아니라
-// "어떤 세상인가"를 고르는 장치라서 배경은 즉시 바뀌는 쪽이 맞다 - 그래야 CO2센서가
-// 예전처럼 슬라이더에 바로 반응한다. 느리게 따라가는 건 바다다(fp-world.js 해수 pCO2).
-//
-// w(t) = 해륙풍. 낮에는 해풍(바다 → 해변 → 녹지 → 도심), 밤에는 육풍(반대).
-// 이미 있는 낮·밤 주기(daylight)에 그대로 얹는다: w = 2·daylight − 1 (+1 한낮 해풍, −1 한밤 육풍).
-// 해변은 바다 구역 동쪽 끝(해양-녹지 경계)이라 바람 사슬은 바다 → 녹지 → 도심 세 칸이다.
-// 사슬 맨 앞 구역은 바람이 불어오는 쪽에 이웃이 없으므로 이류항이 0이다.
-//
-// 시간 단위: τ는 게임 시간(하루 = 실시간 300초)이다. 시각을 멈춰 둬도(기본값) 공기는
-// 계속 섞인다 - 시각 정지는 "그 시각의 조건을 붙잡아 둔 것"이지 물리를 멈춘 게 아니다.
-// 그래서 정오에 멈춰 두면 낮 정상 상태로, 자정에 멈추면 밤 정상 상태로 수렴한다.
-const AIR_TAU_Z = 0.1;       // 국지 평형 수렴 시간 [게임 일] = 실시간 30초
-const AIR_TAU_ADV = 0.25;    // 해륙풍 이류 시간 [게임 일] = 실시간 75초
-const AIR_TICK = 0.2;        // 상태 갱신 주기 [실시간 초] - 렌더 루프가 아니라 이 틱에서 돈다
-const AIR_CHAIN = ['ocean', 'green', 'city'];   // 해풍이 지나가는 순서 (서 → 동)
-const FPAir = {
-  D: { ocean: 0, green: 0, city: 0 },   // 배경(슬라이더+계절)에서 벗어난 몫 [ppm]
-  windK: 1,      // 바람 세기 배수. 0이면 바람 끔 (보정·비교용)
-  w: 0,          // 지금의 해륙풍 (+해풍 / −육풍)
-  _acc: 0,
-  elapsedDays: 0,   // 공기·바다가 흘러온 게임 시간 [일]. 시각을 멈춰도 흐른다 (야장 game_time)
-  onTick: [],    // 같은 틱에 같이 돌아야 하는 다른 상태 (해수 pCO2 등)
-};
-// 국지 평형값 = 예전 고정 오프셋 그대로 (낮 값과 밤 값 사이를 햇빛 세기로 섞는다)
-function zoneCO2Target(zone, hour) {
-  const Z = CO2_ZONE[zone] || CO2_ZONE.green;
-  const k = FPWorld.co2k;
-  const lit = daylight(hour == null ? FPWorld.hour : hour);   // 1=한낮, 0=한밤
-  const off = Z.nightOff + (Z.off - Z.nightOff) * lit;
-  const rise = Z.nightRise + (Z.rise - Z.nightRise) * lit;
-  return off + rise * k;
-}
-function seaBreeze(hour) {
-  return (2 * daylight(hour == null ? FPWorld.hour : hour) - 1) * FPAir.windK;
-}
-// 한 번 적분. dtDay = 게임 시간 [일]. 틱이 짧아(τ의 1% 미만) 오일러로 충분하다.
-FPAir.step = function (dtDay) {
-  const w = seaBreeze();
-  this.w = w;
-  const D = this.D, next = {};
-  AIR_CHAIN.forEach((z, i) => {
-    const up = w > 0 ? AIR_CHAIN[i - 1] : AIR_CHAIN[i + 1];   // 바람이 불어오는 쪽 이웃
-    let d = (zoneCO2Target(z) - D[z]) / AIR_TAU_Z;
-    if (up) d += Math.abs(w) * (D[up] - D[z]) / AIR_TAU_ADV;
-    next[z] = D[z] + d * dtDay;
-  });
-  Object.assign(D, next);
-  this.elapsedDays += dtDay;
-  for (const f of this.onTick) f(dtDay);
-};
-// 처음 열었을 때는 지금 시각의 정상 상태에서 시작한다 (바람 포함 정상 상태를 직접 굴려서 구함)
-FPAir.reset = function () {
-  for (const z of AIR_CHAIN) this.D[z] = zoneCO2Target(z);
-  for (let i = 0; i < 400; i++) {
-    const saved = this.onTick; this.onTick = [];
-    this.step(0.01);
-    this.onTick = saved;
-  }
-  this.elapsedDays = 0;
-};
-// 매 프레임 불리지만 실제 적분은 0.2초마다 한 번
-FPAir.update = function (dt) {
-  this._acc += dt;
-  while (this._acc >= AIR_TICK) {
-    this._acc -= AIR_TICK;
-    this.step(AIR_TICK / DAY_SECONDS);
-  }
-};
-// 구역 대기 CO2 [ppm] = 배경 + 그 구역의 몫
-FPAir.zoneCO2 = function (zone, ppm) {
-  return (ppm == null ? FPWorld.co2 : ppm) + seasonDef().co2 + (this.D[zone] != null ? this.D[zone] : this.D.green);
-};
-FPAir.windLabel = function () {
-  if (Math.abs(this.w) < 0.15) return '무풍';
-  return this.w > 0 ? '해풍' : '육풍';
-};
+// 4차 C3: 구역 대기 CO₂는 FPModel.zoneCO2(fp-model.js)가 그해 엔진 표본으로 바로 낸다(연평균).
+//  - 해양 대기 = 배경(o.ppm) 그대로 — NOAA 지구 평균이 바다 위 관측소 평균이다(문헌값 2-4). 예전 −15~−30 ppm 삭제.
+//  - 도심 = 배경 + 서울 '도시 증가분' 23 ppm × 그해 화석 배출 ÷ 2020년 (문헌값 2-3). 예전 +55~+120 ppm 삭제.
+//  - 녹지·나무 밑 = 3차 낮 정상 상태값 그대로(정량 문헌 미확보 — assumption + unverified).
+// 예전 구역 몫 D_z 를 τ 30초로 따라가던 적분(CO2_ZONE·zoneCO2Target·AIR_TAU_Z)은 C3에서 지웠다 — 연도를 뛰어넘는 구조와 맞지 않는다.
+// 4차 C4: 남아 있던 0.2초 틱(FPAir — 해수 pCO2 동적 평형·산호 갱신용)과 게임일 환산(AIR_DAY_S)도 지웠다.
+// 바다가 그해 엔진 표층 상태가 되어 시간에 따라 적분할 상태가 1인칭에 하나도 남지 않았다.
 
 // 어떤 지점이 나무 수관에 얼마나 가까운지 (0=밖, 1=줄기 바로 옆)
 function treeShadeAt(x, z) {
@@ -255,36 +84,28 @@ function treeShadeAt(x, z) {
   for (const t of FPWorld.trees) s = Math.max(s, 1 - Math.hypot(x - t.x, z - t.z) / t.r);
   return Math.max(0, s);
 }
-function measureCO2(ppm, x, z, zone, px, pz) {
-  const k = FPWorld.co2k;
-  const lit = FPWorld.daylight != null ? FPWorld.daylight : 1;   // 1=한낮, 0=한밤
-  // 구역 대기 = 배경 + 그 구역 상태(FPAir). 국지 평형(낮·밤 오프셋)과 해륙풍 이류가 정한다.
-  // 배경의 계절 진동(킬링 곡선): 북반구 식생이 봄에 CO2를 뱉고 여름내 빨아들여 가을에 최저가 된다.
-  // 슬라이더 값은 연평균이고, 실제로 재는 값은 이만큼 계절을 탄다.
-  let v = FPAir.zoneCO2(zone, ppm);
-
-  // 나무 그늘 아래는 낮에 특히 낮다. 잎이 바로 위에서 CO2를 빨아들이는 자리라
-  // 같은 녹지 안에서도 확연히 차이가 난다.
-  // 밤에는 반대로 잎과 뿌리의 호흡 때문에 나무 밑이 오히려 더 높다.
+// 센서 한 번의 참값 [ppm]. 값 계산은 FPModel.zoneCO2, 여기서는 세계 좌표로 '얼마나 가까운가'만 잰다.
+// s = 그해 엔진 표본(fpSample). (x, z) = 겨눈 지점, (px, pz) = 서 있는 자리.
+function measureCO2(s, x, z, zone, px, pz) {
+  const opt = {};
+  // 나무 그늘 아래는 낮에 특히 낮다(잎이 바로 위에서 CO2를 빨아들이는 자리).
   // 겨눈 지점과 '서 있는 자리' 중 나무에 가까운 쪽을 쓴다. 손에 든 센서가 실제로
   // 빨아들이는 건 내 주변 공기라, 나무 밑에 서 있으면 어디를 겨누든 낮게 나와야 한다.
   // (이걸 겨눈 지점만으로 계산했더니 나무 밑에서 비스듬히 내려다보는 순간 표본이
   //  수관 밖으로 빠져나가 효과가 사라졌다.)
-  if (zone === 'green') {
-    const shade = Math.max(treeShadeAt(x, z), px == null ? 0 : treeShadeAt(px, pz));
-    const draw = (55 + 60 * k) * lit;          // 낮: 광합성 흡수
-    const resp = (40 + 35 * k) * (1 - lit);    // 밤: 호흡 배출
-    v += shade * (resp - draw);
-  }
-
+  if (zone === 'green') opt.treeShade = Math.max(treeShadeAt(x, z), px == null ? 0 : treeShadeAt(px, pz));
   // 국소 배출원: 공장 굴뚝과 내연기관차 배기구 바로 옆은 확 치솟는다
   const sx = FPWorld.ZONE_W + 0.6, sz = 0.55;             // 공장 굴뚝 월드 좌표
-  v += Math.max(0, 1 - Math.hypot(x - sx, z - sz) / 0.55) * 260 * k;
+  opt.stackNear = Math.max(0, 1 - Math.hypot(x - sx, z - sz) / 0.55);
+  let ex = 0;
   for (const c of FPWorld.cars) {
-    if (!c.isGas) continue;
-    v += Math.max(0, 1 - Math.hypot(x - c.tailPos.x, z - c.tailPos.z) / 0.10) * 110;
+    if (!c.isGas) continue;   // 전기차는 배기구가 없다
+    ex += Math.max(0, 1 - Math.hypot(x - c.tailPos.x, z - c.tailPos.z) / 0.10);
   }
-  return Math.max(150, v);   // 산업화 이전보다 낮게는 안 내려가도록
+  opt.exhaustNear = ex;
+  // 4차 F4: '우리 도시'가 함께 걷기·자전거·대중교통을 하면 도심의 도시 증가분이 준다(현재 바로, 미래는 나의 미래 갈래에서만 — fp-actions localCutFor)
+  if (zone === 'city' && typeof FPActions !== 'undefined' && typeof FPScenario !== 'undefined') opt.localCut = FPActions.localCutFor(FPScenario.year, FPScenario.branch);
+  return FPModel.zoneCO2(zone, s, opt);
 }
 
 // 크로스헤어가 가리키는 지점이 무엇인지 판정.
@@ -298,11 +119,9 @@ function pickTarget() {
   const rc = FPTools._rc;
   rc.setFromCamera({ x: 0, y: 0 }, cam);
   rc.far = 1.4;   // 실척 약 70m까지 닿음
-  // 동물·어류는 한 마리가 메시 여러 개라 그룹째 넣고 재귀 탐색(true)을 켠다.
-  // 지형 쪽은 전부 단일 메시라 재귀가 필요 없지만, 한 번에 쏘려면 옵션을 맞춰야 한다.
-  const targets = FPWorld.walkables.concat(
-    [FPWorld.waterMesh], FPWorld.iceMeshes, FPWorld.animalGroups, FPWorld.fishGroups);
-  const hits = rc.intersectObjects(targets, true);
+  // 대상은 지형·수면·유빙뿐이다(전부 단일 메시). 동물·어류는 B4에서 측정 대상이 아니게 됐다.
+  const targets = FPWorld.walkables.concat([FPWorld.waterMesh], FPWorld.iceMeshes);
+  const hits = rc.intersectObjects(targets, false);
   const half = FPWorld.ZONE_W / 2;
 
   if (!hits.length) {
@@ -316,15 +135,10 @@ function pickTarget() {
     p.x = Math.max(-hw, Math.min(hw, p.x));
     p.z = Math.max(-hd, Math.min(hd, p.z));
     const zone = p.x < -half ? 'ocean' : (p.x > half ? 'city' : 'green');
-    // 대기가 열을 주고받는 상대는 바로 아래 '표면'이다. 바다 위에서는 해저가 아니라
-    // 수면이 그 상대이므로 구역에 따라 기준면을 다르게 잡는다.
-    const surf = zone === 'ocean'
-      ? FPPlayer.waterHeightAt(p.x, p.z, performance.now() / 1000)
-      : FPPlayer.terrainHeightAt(p.x, p.z);   // 맵 밖이면 -1 = 자유 대기
+    // 4차 C2: 지면 온도를 뺐으므로 '지면 바로 위 공기는 지면 쪽으로 끌린다'는 보정(aboveGround)도 없다.
     return {
       point: p, zone, isWater: false, isAir: true, dist: AIR_SAMPLE_DIST,
-      spot: zone === 'ocean' ? 'airOcean' : (zone === 'city' ? 'airCity' : 'airGreen'),
-      aboveGround: surf < 0 ? 1 : p.y - surf,
+      spot: AIR_SPOT[zone],
     };
   }
 
@@ -332,31 +146,17 @@ function pickTarget() {
   const isWater = h.object === FPWorld.waterMesh;
   const zone = p.x < -half ? 'ocean' : (p.x > half ? 'city' : 'green');
 
-  // 살아 있는 것을 맞췄는지 먼저 본다. 맞은 메시에서 부모를 거슬러 올라가며 표시를 찾는다.
-  for (let o = h.object; o; o = o.parent) {
-    if (o.userData && o.userData.animal) {
-      const spotKey = ANIMAL_SPOT[o.userData.animal.kind.name];
-      if (spotKey) return { point: p, zone, isWater: false, isAir: false, spot: spotKey,
-                            dist: h.distance, aboveGround: 0, creature: o.userData.animal };
-    }
-    if (o.userData && o.userData.fish) {
-      return { point: p, zone: 'ocean', isWater: false, isAir: false, spot: 'bodyFish',
-               dist: h.distance, aboveGround: 0, creature: true };
-    }
-  }
-
   let spot;
   if (FPWorld.iceMeshes.includes(h.object)) spot = 'ice';
   else if (isWater) spot = 'sea';
-  else if (zone === 'city') spot = 'city';
-  else if (zone === 'green') spot = 'green';
+  else if (zone !== 'ocean') spot = AIR_SPOT[zone];   // 4차 C2(D9): 녹지·도심 땅을 겨눠도 그 구역 대기
   else {
-    // 해양 구역의 단단한 바닥(해변 경사로·해저 모래). 수면 위로 나와 있으면 해변 모래,
+    // 해양 구역의 단단한 바닥(해변 경사로·해저 모래). 수면 위로 나와 있으면 해양 대기(예전 '해변 모래'),
     // 수면 아래면 그 위를 덮고 있는 해수를 잰 것으로 본다.
     const waterY = FPPlayer.waterHeightAt(p.x, p.z, performance.now() / 1000);
-    spot = p.y > waterY ? 'beach' : 'sea';
+    spot = p.y > waterY ? 'airOcean' : 'sea';
   }
-  return { point: p, zone, isWater, isAir: false, spot, dist: h.distance, aboveGround: 0 };
+  return { point: p, zone, isWater, isAir: false, spot, dist: h.distance };
 }
 
 // ── 계측기 사양 ─────────────────────────────────────────────────────────────
@@ -398,30 +198,46 @@ function fmtValue(v, res) {
 }
 
 // ── 도구 정의 ───────────────────────────────────────────────────────────────
+// 4차 D1: 표시창 색은 css/theme.css 의 --lcd-* 토큰에서 읽는다(대비는 tools/check_contrast.js 가 확인).
+// 기기 화면이라 1인칭 UI 의 종이 테마와 달리 어두운 LCD 그대로 둔다(D §1).
+const LCD = k => Theme.color('--lcd-' + k);
+// 글자 크기는 표시창 높이에 대한 비율로 정한다 — 해상도를 바꿔도 배치가 그대로 따라오게.
+// 숫자 '-12.3'·'1000' 처럼 길어지면 폭에 맞춰 줄인다(잘리면 값을 잘못 읽는다).
+function fitText(c, text, weight, size, family, maxW) {
+  let px = size;
+  c.font = `${weight} ${px}px ${family}`;
+  while (px > 8 && c.measureText(text).width > maxW) { px -= 2; c.font = `${weight} ${px}px ${family}`; }
+}
+const LCD_MONO = '"Courier New", monospace';
 function makeDisplayCanvas() {
   const cv = document.createElement('canvas');
-  cv.width = 160; cv.height = 96;
+  // 화면 판(PlaneGeometry)의 크기는 그대로, 텍스처 해상도만 두 배(예전 160×96) — 큰 숫자를 키워도 흐려지지 않게
+  cv.width = 320; cv.height = 192;
   return cv;
 }
 function drawDisplay(tool, big, small, color, progress) {
   const cv = tool.canvas, c = cv.getContext('2d');
-  c.fillStyle = '#0a1512';
-  c.fillRect(0, 0, cv.width, cv.height);
-  c.strokeStyle = '#1d3a32'; c.lineWidth = 4;
-  c.strokeRect(2, 2, cv.width - 4, cv.height - 4);
+  const W = cv.width, H = cv.height;
+  c.fillStyle = LCD('bg');
+  c.fillRect(0, 0, W, H);
+  c.strokeStyle = LCD('edge'); c.lineWidth = H * 0.042;
+  c.strokeRect(H * 0.021, H * 0.021, W - H * 0.042, H - H * 0.042);
   c.textAlign = 'center';
+  c.textBaseline = 'alphabetic';
+  // 큰 숫자: 표시창 높이의 55 % 안팎(D1 — 예전 44/96 = 46 %). 단위·상태 글자도 18/96 → 22 %
   c.fillStyle = color;
-  c.font = 'bold 44px "Courier New", monospace';
-  c.fillText(big, cv.width / 2, 56);
-  c.fillStyle = '#7fa89a';
-  c.font = '18px sans-serif';
-  c.fillText(small, cv.width / 2, 82);
+  fitText(c, big, 'bold', Math.round(H * 0.55), LCD_MONO, W * 0.9);
+  c.fillText(big, W / 2, H * 0.6);
+  c.fillStyle = LCD('label');
+  fitText(c, small, '600', Math.round(H * 0.22), 'sans-serif', W * 0.92);
+  c.fillText(small, W / 2, H * 0.84);
   // 값이 안정되는 동안 아래쪽에 진행 막대. 다 차기 전 숫자는 아직 못 믿는다는 표시.
   if (progress != null && progress < 1) {
-    c.fillStyle = '#16302a';
-    c.fillRect(8, cv.height - 12, cv.width - 16, 5);
-    c.fillStyle = '#5dcaa5';
-    c.fillRect(8, cv.height - 12, (cv.width - 16) * progress, 5);
+    const bx = W * 0.05, bw = W * 0.9, by = H * 0.9, bh = H * 0.05;
+    c.fillStyle = LCD('track');
+    c.fillRect(bx, by, bw, bh);
+    c.fillStyle = LCD('ok');
+    c.fillRect(bx, by, bw * progress, bh);
   }
   tool.tex.needsUpdate = true;
   tool.lastResult = { big, small };   // 캔버스 픽셀을 읽지 않고도 결과를 확인할 수 있게 보관
@@ -432,36 +248,45 @@ function drawDisplay(tool, big, small, color, progress) {
 function drawAnalyzer(tool, vals, status, color, progress) {
   const cv = tool.canvas, c = cv.getContext('2d');
   const W = cv.width, H = cv.height;
-  c.fillStyle = '#0a1512';
+  c.fillStyle = LCD('bg');
   c.fillRect(0, 0, W, H);
-  c.strokeStyle = '#1d3a32'; c.lineWidth = 4;
-  c.strokeRect(2, 2, W - 4, H - 4);
-  c.strokeStyle = '#16302a'; c.lineWidth = 1;
-  c.beginPath(); c.moveTo(W / 2, 8); c.lineTo(W / 2, 118); c.moveTo(8, 63); c.lineTo(W - 8, 63); c.stroke();
+  c.strokeStyle = LCD('edge'); c.lineWidth = H * 0.028;
+  c.strokeRect(H * 0.014, H * 0.014, W - H * 0.028, H - H * 0.028);
+  // 칸 나눔: 위 2줄(값 칸, 각 0.4H) + 맨 아래 상태 줄(0.2H)
+  const CELL = H * 0.4, STATUS_Y = CELL * 2;
+  c.strokeStyle = LCD('track'); c.lineWidth = Math.max(1, H * 0.007);
+  c.beginPath();
+  c.moveTo(W / 2, H * 0.05); c.lineTo(W / 2, STATUS_Y);
+  c.moveTo(W * 0.03, CELL); c.lineTo(W * 0.97, CELL);
+  c.moveTo(W * 0.03, STATUS_Y); c.lineTo(W * 0.97, STATUS_Y);
+  c.stroke();
   const LABEL = { co2aq: '용존CO₂ µmol/kg', dic: 'DIC µmol/kg', omega: 'Ω 포화도', temp: '수온 °C' };
+  c.textAlign = 'center';
+  c.textBaseline = 'alphabetic';
   TOOL_SPEC.sea.ch.forEach((ch, i) => {
-    const cx = (i % 2) * (W / 2) + W / 4, top = Math.floor(i / 2) * 55 + 6;
+    const cx = (i % 2) * (W / 2) + W / 4, top = Math.floor(i / 2) * CELL;
     const v = vals ? vals[ch.key] : null;
-    c.textAlign = 'center';
-    c.fillStyle = '#7fa89a';
-    c.font = '13px sans-serif';
-    c.fillText(LABEL[ch.key], cx, top + 14);
+    c.fillStyle = LCD('label');
+    fitText(c, LABEL[ch.key], '600', Math.round(H * 0.1), 'sans-serif', W / 2 * 0.9);
+    c.fillText(LABEL[ch.key], cx, top + CELL * 0.3);
     let col = color;
     const settled = progress == null && v != null;
-    if (ch.key === 'omega' && settled) col = v < 1 ? '#ff6a5c' : (v < 2 ? '#f0b45c' : color);
+    if (ch.key === 'omega' && settled) col = v < 1 ? LCD('alarm') : (v < 2 ? LCD('caution') : color);
     c.fillStyle = col;
-    c.font = 'bold 30px "Courier New", monospace';
-    c.fillText(v == null ? '--' : fmtValue(v, ch.res) + (ch.key === 'omega' && settled && v < 1 ? '!' : ''), cx, top + 46);
+    // 숫자: 칸 높이의 60 % 안팎(예전 30/144 = 표시창의 21 % → 24 %)
+    const txt = v == null ? '--' : fmtValue(v, ch.res) + (ch.key === 'omega' && settled && v < 1 ? '!' : '');
+    fitText(c, txt, 'bold', Math.round(H * 0.24), LCD_MONO, W / 2 * 0.88);
+    c.fillText(txt, cx, top + CELL * 0.86);
   });
-  c.textAlign = 'center';
-  c.fillStyle = '#7fa89a';
-  c.font = '12px sans-serif';
-  c.fillText(status, W / 2, H - 13);
+  c.fillStyle = LCD('label');
+  fitText(c, status, '600', Math.round(H * 0.12), 'sans-serif', W * 0.92);
+  c.fillText(status, W / 2, STATUS_Y + (H - STATUS_Y) * 0.62);
   if (progress != null && progress < 1) {
-    c.fillStyle = '#16302a';
-    c.fillRect(8, H - 8, W - 16, 4);
-    c.fillStyle = '#5dcaa5';
-    c.fillRect(8, H - 8, (W - 16) * progress, 4);
+    const bx = W * 0.05, bw = W * 0.9, by = H * 0.91, bh = H * 0.035;
+    c.fillStyle = LCD('track');
+    c.fillRect(bx, by, bw, bh);
+    c.fillStyle = LCD('ok');
+    c.fillRect(bx, by, bw * progress, bh);
   }
   tool.tex.needsUpdate = true;
   tool.lastResult = {
@@ -475,7 +300,7 @@ function buildTool(kind) {
   const g = new THREE.Group();
   const canvas = makeDisplayCanvas();
   // 해수 분석기는 네 줄을 띄워야 해서 표시창 해상도와 크기를 키운다 (가로세로 비는 그대로)
-  if (kind === 'sea') { canvas.width = 240; canvas.height = 144; }
+  if (kind === 'sea') { canvas.width = 480; canvas.height = 288; }
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
 
@@ -543,8 +368,8 @@ function buildTool(kind) {
   }
 
   const tool = { kind, group: g, canvas, tex };
-  if (kind === 'sea') drawAnalyzer(tool, null, '해수 분석기', '#5dcaa5');
-  else drawDisplay(tool, '--', kind === 'temp' ? '°C' : (kind === 'ph' ? 'pH' : 'ppm'), '#5dcaa5');
+  if (kind === 'sea') drawAnalyzer(tool, null, '해수 분석기', LCD('ok'));
+  else drawDisplay(tool, '--', kind === 'temp' ? '°C' : (kind === 'ph' ? 'pH' : 'ppm'), LCD('ok'));
   return tool;
 }
 
@@ -633,7 +458,8 @@ FPTools.select = function (i) {
   this.slots.forEach((t, idx) => { if (t) t.group.visible = idx === i; });
   this.handGroup.visible = i >= 0 && !!this.slots[i];
   document.querySelectorAll('#hotbar .slot').forEach((el, idx) => {
-    el.classList.toggle('on', idx === i);
+    el.classList.toggle('is-on', idx === i);   // .btn.is-on = 눌린 버튼(채움) — theme.css 버튼 체계
+    el.setAttribute('aria-pressed', String(idx === i));
   });
 };
 
@@ -651,7 +477,7 @@ FPTools.beginReading = function (tool, trueValue, label, color) {
   };
   // 클릭한 그 순간 표시창을 '측정 중'으로 바꾼다. 다음 프레임의 update()를 기다리면
   // 직전 측정값이 한 프레임 더 남아 있어서, 새로 누른 건지 아닌지 헷갈린다.
-  drawDisplay(tool, fmtValue(quantize(tool.reading.from, spec.res), spec.res), '측정 중…', '#8fb7c9', 0);
+  drawDisplay(tool, fmtValue(quantize(tool.reading.from, spec.res), spec.res), '측정 중…', LCD('busy'), 0);
 };
 // 다채널 계측기(해수 분석기). 채널마다 따로 오차를 뽑고, 응답 곡선은 같이 탄다.
 FPTools.beginMultiReading = function (tool, trueVals, label, color) {
@@ -663,7 +489,7 @@ FPTools.beginMultiReading = function (tool, trueVals, label, color) {
     from[ch.key] = last[ch.key] != null ? last[ch.key] : ch.cold;
   }
   tool.reading = { multi: true, target, from, t: 0, dur: spec.settle, spec, label, color };
-  drawAnalyzer(tool, this._quantizeAll(spec, from), '측정 중…', '#8fb7c9', 0);
+  drawAnalyzer(tool, this._quantizeAll(spec, from), '측정 중…', LCD('busy'), 0);
 };
 FPTools._quantizeAll = function (spec, vals) {
   const out = {};
@@ -682,7 +508,7 @@ FPTools._updateMulti = function (tool, dt) {
     shown[ch.key] = done ? b : a + (b - a) * (1 - Math.exp(-3.5 * p));
   }
   const q = this._quantizeAll(r.spec, shown);
-  drawAnalyzer(tool, q, done ? r.label : '측정 중…', done ? r.color : '#8fb7c9', done ? null : p);
+  drawAnalyzer(tool, q, done ? r.label : '측정 중…', done ? r.color : LCD('busy'), done ? null : p);
   if (done) {
     tool.lastValue = r.target;
     tool.reading = null;
@@ -704,7 +530,7 @@ FPTools.update = function (dt) {
     const q = quantize(shown, r.spec.res);
     const done = r.t >= r.dur;
     drawDisplay(tool, fmtValue(q, r.spec.res),
-      done ? r.label : '측정 중…', done ? r.color : '#8fb7c9', done ? 1 : p);
+      done ? r.label : '측정 중…', done ? r.color : LCD('busy'), done ? 1 : p);
     if (done) {
       tool.lastValue = r.target;
       tool.reading = null;
@@ -713,11 +539,28 @@ FPTools.update = function (dt) {
   }
 };
 
+// 4차 E2: 측정 중(계측기 수렴 중)에 연도·갈래가 바뀌면 그 측정은 취소한다 — 겨눈 순간의 해 값으로 수렴하다가
+// 다른 해에서 확정되면 기록에 다른 해의 값이 섞인다. 취소했으면 true(fp-main goTo 가 알림을 띄운다)
+FPTools.cancelReadings = function () {
+  let n = 0;
+  for (const tool of this.slots) {
+    if (!tool || !tool.reading) continue;
+    const multi = tool.reading.multi;
+    tool.reading = null;
+    n++;
+    if (multi) drawAnalyzer(tool, null, '연도가 바뀌어 취소', LCD('idle'));
+    else drawDisplay(tool, '--', '연도가 바뀌어 취소', LCD('idle'));
+  }
+  return n > 0;
+};
+
 // ── 측정 실행 (좌클릭) ──────────────────────────────────────────────────────
 FPTools.use = function () {
   const tool = this.slots[this.selected];
   if (!tool || !TOOL_SPEC[tool.kind]) return;
-  const ppm = FPWorld.co2;
+  // 4차 E2: 시간 이동 덮개가 떠 있는 동안(0.4초)의 클릭은 무시 — 어느 해의 값인지 모호하다
+  if (typeof FPScenario !== 'undefined' && FPScenario.inTransition) return;
+  // 4차 D1: 예전 'const ppm = FPWorld.co2' 는 C3 뒤로 쓰는 곳이 없어 뺐다(구역 CO₂ 는 measureCO2 → FPModel.zoneCO2)
 
   const hit = pickTarget();   // 하늘을 겨눠도 null이 아니라 '대기'가 돌아온다
 
@@ -725,59 +568,65 @@ FPTools.use = function () {
     // 대기 중에서만 - 물속에서는 공기를 못 빨아들임
     if (FPPlayer.underwater) {
       tool.reading = null;
-      drawDisplay(tool, 'ERR', '수중 · 측정 불가', '#e2705f');
+      drawDisplay(tool, 'ERR', '수중 · 측정 불가', LCD('err'));
       return;
     }
-    const v = measureCO2(ppm, hit.point.x, hit.point.z, hit.zone, FPPlayer.pos.x, FPPlayer.pos.z);
+    const v = measureCO2(fpSample(), hit.point.x, hit.point.z, hit.zone, FPPlayer.pos.x, FPPlayer.pos.z);
     const label = hit.zone === 'city' ? '도심' : (hit.zone === 'green' ? '녹지' : '해양');
-    this.beginReading(tool, v, `ppm · ${label}`, '#f0b45c');
+    this.beginReading(tool, v, `ppm · ${label}`, LCD('co2'));
   } else if (tool.kind === 'temp') {
-    const v = measureTemperature(hit.spot, hit.point.x, hit.point.z, ppm, hit.aboveGround);
-    this.beginReading(tool, v, `°C · ${SPOT[hit.spot].label}`, '#ff8f6b');
+    const v = measureTemperature(hit.spot, hit.point.x, hit.point.z, fpSample());
+    this.beginReading(tool, v, `°C · ${SPOT[hit.spot].label}`, LCD('temp'));
   } else if (tool.kind === 'ph') {
     // pH는 바다에서만. 해양 구역이면서 수면 아래인 지점만 유효.
     if (!isSeaHit(hit)) {
       tool.reading = null;
-      drawDisplay(tool, '--', '바다에서만 측정', '#8a949c');
+      drawDisplay(tool, '--', '바다에서만 측정', LCD('idle'));
       return;
     }
     // 표시창에 수온을 병기한다 (pH미터의 온도 보상 탐침 - 온도계와 같은 사양)
-    const st = seaStateAt(hit.point.x, hit.point.z, ppm);
+    const st = seaStateAt(hit.point.x, hit.point.z);
     const wt = quantize(st.temp + gaussNoise() * TOOL_SPEC.temp.sigma, TOOL_SPEC.temp.res);
-    this.beginReading(tool, st.pH, `pH · 수온 ${wt.toFixed(1)}°C`, '#7fd8ff');
+    this.beginReading(tool, st.pH, `pH · 수온 ${wt.toFixed(1)}°C`, LCD('ph'));
     tool.reading.waterTemp = wt;
   } else if (tool.kind === 'sea') {
     // 해수 분석기: 바다를 겨눴을 때만. 육지·하늘이면 ERR.
     if (!isSeaHit(hit)) {
       tool.reading = null;
-      drawAnalyzer(tool, null, 'ERR · 바다에서만 측정', '#e2705f');
+      drawAnalyzer(tool, null, 'ERR · 바다에서만 측정', LCD('err'));
       return;
     }
-    const st = seaStateAt(hit.point.x, hit.point.z, ppm);
+    const st = seaStateAt(hit.point.x, hit.point.z);
     this.beginMultiReading(tool, {
       co2aq: st.co2aq * UMOL, dic: st.dic * UMOL, omega: st.omega, temp: st.temp,
-    }, '해수 분석 완료', '#7fe0c8');
+    }, '해수 분석 완료', LCD('sea'));
   }
   // 야장이 기록할 수 있게 이번 측정의 지점 정보를 붙여 둔다
   if (tool.reading) {
     tool.reading.spot = hit.spot;
     tool.reading.zone = hit.zone;
     tool.reading.at = hit.point.clone();
-    tool.reading.creature = !!hit.creature;
   }
 };
 
 // ── 단축바 UI ───────────────────────────────────────────────────────────────
-const HOTBAR_LABELS = ['온도계', 'pH미터', 'CO₂센서', '해수분석기', '', '', '', '', ''];
-const HOTBAR_ICONS = ['🌡️', '🧪', '🌫️', '🌊', '', '', '', '', ''];
+const HOTBAR_LABELS = ['온도계', 'pH미터', 'CO₂센서', '해수분석기'];
+// 4차 D1: 이모지(🌡️🧪🌫️🌊) 대신 조감과 같은 SVG 아이콘(js/icons.js) — 이모지는 Windows·macOS 마다 모양이 다르다
+const HOTBAR_ICONS = ['thermo', 'drop', 'dots', 'flask'];
 function buildHotbarUI() {
   const bar = document.getElementById('hotbar');
   bar.innerHTML = '';
-  for (let i = 0; i < 9; i++) {
-    const el = document.createElement('div');
-    el.className = 'slot';
+  for (let i = 0; i < HOTBAR_N; i++) {
+    // 누를 수 있으니 버튼(.btn 체계). 다만 초점은 받지 않는다 — 클릭으로 초점이 남으면 Space(점프)가 버튼을 또 누른다.
+    // 키보드로는 1~4 키가 같은 일을 하므로 Tab 순서에서도 뺀다(tabIndex −1 + 누를 때 초점 이동 막기).
+    const el = document.createElement('button');
+    el.type = 'button';
+    el.tabIndex = -1;
+    el.addEventListener('mousedown', e => e.preventDefault());
+    el.className = 'slot btn btn--nav btn--stack';
+    el.setAttribute('aria-pressed', 'false');
     el.innerHTML = `<span class="num">${i + 1}</span>` +
-      (HOTBAR_ICONS[i] ? `<span class="ico">${HOTBAR_ICONS[i]}</span><span class="nm">${HOTBAR_LABELS[i]}</span>` : '');
+      (HOTBAR_ICONS[i] ? `<span class="ico">${Icons.svg(HOTBAR_ICONS[i], 26)}</span><span class="nm">${HOTBAR_LABELS[i]}</span>` : '');
     el.addEventListener('click', () => FPTools.select(i));
     bar.appendChild(el);
   }

@@ -1,55 +1,19 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
-
-# dependencies
-/node_modules
-/.pnp
-.pnp.*
-.yarn/*
-!.yarn/patches
-!.yarn/plugins
-!.yarn/releases
-!.yarn/versions
-
-# testing
-/coverage
-
-# next.js
-/.next/
-/out/
-
-# production
-/build
+# 4차 A6: 루트의 Next.js 프로토타입(app/·package.json 등)을 지워 node·Next.js 무시 줄을 뺐다.
 
 # misc
 .DS_Store
 *.pem
 
-# debug
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.pnpm-debug.log*
-
-# env files (can opt-in for committing if needed)
+# env files
 .env*
 
-# vercel
-.vercel
-
-# typescript
-*.tsbuildinfo
-next-env.d.ts
-
-# python (Critical_Earth_simulator/server.py)
+# python (Critical_Earth_simulator/server.py · tools/*.py)
 __pycache__/
 *.pyc
-Critical_Earth_simulator/data_log.csv
-# 실험 한 번마다 서버가 남기는 기록 (logs/실험_날짜_시각.jsonl·.csv) - data_log.csv처럼 각자 PC에만 둔다
-Critical_Earth_simulator/logs/
 Critical_Earth_simulator/.venv/
 
-# PyInstaller build output (재빌드 가능한 산출물, 배포는 GitHub Releases로)
-Critical_Earth_simulator/build/
+# 단일 HTML 빌드 결과(tools/build_single_html.py → dist/MiniEarth.html). 재빌드 가능한 산출물, 배포는 GitHub Releases로.
+# (4차 A3: 직접 실험 기록 data_log.csv·logs/ 와 PyInstaller build/ 줄은 직접 실험·exe 빌드와 함께 지웠다)
 Critical_Earth_simulator/dist/
 
 # python venv

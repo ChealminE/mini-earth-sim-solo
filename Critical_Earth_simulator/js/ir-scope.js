@@ -356,8 +356,8 @@ const IRScope = (typeof THREE === 'undefined') ? null : (() => {
     for (const b of document.querySelectorAll('[data-ir-mode]')) b.setAttribute('aria-pressed', String((b.dataset.irMode === 'ir') === IR.on));
     const lg = $('legend3d');
     if (lg) lg.querySelector('[data-row="ir"]').hidden = !IR.on;
-    const paper = typeof PAPER_TABS !== 'undefined' ? PAPER_TABS.includes(activeTab) : true;
-    setSceneBackdrop(paper ? Theme.hex(IR.on ? '--ir-bg' : '--paper') : LIVE_BACKDROP);
+    // 대시보드 두 탭 모두 종이 테마다(4차 A3: 검정 바탕이던 직접 실험 탭을 지웠다)
+    setSceneBackdrop(Theme.hex(IR.on ? '--ir-bg' : '--paper'));
     if (typeof updateLegend3D === 'function') updateLegend3D();
   }
   // 배율 문구는 계산과 같은 상수에서 (화면에 적은 배율과 실제 배율이 어긋나지 않게)

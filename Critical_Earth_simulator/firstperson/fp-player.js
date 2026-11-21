@@ -9,12 +9,10 @@
 const FPPlayer = {
   // ── 신체/이동 상수 ──────────────────────────────────────────────────────
   EYE_H: 0.032,          // 눈높이 (≈1.6m)
-  CROUCH_EYE_H: 0.019,   // 앉았을 때
   RADIUS: 0.009,         // 충돌 반지름 (≈0.45m 폭)
   STEP_H: 0.013,         // 이 높이 이하 턱은 걸어서 그냥 올라감 (마인크래프트의 반블록 계단 느낌)
   WALK: 0.09,            // ≈4.5m/s
   SPRINT: 0.19,
-  CROUCH_SPEED: 0.04,
   SWIM: 0.055,
   GRAVITY: 0.62,
   JUMP_V: 0.195,         // 도달 높이 ≈0.031유닛 = 딱 자기 키만큼
@@ -29,13 +27,12 @@ const FPPlayer = {
   vel: new THREE.Vector3(),
   yaw: Math.PI, pitch: -0.05,
   onGround: false, inWater: false, underwater: false,
-  crouching: false, sprinting: false, flying: false,
+  sprinting: false,
   bobPhase: 0, bobY: 0, bobX: 0,
-  thirdPerson: false,
   curFov: 75,
   keys: Object.create(null),
 
-  camera: null, avatar: null,
+  camera: null,
   _ray: new THREE.Raycaster(),
   _down: new THREE.Vector3(0, -1, 0),
   _origin: new THREE.Vector3(),
@@ -49,10 +46,6 @@ FPPlayer.init = function (camera, canvas) {
   camera.far = 60;
   camera.updateProjectionMatrix();
 
-  this.avatar = buildAvatar();
-  this.avatar.visible = false;
-  FPWorld.scene.add(this.avatar);
-
   this.respawn();
   bindInput(this, canvas);
 };
@@ -61,7 +54,6 @@ FPPlayer.respawn = function () {
   this.pos.set(0, FPWorld.GROUND_BASE + 0.05, 1.2);
   this.vel.set(0, 0, 0);
   this.yaw = Math.PI; this.pitch = -0.05;
-  this.flying = false;
 };
 
 // ── 지형 높이: 레이캐스터로 바닥 표면을 실제로 맞춰서 잰다 ──────────────────
@@ -99,8 +91,8 @@ FPPlayer.waterHeightAt = function (x, z, t) {
   const lx = x + FPWorld.ZONE_W;               // oceanGroup 로컬 x
   const halfW = (FPWorld.ZONE_W - 0.08) / 2, halfD = FPWorld.waveD / 2;
   if (Math.abs(lx) > halfW || Math.abs(z) > halfD) return -Infinity;
-  const k = Math.min(1, Math.max(0, (FPWorld.co2 - 280) / 320));
-  return FPWorld.waveBaseY + FPWorld.waveHeightAt(lx, -z, t, k, halfD);
+  // 4차 C5: 파도 세기의 CO₂ 항을 지웠다(예전 여기만 (CO₂ − 280)/320 으로 그려진 물결(co2k)과 다른 세기를 써서 수면과 몸이 어긋났다)
+  return FPWorld.waveBaseY + FPWorld.waveHeightAt(lx, -z, t);
 };
 
 // ── 충돌: 원기둥/사각 콜라이더 밖으로 밀어냄 ────────────────────────────────
@@ -148,8 +140,8 @@ FPPlayer.update = function (dt, t) {
   dt = Math.min(dt, 0.05);   // 탭 전환 후 큰 dt로 지형을 뚫고 나가는 걸 방지
   const k = this.keys;
 
-  this.crouching = !!(k['ControlLeft'] || k['KeyC']);
-  this.sprinting = !!(k['ShiftLeft'] || k['ShiftRight']) && !this.crouching;
+  // 4차 B4: 비행(G)·3인칭(V·F5)·앉기(Ctrl·C)를 뺐다. 측정·시간 이동·행동에 쓰이지 않는 조작이라서.
+  this.sprinting = !!(k['ShiftLeft'] || k['ShiftRight']);
 
   // 입력 -> 원하는 이동 방향 (시선 기준)
   // 시선 앞쪽 forward=(sin yaw, 0, cos yaw), 오른쪽 right=(-cos yaw, 0, sin yaw)
@@ -167,23 +159,17 @@ FPPlayer.update = function (dt, t) {
   const waterY = this.waterHeightAt(this.pos.x, this.pos.z, t);
   this.inWater = this.pos.y < waterY;
 
-  let speed = this.crouching ? this.CROUCH_SPEED : (this.sprinting ? this.SPRINT : this.WALK);
-  if (this.inWater && !this.flying) speed = this.SWIM;
-  if (this.flying) speed = this.sprinting ? this.SPRINT * 2.5 : this.SPRINT;
+  let speed = this.sprinting ? this.SPRINT : this.WALK;
+  if (this.inWater) speed = this.SWIM;
 
   // 수평 속도: 목표 속도로 부드럽게 수렴 (지상은 빠르게, 공중은 느리게 = 관성)
-  const rate = this.flying ? 10 : (this.onGround ? 14 : (this.inWater ? 6 : 2.2));
+  const rate = this.onGround ? 14 : (this.inWater ? 6 : 2.2);
   const f = 1 - Math.exp(-rate * dt);
   this.vel.x += (wishX * speed - this.vel.x) * f;
   this.vel.z += (wishZ * speed - this.vel.z) * f;
 
   // 수직
-  if (this.flying) {
-    let vy = 0;
-    if (k['Space']) vy += speed;
-    if (k['ControlLeft'] || k['KeyC']) vy -= speed;
-    this.vel.y += (vy - this.vel.y) * (1 - Math.exp(-10 * dt));
-  } else if (this.inWater) {
+  if (this.inWater) {
     // 물속: 중력을 부력이 상당 부분 상쇄 -> 천천히 가라앉고, Space로 헤엄쳐 오름
     this.vel.y -= (this.GRAVITY - this.BUOYANCY) * dt;
     if (k['Space']) this.vel.y += this.BUOYANCY * 2.2 * dt;
@@ -207,25 +193,23 @@ FPPlayer.update = function (dt, t) {
   this.pos.x = Math.max(-limX, Math.min(limX, this.pos.x));
   this.pos.z = Math.max(-limZ, Math.min(limZ, this.pos.z));
 
-  if (!this.flying) {
-    this.resolveCollisions(this.pos.y);
-    // 충돌 밀어내기가 세계 끝 밖으로 내보내면 다음 프레임 위의 경계 처리가 한 번에 끌어당겨서
-    // 위치가 '툭' 되돌아갔다(도로 끝에서 차에 밀릴 때 실제로 생김). 밀어낸 직후에도 경계를 지킨다.
-    this.pos.x = Math.max(-limX, Math.min(limX, this.pos.x));
-    this.pos.z = Math.max(-limZ, Math.min(limZ, this.pos.z));
-  }
+  this.resolveCollisions(this.pos.y);
+  // 충돌 밀어내기가 세계 끝 밖으로 내보내면 다음 프레임 위의 경계 처리가 한 번에 끌어당겨서
+  // 위치가 '툭' 되돌아갔다(도로 끝에서 차에 밀릴 때 실제로 생김). 밀어낸 직후에도 경계를 지킨다.
+  this.pos.x = Math.max(-limX, Math.min(limX, this.pos.x));
+  this.pos.z = Math.max(-limZ, Math.min(limZ, this.pos.z));
 
   // 지형 추종: 새 위치의 바닥 높이를 재서, 오를 수 있는 턱이면 따라 올라가고
   // 못 오르는 절벽이면 이동 자체를 되돌린다
   const ground = this.groundHeightAt(this.pos.x, this.pos.z, this.pos.y);
-  if (!this.flying && this.onGround && ground > this.pos.y + this.STEP_H) {
+  if (this.onGround && ground > this.pos.y + this.STEP_H) {
     this.pos.x = prevX; this.pos.z = prevZ;     // 너무 높은 벽 - 못 올라감
     this.vel.x = 0; this.vel.z = 0;
   }
 
   this.pos.y += this.vel.y * dt;
   const g2 = this.groundHeightAt(this.pos.x, this.pos.z, this.pos.y);
-  if (!this.flying && this.pos.y <= g2) {
+  if (this.pos.y <= g2) {
     this.pos.y = g2;
     if (this.vel.y < 0) this.vel.y = 0;
     this.onGround = true;
@@ -237,7 +221,7 @@ FPPlayer.update = function (dt, t) {
   if (this.pos.y < -0.6) this.respawn();
 
   // ── 카메라 ───────────────────────────────────────────────────────────────
-  const eyeH = this.crouching ? this.CROUCH_EYE_H : this.EYE_H;
+  const eyeH = this.EYE_H;
 
   // 헤드밥: 실제 이동 속도에 비례해서 위아래+좌우로 흔들림 (걷는 느낌의 핵심)
   const hSpeed = Math.hypot(this.vel.x, this.vel.z);
@@ -273,23 +257,8 @@ FPPlayer.update = function (dt, t) {
   const right = new THREE.Vector3(-Math.cos(this.yaw), 0, Math.sin(this.yaw));
   const eye = new THREE.Vector3(this.pos.x, eyeY, this.pos.z).addScaledVector(right, this.bobX);
 
-  if (this.thirdPerson) {
-    // 3인칭: 시선 반대쪽으로 물러선다. 지형을 뚫지 않도록 바닥 위로 살짝 띄움
-    const back = 0.11;
-    const camPos = eye.clone().addScaledVector(dir, -back);
-    const camGround = this.terrainHeightAt(camPos.x, camPos.z);
-    camPos.y = Math.max(camPos.y, camGround + 0.012);
-    this.camera.position.copy(camPos);
-    this.camera.lookAt(eye.clone().addScaledVector(dir, 0.3));
-    this.avatar.visible = true;
-    this.avatar.position.set(this.pos.x, this.pos.y, this.pos.z);
-    this.avatar.rotation.y = this.yaw + Math.PI;
-    this.avatar.scale.setScalar(this.crouching ? 0.62 : 1);
-  } else {
-    this.camera.position.copy(eye);
-    this.camera.lookAt(eye.clone().add(dir));
-    this.avatar.visible = false;
-  }
+  this.camera.position.copy(eye);
+  this.camera.lookAt(eye.clone().add(dir));
 };
 
 // 현재 서 있는 구역 이름 (HUD용)
@@ -301,95 +270,42 @@ FPPlayer.currentZone = function () {
   return '습지·숲';
 };
 
-// ── 간단한 저폴리 아바타 (3인칭에서만 보임) ──────────────────────────────────
-function buildAvatar() {
-  const g = new THREE.Group();
-  const skin = new THREE.MeshStandardMaterial({ color: 0xe8b58c, roughness: 0.8 });
-  const cloth = new THREE.MeshStandardMaterial({ color: 0x3f6fa8, roughness: 0.85 });
-  const E = FPPlayer.EYE_H;
-  const body = new THREE.Mesh(new THREE.BoxGeometry(E * 0.34, E * 0.46, E * 0.2), cloth);
-  body.position.y = E * 0.52;
-  const head = new THREE.Mesh(new THREE.BoxGeometry(E * 0.26, E * 0.26, E * 0.26), skin);
-  head.position.y = E * 0.9;
-  const legL = new THREE.Mesh(new THREE.BoxGeometry(E * 0.14, E * 0.3, E * 0.16), cloth);
-  legL.position.set(-E * 0.09, E * 0.15, 0);
-  const legR = legL.clone(); legR.position.x = E * 0.09;
-  [body, head, legL, legR].forEach(m => { m.castShadow = true; g.add(m); });
-  return g;
-}
-
 // ── 입력 바인딩 ─────────────────────────────────────────────────────────────
 function bindInput(P, canvas) {
-  const settingsPanel = document.getElementById('settingsPanel');
-  const overlayEl = document.getElementById('startOverlay');
-
-  // E키 설정창: 포인터락 상태에서는 마우스 커서가 없어서 슬라이더를 못 만진다.
-  // E를 누르면 포인터락을 풀어 커서를 돌려주고, 다시 E(또는 닫기)로 게임에 복귀한다.
-  function openSettings() {
-    P.settingsOpen = true;
-    settingsPanel.classList.remove('hidden');
-    overlayEl.classList.add('hidden');
-    P.keys = Object.create(null);              // 열린 동안 이동 입력 정리
-    if (document.pointerLockElement) document.exitPointerLock();
-  }
-  function closeSettings() {
-    P.settingsOpen = false;
-    settingsPanel.classList.add('hidden');
-    // 브라우저가 포인터락 재요청을 잠깐 막을 수 있으므로, 실패하면 시작 오버레이로 폴백
-    if (canvas.requestPointerLock) canvas.requestPointerLock();
-    setTimeout(() => {
-      if (document.pointerLockElement !== canvas && !P.settingsOpen) overlayEl.classList.remove('hidden');
-    }, 350);
-  }
-  P.openSettings = openSettings;
-  P.closeSettings = closeSettings;
-  P.toggleSettings = () => (P.settingsOpen ? closeSettings() : openSettings());
-  document.getElementById('settingsCloseBtn').addEventListener('click', closeSettings);
-
-  // 야장도 설정창과 똑같이 커서를 돌려줘야 표를 읽고 버튼을 누를 수 있다.
-  // 두 창이 동시에 열리면 서로 가리므로 하나를 열면 다른 하나는 닫는다.
-  function openField() {
-    if (P.settingsOpen) closeSettings();
-    P.settingsOpen = true;                     // 게임 조작 차단은 설정창과 같은 플래그를 쓴다
-    FPField.open();
-    overlayEl.classList.add('hidden');
-    P.keys = Object.create(null);
-    if (document.pointerLockElement) document.exitPointerLock();
-  }
-  function closeField() {
-    FPField.close();
-    P.settingsOpen = false;
-    if (canvas.requestPointerLock) canvas.requestPointerLock();
-    setTimeout(() => {
-      if (document.pointerLockElement !== canvas && !P.settingsOpen) overlayEl.classList.remove('hidden');
-    }, 350);
-  }
-  P.toggleField = () => (FPField.panelOpen ? closeField() : openField());
-  document.getElementById('fieldCloseBtn').addEventListener('click', closeField);
+  // 4차 D3: E키 설정창(#settingsPanel)과 F키 야장(#fieldPanel)을 오른쪽 학습지 패널 하나(firstperson/fp-sheet.js)로 합쳤다.
+  // 패널이 열려 있는 동안은 P.uiOpen 이 걷기·도구 조작을 막는다(FPSheet 가 세우고 내린다). E 는 4차 F2 부터 행동 지점 '상호작용' 키다.
+  P.uiOpen = false;
+  // 4차 M1: 무대에 들어가 있거나 드나드는 중(FPStage.busy)이면 걷기·잠금·시작 안내를 쓰지 않는다 — 무대는 커서로 조작한다
+  const inStage = () => typeof FPStage !== 'undefined' && FPStage.busy;
 
   window.addEventListener('keydown', e => {
-    // 야장 현장 과제의 글 칸·설정창 목록 상자에 글을 쓰는 중이면 단축키를 쓰지 않는다(3차 E4).
-    // 한글 자판에서 E = ㄷ, F = ㄹ 이라 이 검사가 없으면 글을 쓰다 야장·설정창이 닫혔다
+    // 학습지 현장 과제의 글 칸·목록 상자에 글을 쓰는 중이면 단축키를 쓰지 않는다(3차 E4, 마스터 §6-5).
+    // 한글 자판에서 E = ㄷ, F = ㄹ 이라 이 검사가 없으면 글을 쓰다 학습지가 닫혔다
     if (e.target && e.target.closest && e.target.closest('input[type="text"], textarea, select')) return;
+    // 4차 D4: 첫 진입 안내가 열려 있으면 단축키를 쓰지 않는다(안내 버튼을 Space·Enter 로 누를 수 있게 — fp-onboard.js)
+    if (typeof FPOnboard !== 'undefined' && FPOnboard.isOpen) return;
     // e.repeat 가드: 키를 누르고 있으면 keydown이 연속으로 들어와 창이 깜빡인다
-    if (e.code === 'KeyE') {
-      if (!e.repeat) { if (FPField.panelOpen) closeField(); else P.toggleSettings(); }
-      e.preventDefault(); return;
-    }
-    if (e.code === 'KeyF') { if (!e.repeat) P.toggleField(); e.preventDefault(); return; }
-    if (P.settingsOpen) return;                // 설정창·야장이 열려 있으면 게임 조작 차단
+    if (e.code === 'KeyF') { if (!e.repeat) FPSheet.toggle(); e.preventDefault(); return; }
+    if (P.uiOpen) return;                      // 학습지가 열려 있으면 게임 조작 차단 (Tab·화살표는 패널 안 초점 이동에 쓴다)
+    if (inStage()) return;                     // 4차 M1: 무대(미니게임) 안 — 키는 fp-stage.js 가 받는다(Tab·Enter·Esc·숫자키)
     P.keys[e.code] = true;
-    if (e.code === 'F5' || e.code === 'KeyV') { P.thirdPerson = !P.thirdPerson; e.preventDefault(); }
-    if (e.code === 'KeyG') P.flying = !P.flying;    // F는 야장이 가져갔다
-    if (e.code === 'KeyT' && !e.repeat) FPWorld.timeFlowing = !FPWorld.timeFlowing;
     if (e.code === 'KeyM' && !e.repeat) FPMinimap.toggle();
     if (e.code === 'KeyR') P.respawn();
-    if (e.code === 'KeyH') document.getElementById('helpPanel').classList.toggle('hidden');
+    // 4차 D4: H 도움말 패널을 학습지 [과제] 맨 아래 '조작법' 절로 옮겼다 — H 는 그 절을 연다
+    if (e.code === 'KeyH' && !e.repeat) { FPSheet.showHelp(); e.preventDefault(); return; }
+    // 4차 E1: [ · ] = 타임라인 정거장 이전/다음(fp-timeline.js). e.code 라 한글 자판에서도 같은 키. 누르고 있어도 한 칸씩만
+    if (e.code === 'BracketLeft' || e.code === 'BracketRight') {
+      if (!e.repeat) FPTimeline.step(e.code === 'BracketLeft' ? -1 : 1);
+      e.preventDefault(); return;
+    }
+    // 4차 F2: E = 겨눈 행동 지점과 상호작용(fp-actions.js). e.code 라 한글 자판 ㄷ 이어도 같다. 겨눈 지점이 없으면 아무 일도 없다
+    // 4차 M2: 행동 지점을 겨누지 않았으면 무대 입구(카페 문 등 — fp-stage.js)
+    if (e.code === 'KeyE') { if (!e.repeat && !FPActions.interact()) FPStage.interactDoor(); e.preventDefault(); return; }
     if (e.code === 'Space') e.preventDefault();   // 스페이스로 페이지가 스크롤되는 것 방지
-    // 숫자키 1~9로 단축바 선택
+    // 숫자키 1~4로 단축바 선택 (칸 수는 fp-tools.js HOTBAR_N)
     if (e.code.startsWith('Digit')) {
       const n = Number(e.code.slice(5));
-      if (n >= 1 && n <= 9) FPTools.select(n - 1);
+      if (n >= 1 && n <= HOTBAR_N) FPTools.select(n - 1);
     }
   });
   window.addEventListener('keyup', e => { P.keys[e.code] = false; });
@@ -405,17 +321,24 @@ function bindInput(P, canvas) {
   // 버튼을 누르지 않아도 마우스를 움직이는 것만으로 시점이 돈다(드래그 방식 폐지).
   const overlay = document.getElementById('startOverlay');
   function enterGame() {
+    if (inStage()) return;   // 4차 M2: 무대 안(예: ?stage=cafe 첫 방문의 첫 안내 [시작하기])에서는 잠그지 않는다 — 무대는 커서로 조작
     const root = document.documentElement;
     if (!document.fullscreenElement && root.requestFullscreen) {
       // 실패해도(권한/브라우저 정책) 포인터락만으로 플레이는 가능해야 하므로 무시하고 진행
       root.requestFullscreen().catch(() => {});
     }
-    if (canvas.requestPointerLock) canvas.requestPointerLock();
+    // 요즘 Chrome 의 requestPointerLock 은 Promise 를 돌려주고, 거절되면(Esc 로 푼 직후 1초 안에 다시 누름,
+    // 잠금을 막는 내장 브라우저 등) 받는 곳이 없어 콘솔에 빨간 'Uncaught (in promise)'가 남았다.
+    // 거절돼도 '클릭해서 시작' 안내가 그대로 있어 다시 누르면 되므로 조용히 받는다(2026-11-19 사람 확인 E 묶음).
+    if (canvas.requestPointerLock) {
+      const p = canvas.requestPointerLock();
+      if (p && typeof p.catch === 'function') p.catch(() => {});
+    }
   }
   P.enterGame = enterGame;
   overlay.addEventListener('click', enterGame);
   canvas.addEventListener('click', () => {
-    if (document.pointerLockElement !== canvas && !P.settingsOpen) enterGame();
+    if (document.pointerLockElement !== canvas && !P.uiOpen && !inStage()) enterGame();
   });
 
   // 시점 튐 방지. Windows Chrome은 포인터락 중에 movementX/Y가 가끔 한 번씩 수백 픽셀로
@@ -446,12 +369,13 @@ function bindInput(P, canvas) {
   });
 
   // 포인터락이 풀리면(ESC) 다시 안내 오버레이를 띄운다.
-  // 단, E키로 설정창을 연 경우는 의도된 해제이므로 오버레이를 띄우지 않는다.
+  // 단, F키로 학습지를 연 경우는 의도된 해제이므로 오버레이를 띄우지 않는다.
   document.addEventListener('pointerlockchange', () => {
     const locked = document.pointerLockElement === canvas;
     if (locked) { lockedAt = performance.now(); lastMove = 0; }
-    if (locked) overlay.classList.add('hidden');
-    else if (!P.settingsOpen) overlay.classList.remove('hidden');
+    // 다시 잠기면 안내는 처음 모양('클릭해서 시작' 설명)으로 — 학습지를 닫은 뒤의 짧은 '3D를 클릭해 계속'은 그때 한 번만
+    if (locked) { overlay.classList.add('hidden'); delete overlay.dataset.mode; }
+    else if (!P.uiOpen && !inStage()) overlay.classList.remove('hidden');
     if (!locked) P.keys = Object.create(null);
   });
 }

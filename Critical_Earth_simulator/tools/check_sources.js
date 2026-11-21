@@ -21,7 +21,7 @@ const errors = [];
 const err = m => errors.push(m);
 
 // ── 1) 화면에서 쓰는 키 ─────────────────────────────────────────────────────
-// 직접 실험 탭·1인칭은 이번 범위 밖이지만 같은 규칙을 따르도록 함께 훑는다.
+// 조감(루트 html·js/)과 1인칭(firstperson/)을 함께 훑는다.
 const SCAN_DIRS = ['.', 'js', 'firstperson'];
 const files = [];
 for (const d of SCAN_DIRS) {
@@ -33,6 +33,7 @@ const used = new Map();   // 키 -> 처음 나온 파일
 const PATTERNS = [/data-src\s*=\s*["']([^"'$`{}]+)["']/g, /srcButton\(\s*["']([\w]+)["']/g];
 // 탐구 단계 데이터(js/inquiry-steps.js)는 사건 표지·영향 카드의 출처를 src: '키' 로 적고 실행기가 srcButton(src)로 그린다
 const STEP_FILE = path.join('js', 'inquiry-steps.js');
+const ITEMS_FILE = path.join('firstperson', 'fp-recycle-items.js');
 for (const f of files) {
   const text = fs.readFileSync(path.join(ROOT, f), 'utf8');
   for (const re of f === STEP_FILE ? [...PATTERNS, /\bsrc:\s*["']([\w]+)["']/g] : PATTERNS) {
@@ -40,6 +41,15 @@ for (const f of files) {
       const key = m[1].trim();
       if (!used.has(key)) used.set(key, f);
       if (!(key in SOURCES)) err(`${f}: data-src "${key}" 가 등록부에 없음`);
+    }
+  }
+  // 4차 M3: 분리배출 품목 데이터(firstperson/fp-recycle-items.js)는 근거를 src: ['키', …] 목록으로 적고 무대가 srcButton(키)로 그린다
+  if (f === ITEMS_FILE) {
+    for (const m of text.matchAll(/\bsrc:\s*\[([^\]]*)\]/g)) {
+      for (const k of m[1].matchAll(/["']([\w]+)["']/g)) {
+        if (!used.has(k[1])) used.set(k[1], f);
+        if (!(k[1] in SOURCES)) err(`${f}: src "${k[1]}" 가 등록부에 없음`);
+      }
     }
   }
 }

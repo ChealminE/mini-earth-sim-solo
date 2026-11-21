@@ -1,5 +1,6 @@
-// ================= 부트스트랩: 세 탭을 엮고 초기 렌더를 시작 =================
-const bundles = { current: sceneCurrent, future: sceneFuture, live: sceneLive };
+// ================= 부트스트랩: 두 탭을 엮고 초기 렌더를 시작 =================
+// 4차 A3: 직접 실험 탭을 지워 현재 실태·미래 예측 두 탭만 남았다(직접 실험은 협동판 태그 v2.0-collab-final 에 있다)
+const bundles = { current: sceneCurrent, future: sceneFuture };
 let activeTab = 'current';
 // 보기 도구 버튼 눌림 표시(파일 끝 3차 E2 절이 채운다). updateLegend3D 가 그보다 먼저 불리므로 선언은 여기 맨 위에 둔다
 // (let 을 아래에 두면 초기화 전 이름을 typeof 로 읽어도 오류 — 3차 B1의 탐구 복원 버그와 같은 종류)
@@ -9,10 +10,9 @@ let syncTools = null;
 const TAB_HEADERS = {
   current: { title: '현재 실태', desc: '관측으로 본 지구의 지금: 대기 CO₂·기온·바다 pH·화석연료 배출 (연평균)' },
   future: { title: '미래 예측', desc: '1750년부터 2200년까지, 사람이 내보낸 탄소가 지구를 어떻게 바꾸는지 재생해 보세요.' },
-  live: { title: '직접 실험', desc: '아두이노·ESP32 보드의 센서 값을 실시간으로 받아 기록하고, 실험이 끝나면 정리·분석해 엑셀로 내보냅니다.' },
 };
 
-// 라이트(종이) 테마를 쓰는 탭. 직접 실험 탭은 동료가 옮기기 전까지 예전 다크 화면 (docs/테마_이관_가이드.md)
+// 라이트(종이) 테마를 쓰는 탭. 4차 A3 뒤로 두 탭 모두 종이 테마지만, 아래 학습지·카메라 판단이 이 목록을 읽으므로 남긴다(탭을 더하면 여기서 정한다)
 const PAPER_TABS = ['current', 'future'];
 // 모형 전체가 가로로 들어오는 종횡비(실측: 1.07에서는 바다 왼쪽 끝이 잘렸다)
 const PAPER_CAM_FIT = 1.4;
@@ -24,7 +24,6 @@ function switchTab(name) {
   ensureSceneBuilt(bundles[name]); // 처음 여는 화면이면 이제 아크릴을 만든다 (common.js sceneFor)
   document.getElementById('tab-current').classList.toggle('active', name === 'current');
   document.getElementById('tab-future').classList.toggle('active', name === 'future');
-  document.getElementById('tab-live').classList.toggle('active', name === 'live');
   document.getElementById('tabHeaderTitle').textContent = TAB_HEADERS[name].title;
   document.getElementById('tabHeaderDesc').textContent = TAB_HEADERS[name].desc;
   document.getElementById('topbarDesc').textContent = TAB_HEADERS[name].desc;
@@ -36,28 +35,19 @@ function switchTab(name) {
     a.classList.toggle('is-on', on);
     if (on) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
   });
-  // 종이(라이트) 테마는 현재 실태·미래 예측만. 직접 실험 탭은 동료가 옮기기 전까지 예전 다크 화면 그대로 둔다
-  // (docs/테마_이관_가이드.md). tab-<이름> 클래스로 탭별 배치를 고른다(css/paper.css).
+  // 종이(라이트) 테마: 남은 두 탭 모두. tab-<이름> 클래스로 탭별 배치를 고른다(css/paper.css).
   const paper = PAPER_TABS.includes(name);
   for (const t of Object.keys(TAB_HEADERS)) document.body.classList.toggle('tab-' + t, t === name);
   document.body.classList.toggle('paper', paper);
-  setSceneBackdrop(paper ? Theme.hex('--paper') : LIVE_BACKDROP);
+  setSceneBackdrop(Theme.hex('--paper'));
   // 종이 테마 화면은 3D 칸이 세로로 길 수 있다 - 모형 전체(물·숲·도시)가 가로로 들어오게 (common.js)
   setCameraFit(paper ? PAPER_CAM_FIT : null, paper ? PAPER_MIN_FOV : undefined);
-  // 직접 실험 탭은 아크릴을 화면 가득 두고 그 위에 띄운다: 처음엔 '실험 준비'(body.live-setup),
-  // 실험을 시작하면 '실험 화면'(body.live-run) - js/live-setup.js가 전환
-  if (name !== 'live') document.body.classList.remove('live-setup', 'live-run');
   activeTab = name;
   if (typeof Inquiry !== 'undefined' && Inquiry) Inquiry.onTab(name);   // 탐구 경로는 탭마다 다르다 (3차 E1, js/inquiry.js)
   if (IRScope) IRScope.onTab(name);   // 적외선 보기(3차 F): 위에서 종이색으로 칠한 3D 바탕을 켬 상태에 맞춘다 (js/ir-scope.js)
   fitRenderer();   // 탭에 따라 3D 칸 크기가 달라진다
   if (name === 'future') {
     activateFutureTab();   // 그래프 크기 맞추기 + 재생 연도의 엔진 값을 3D에 반영 (js/tab-future.js)
-  } else if (name === 'live') {
-    activateLiveTab();
-    liveGraphs.forEach(g => g.chart.resize());
-    resizeAnalysisChart();
-    applyState(sceneLive);
   } else {
     resizeCurrentGraphs();   // 그래프 작업대(3차 C3) 또는 예전 그래프 4개 (js/tab-current.js)
     sceneCurrent.state.co2 = lastOf(obsCo2).y; // 마지막 완전한 해의 NOAA 지구 평균
@@ -68,10 +58,10 @@ function switchTab(name) {
 Icons.fill();   // 마크업의 <span data-icon="…"> 자리에 아이콘 채우기 (js/icons.js)
 applyState(sceneCurrent);
 applyState(sceneFuture);
-applyState(sceneLive);
 fitRenderer();
 
-// 시작 화면(select.html)의 카드에서 "/?tab=live"처럼 쿼리로 들어오면 그 탭이 바로 열리게 함.
+// 시작 화면(select.html)의 카드에서 "?tab=future"처럼 쿼리로 들어오면 그 탭이 바로 열리게 함.
+// 없는 탭(예전 주소 ?tab=live 등)은 TAB_HEADERS 에 없으므로 기본 탭(현재 실태)이 열린다.
 // animate()가 첫 프레임부터 지금 탭의 아크릴을 그리므로, 아직 안 만든 기본 탭(현재 실태)을 그리지 않게 탭을 먼저 정한다.
 const initialTab = new URLSearchParams(location.search).get('tab');
 // 처음 화면도 switchTab을 거쳐야 body 클래스(종이 테마·탭 배치)와 머리줄 표시가 정해진다
@@ -81,7 +71,7 @@ document.documentElement.classList.remove('booting'); // 화면이 정해졌으�
 
 window.addEventListener('resize', fitRenderer);
 // 3차 B1: 3D 칸·그래프 칸 크기는 창 크기만이 아니라 학습지 접기(B2)로도 바뀐다. 창 resize 이벤트로는 그걸 못 잡으므로
-// 칸 자체를 지켜본다. 직접 실험 탭 그래프는 예전처럼 Chart.js 자체 반응형에 맡긴다(범위 밖).
+// 칸 자체를 지켜본다.
 if (typeof ResizeObserver !== 'undefined') {
   new ResizeObserver(() => fitRenderer()).observe(glContainer);
   new ResizeObserver(() => {
@@ -210,15 +200,18 @@ function updateLegend3D() {
 }
 
 // ── [1인칭으로] (3차 E4): 지금 보고 있는 배출 경로·연도로 1인칭을 연다 ──
-// 미래 예측 = 고른 시나리오와 재생 연도, 현재 실태 = 엔진이 실제 배출로 계산하는 마지막 해(EarthSystem.LAST_HIST_YEAR).
+// 미래 예측 = 고른 시나리오와 재생 연도, 현재 실태 = 1인칭의 '현재'(FP_NOW_YEAR).
 // 1인칭은 같은 엔진으로 그 해의 전 지구 CO₂를 다시 계산한다(firstperson/fp-main.js FPScenario). 주소는 누르는 순간 만든다.
+// 4차 E2(마스터 §4 가 허용한 조감 변경 — 링크 연도만): 현재 실태의 링크 연도 LAST_HIST_YEAR(2023) → 1인칭 '현재' 2026(마스터 D6).
+// 조감은 actions-core.js(ActionsCore.START = FPModel.NOW_YEAR)를 읽지 않아 값을 여기 적는다 — test_fp_model 이 둘이 같은지 본다.
+const FP_NOW_YEAR = 2026;
 function firstPersonQuery() {
   const q = new URLSearchParams();
   if (activeTab === 'future') {
     q.set('scenario', FUT.preset);
     if (FUT.preset === 'custom') q.set('levers', JSON.stringify(FUT.levers));
     q.set('year', String(Math.round(FUT.year)));
-  } else q.set('year', String(EarthSystem.LAST_HIST_YEAR));
+  } else q.set('year', String(FP_NOW_YEAR));
   return '?' + q.toString();
 }
 {

@@ -490,10 +490,9 @@ $('futCharts').addEventListener('click', e => {
 
 // ── 기록 서랍 ─────────────────────────────────────────────────────────
 // 프로그램 전체의 공통 측정 요소 4개. 열 이름(co2_ppm, air_temp, water_temp, ph)은
-// 직접 실험 탭과 1인칭 야장도 나중에 이 이름으로 맞출 예정이라 그대로 쓴다. 값은 모두 연평균.
+// 1인칭 야장도 나중에 이 이름으로 맞출 예정이라 그대로 쓴다. 값은 모두 연평균.
 // 기온은 엔진이 편차(T)만 내므로 산업화 이전 전 지구 평균 지표 기온 AIR_T0에 더한다.
-// AIR_T0 = 14 °C는 대략치다 (NOAA가 밝힌 20세기 전 지구 평균 13.9 °C를 반올림한 값 - 원문 미확인, 등록부 model_air_temp).
-const AIR_T0 = 14.0;
+// AIR_T0(14 °C, 등록부 model_air_temp)는 4차 C2에서 js/earth-model.js 로 옮겼다 — 1인칭 대기 온도계와 같은 기준을 쓰려고.
 const MEAS = [
   { key: 'co2_ppm', digits: 1 }, { key: 'air_temp', digits: 2 }, { key: 'water_temp', digits: 2 }, { key: 'ph', digits: 3 },
 ];
@@ -551,7 +550,7 @@ $('recCsv').addEventListener('click', () => {
   const cols = ['year', 'scenario', 'earth', ...MEAS.map(m => m.key)];
   const esc = v => (/[",\n]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : String(v));
   const csv = [cols.join(','), ...measRecords.map(r => cols.map(c => esc(r[c])).join(','))].join('\r\n');
-  // BOM: 엑셀에서 한글이 깨지지 않게 (직접 실험 탭 CSV와 같은 방식, downloadBlob은 js/xlsx-lite.js)
+  // BOM: 엑셀에서 한글이 깨지지 않게 (downloadBlob은 js/xlsx-lite.js)
   downloadBlob(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' }), `미래예측_측정기록_${fileStamp()}.csv`);
 });
 
@@ -955,6 +954,29 @@ function activateFutureTab() {
   apply3D(sceneNature, sampleAt(FUT.nature, FUT.year));
 }
 
+// ── 주소의 직접 설계 레버 (4차 T4 — 마스터 §4 가 허용한 조감 변경 하나) ──
+// 1인칭 학습지 [우리 사회]의 [조감에서 그래프로 보기]가 ?tab=future&preset=custom&levers={…} 로 연다(단일 HTML 은 껍데기가
+// window.__AERIAL_QUERY__ 로 넘긴다). 같은 엔진·같은 레버라 같은 해의 값이 1인칭 표와 같다.
+// 낯선 주소에 대비해 칸마다 숫자인지 보고 엔진 범위로 자르며, 빠진 칸은 지금 값, 전력 세 비중의 합이 1이 아니면 통째로 버린다.
+function leversFromQuery() {
+  const q = new URLSearchParams(window.__AERIAL_QUERY__ || location.search);
+  if (q.get('preset') !== 'custom' || !q.get('levers')) return null;
+  let o = null;
+  try { o = JSON.parse(q.get('levers')); } catch (e) { return null; }
+  if (!o || typeof o !== 'object') return null;
+  const L = { ...ES.LEVER_NOW };
+  for (const k of Object.keys(L)) {
+    const v = Number(o[k]);
+    if (o[k] == null || !Number.isFinite(v)) continue;
+    const r = ES.LEVER_RANGE[k] || [0, 1];   // 전력 세 비중은 0~1
+    L[k] = Math.min(Math.max(r[0], r[1]), Math.max(Math.min(r[0], r[1]), v));
+  }
+  return Math.abs(L.fossilShare + L.nuclearShare + L.renewShare - 1) < 1e-6 ? L : null;
+}
+{
+  const L = leversFromQuery();
+  if (L) { FUT.preset = 'custom'; FUT.levers = L; leversToInputs(L); showLeverValues(); }
+}
 computeNature();
 setPreset(FUT.preset);   // 궤적 계산 + 버튼 표시
 

@@ -8,15 +8,14 @@ renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.1;
 
-// 3D 바탕색: 탭마다 다르다. 현재 실태·미래 예측은 종이색(css/theme.css --paper), 직접 실험 탭은 예전 그대로
-// 검정(렌더러 기본값)을 넘긴다 - 직접 실험 탭은 동료가 테마를 옮길 때까지 바꾸지 않는다.
-const LIVE_BACKDROP = 0x000000;
+// 3D 바탕색: 현재 실태·미래 예측·시작 화면 모두 종이색(css/theme.css --paper)을 넘긴다. 적외선 보기는 --ir-bg.
+// (4차 A3: 검정 바탕을 쓰던 직접 실험 탭을 지웠다.)
 function setSceneBackdrop(hex) { renderer.setClearColor(hex, 1); }
 
 const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 100);
 // 화각은 세로 기준 38°다. 3D 칸이 세로로 길면 같은 세로 화각에서 모형 양옆이 잘린다.
 // setCameraFit(a)를 부른 화면(현재 실태·미래 예측)에서만, 칸의 종횡비가 a보다 좁을 때 세로 화각을 넓혀
-// 가로로 보이는 폭을 종횡비 a일 때와 같게 둔다. 부르지 않은 화면(직접 실험 탭·시작 화면)은 예전과 똑같다.
+// 가로로 보이는 폭을 종횡비 a일 때와 같게 둔다. 부르지 않은 화면(시작 화면)은 예전과 똑같다.
 // 거꾸로 칸이 넓고 낮으면(3차 B1의 좌측 위 3D 칸, 약 3.5:1) 세로 38°로는 받침대 아래가 잘린다. 그래서 세로 화각의
 // 최솟값(minFov)도 함께 받는다. 장면 크기·배치·카메라 거리는 그대로 두고 화각만 넓힌다.
 const CAM_FOV = 38;
@@ -56,7 +55,8 @@ function getCameraView() {
   return { angleY: camAngleY, angleX: camAngleX, dist: camDist, target: camTarget.toArray() };
 }
 let camTween = 0;
-function setCameraView(v, animate = true) {
+// ms: 옮기는 시간. 탐구 모드는 기본 0.9초, 시작 화면의 1인칭 카드 전환은 0.6초(4차 A5)
+function setCameraView(v, animate = true, ms = 900) {
   cancelAnimationFrame(camTween);
   const from = getCameraView();
   const apply = k => {
@@ -67,10 +67,10 @@ function setCameraView(v, animate = true) {
     updateCamera();
   };
   if (!animate || matchMedia('(prefers-reduced-motion: reduce)').matches) { apply(1); return; }
-  const t0 = performance.now(), MS = 900;
+  const t0 = performance.now(), MS = ms;
   const step = now => {
     if (isDragging) return;
-    const k = Math.min(1, (now - t0) / MS);
+    const k = Math.min(1, Math.max(0, (now - t0) / MS));   // rAF 시각은 t0보다 앞설 수 있다 — 음수면 시작점 밖으로 튄다(느린 PC에서 보임)
     apply(1 - (1 - k) ** 3);
     if (k < 1) camTween = requestAnimationFrame(step);
   };
@@ -638,7 +638,8 @@ const VIEW3D = { co2: false, indicator: false };
 
 // ================= 아크릴 모형: 탭마다 독립적인 씬을 만드는 팩토리 함수 =================
 // opts.paper: 종이(라이트) 테마 탭(현재 실태·미래 예측)의 씬. 2차 개편 D의 3D 시각 언어(밝은 바탕 맞춤,
-//   CO₂ 보기, 도시 성장, 산호·조개 등)는 이 씬에서만 켠다 - 직접 실험 탭은 같은 함수를 쓰지만 예전 모습 그대로 둔다.
+//   CO₂ 보기, 도시 성장, 산호·조개 등)는 이 씬에서만 켠다. 4차 A5부터 모든 화면(대시보드 두 탭·시작 화면)이 종이 씬이라
+//   아래 `!PAPER` 갈래(예전 직접 실험 탭·예전 시작 화면 모습)는 부르는 곳이 없다 — 되돌리기 쉽게 지우지 않고 남겼다.
 // opts.nature: 미래 예측 탭의 '자연만 있는 지구' 씬 (도시 구역 대신 자연 식생, D6)
 function buildAcrylicScene(opts = {}) {
 const PAPER = !!opts.paper;
@@ -866,7 +867,7 @@ if (PAPER) {
 // 받침대 연산 효과 (2차 F6): 미래 예측 탭 씬(인간활동·자연 지구)에만
 const predictFx = PAPER && opts.predictFx ? buildPredictFx(scene) : null;
 
-// 4) 구름. 종이 탭은 흐르는 뭉게구름(buildClouds, 2차 F5), 직접 실험 탭은 예전 얼음 덩어리 클러스터 그대로
+// 4) 구름. 종이 탭은 흐르는 뭉게구름(buildClouds, 2차 F5), 종이가 아닌 예전 씬은 얼음 덩어리 클러스터
 const clouds = PAPER ? buildClouds(box, BOX_W, BOX_H) : null;
 if (!PAPER) {
   const cloudIceMat = new THREE.MeshPhysicalMaterial({ map: sharedTex.iceCrack, color: 0xffffff, roughness: 0.1, transmission: 0.5, clearcoat: 1, flatShading: true });
@@ -1445,7 +1446,7 @@ cityGroup.add(solarPanels);
 
 // ── 도시가 역사를 따라 자란다 (2차 개편 D3, 종이 탭 인간활동 지구만) ──
 // 예전 도시(건물 8채·공장 1개·자동차 12대, 자동차 한 대가 메시 10개)는 고정 모양이라 1750년에도 빌딩이 서 있었다.
-// 종이 탭은 아래 인스턴싱 도시로 바꾸고 예전 것은 숨긴다(직접 실험 탭은 예전 그대로).
+// 종이 탭은 아래 인스턴싱 도시로 바꾸고 예전 것은 숨긴다(종이가 아닌 예전 씬만 예전 도시를 쓴다).
 const city = PAPER && !opts.nature ? buildCityGrowth(cityGroup, CITY_BASE, stackTex) : null;
 // 자연 지구: 도시 구역 자리에 나무·풀 (인스턴싱). 1750~2200 내내 그대로다 - 그것이 보여 줄 내용이다(D6)
 if (WILD) buildWilderness(cityGroup, (x, z) => CITY_BASE + terrainNoise(x, -z, WETLAND_TERRAIN_AMP, WETLAND_TERRAIN_SEED + 2.3));
@@ -1520,7 +1521,7 @@ function applyState(S) {
     // 적외선 보기(3차 F): 켜져 있으면 입자 개수·밝기·화살표를 이 씬 값으로. ir-scope.js 는 이 파일 뒤에 읽히지만 applyState 는 그 뒤에 불린다
     if (typeof IRScope !== 'undefined') IRScope.apply(S);
   } else {
-    // 직접 실험 탭: 예전 그대로 (실측 CO₂ → 뚜껑·입자·안개 색)
+    // 종이가 아닌 예전 씬(예전 직접 실험 탭이 쓰던 모습): 실측 CO₂ → 뚜껑·입자·안개 색
     S.lidMat.opacity = 0.12 + intensity * 0.35;
     S.lidMat.color.lerpColors(S.CLEAR_SKY, S.HAZY_SKY, intensity);
     S.atmoMat.opacity = 0.35 + intensity * 0.45;
@@ -1552,7 +1553,7 @@ function applyState(S) {
     // 실제 y좌표는 매 프레임 animate()에서 shrinkY + 파도 높이를 합쳐 계산하므로 여기선 오프셋만 저장
     o.shrinkY = -(1 - shrink) * 0.1;
   });
-  }   // 직접 실험 탭 바다·빙하 끝
+  }   // 종이가 아닌 예전 씬 바다·빙하 끝
 
   // 실측 습도 → 응결 물방울 농도·낙하 속도 (역시 co2 강도와 더 강한 쪽 반영)
   const humIntensity = Math.min(1, Math.max(0, (S.state.hum - HUM_MIN) / (HUM_MAX - HUM_MIN)));
@@ -1775,16 +1776,18 @@ function stepScene(S) {
 }
 
 // ================= 화면별 아크릴은 필요할 때만 만들기 =================
-// 대시보드(index.html)에는 현재 실태·미래 예측·직접 실험 세 화면이 들어 있지만, 시작 화면에서 하나를
-// 골라 들어오므로 한 번에 하나만 보인다. 예전처럼 세 화면 아크릴을 다 만들면 둘은 만들기만 하고 안 쓰는
+// 대시보드(index.html)에는 현재 실태·미래 예측 두 화면이 들어 있지만, 시작 화면에서 하나를
+// 골라 들어오므로 한 번에 하나만 보인다. 두 화면 아크릴을 다 만들면 하나는 만들기만 하고 안 쓰는
 // 셈이라(나무·물·건물 한 세트씩), 지금 연 화면 것만 만든다. 나머지는 state만 가진 빈 껍데기로 두고,
 // 그 화면을 실제로 열 때 ensureSceneBuilt()가 같은 객체를 채운다 - 탭 코드가 들고 있는 sceneFuture 같은
 // 변수가 그대로 같은 객체를 가리키므로 탭 코드는 고칠 필요가 없다.
-const DASHBOARD_TAB = new URLSearchParams(location.search).get('tab') || 'current';
-// paper: 종이 테마 탭(현재 실태·미래 예측)의 씬인가 - 2차 개편 D의 새 3D 표현은 이 씬에서만 만든다
+// 없는 탭(예전 주소 ?tab=live 등)은 main.js 가 현재 실태를 여므로 여기서도 현재 실태 아크릴을 처음부터 만든다.
+const DASHBOARD_TAB = new URLSearchParams(location.search).get('tab') === 'future' ? 'future' : 'current';
+// paper: 종이 테마 씬인가 - 대시보드 두 탭은 모두 종이 테마(2차 개편 D의 새 3D 표현). 시작 화면(select.html)도
+// 4차 A5부터 종이 씬이다.
 // predictFx: 받침대 연산 효과(2차 F6)를 만들 씬인가 - 미래 예측 탭만
 function sceneFor(tab) {
-  const opts = { paper: tab !== 'live', predictFx: tab === 'future' };
+  const opts = { paper: true, predictFx: tab === 'future' };
   return tab === DASHBOARD_TAB ? Object.assign(buildAcrylicScene(opts), { opts }) : { dormant: true, opts, state: {} };
 }
 function ensureSceneBuilt(S) {

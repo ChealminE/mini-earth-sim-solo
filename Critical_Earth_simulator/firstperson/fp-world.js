@@ -35,17 +35,19 @@ const WAVE_OCT = {
   midA: 0.008, midB: 0.006,       // 중간 물결
   ripA: 0.0028, ripB: 0.0022,     // 잔물결 (반사 반짝임을 만드는 층)
 };
-// 최대 진폭 = 전 옥타브 합 * 폭풍계수. 육지(GROUND_BASE)보다 확실히 낮게 유지된다.
+// 최대 진폭 = 전 옥타브 합. 육지(GROUND_BASE)보다 확실히 낮게 유지된다.
+// 4차 C5: 예전에는 CO₂가 높을수록 파도가 거칠어졌다(× (1 + co2k × 0.5)). CO₂ 농도와 파고 사이에 근거 있는 대응이 없고
+// CO₂는 눈에 보이지 않는다(2차 D2) → CO₂ 항(폭풍계수)을 지웠다. 파도는 연도와 상관없이 같다.
 const WAVE_MAX_AMPLITUDE =
-  (WAVE_OCT.swellA + WAVE_OCT.swellB + WAVE_OCT.midA + WAVE_OCT.midB + WAVE_OCT.ripA + WAVE_OCT.ripB) * 1.5;
-function waveHeightAt(lx, ly, t, intensity, halfD) {
+  WAVE_OCT.swellA + WAVE_OCT.swellB + WAVE_OCT.midA + WAVE_OCT.midB + WAVE_OCT.ripA + WAVE_OCT.ripB;
+function waveHeightAt(lx, ly, t) {
   const swell = Math.sin(lx * 1.5 + t * 0.70) * WAVE_OCT.swellA
               + Math.sin(ly * 1.9 - t * 0.55) * WAVE_OCT.swellB;
   const mid = Math.sin(lx * 5.5 + ly * 4.2 + t * 1.60) * WAVE_OCT.midA
             + Math.sin(ly * 6.3 - lx * 4.1 + t * 1.90) * WAVE_OCT.midB;
   const ripple = Math.sin(lx * 14.0 + ly * 11.0 + t * 3.40) * WAVE_OCT.ripA
                + Math.sin(ly * 15.0 - lx * 17.0 + t * 4.10) * WAVE_OCT.ripB;
-  return (swell + mid + ripple) * (1 + intensity * 0.5);   // CO2가 높을수록 거칠어짐
+  return swell + mid + ripple;
 }
 
 // 파도 표면의 법선을 '미분으로 직접' 구한다.
@@ -53,8 +55,8 @@ function waveHeightAt(lx, ly, t, intensity, halfD) {
 // 정점 12,500개를 매 프레임 처리하면 3ms 넘게 먹는다(측정치). 파도 수식을 이미 알고 있으니
 // 편미분 한 번이면 끝나고, 결과도 면 평균이 아니라 정확한 접평면 법선이라 반사가 더 매끈하다.
 // 반환은 waveMesh 로컬 좌표계 기준 - 이 평면은 -90도 회전해서 쓰므로 로컬 +z가 '위'다.
-function waveNormalAt(lx, ly, t, intensity, out) {
-  const S = 1 + intensity * 0.5, O = WAVE_OCT;
+function waveNormalAt(lx, ly, t, out) {
+  const O = WAVE_OCT;
   const c1 = Math.cos(lx * 1.5 + t * 0.70);
   const c2 = Math.cos(ly * 1.9 - t * 0.55);
   const c3 = Math.cos(lx * 5.5 + ly * 4.2 + t * 1.60);
@@ -62,9 +64,9 @@ function waveNormalAt(lx, ly, t, intensity, out) {
   const c5 = Math.cos(lx * 14.0 + ly * 11.0 + t * 3.40);
   const c6 = Math.cos(ly * 15.0 - lx * 17.0 + t * 4.10);
   const dx = (O.swellA * 1.5 * c1 + O.midA * 5.5 * c3 - O.midB * 4.1 * c4
-            + O.ripA * 14.0 * c5 - O.ripB * 17.0 * c6) * S;
+            + O.ripA * 14.0 * c5 - O.ripB * 17.0 * c6);
   const dy = (O.swellB * 1.9 * c2 + O.midA * 4.2 * c3 + O.midB * 6.3 * c4
-            + O.ripA * 11.0 * c5 + O.ripB * 15.0 * c6) * S;
+            + O.ripA * 11.0 * c5 + O.ripB * 15.0 * c6);
   const inv = 1 / Math.sqrt(dx * dx + dy * dy + 1);
   out[0] = -dx * inv; out[1] = -dy * inv; out[2] = inv;
 }
@@ -102,24 +104,19 @@ const FPWorld = {
   waterMesh: null,
   waveGeo: null, wavePosAttr: null, waveBase: null,
   waterWall: null,    // 물 옆면(윗변이 파도를 따라감)
-  // CO2가 정하는 기준 시야거리. 계절·날씨 계수가 여기에 곱해진다(applyEnvironment).
+  // 시야거리(applyEnvironment). 4차 C5: CO₂와 무관하게 맑은 낮 값으로 고정(예전 1000 ppm에서 1.1유닛까지 줄어들던 연출 삭제).
   fogBase: { far: 7.0, near: 0.25 },
   // 실측 도구가 측정 지점을 구분하는 데 쓰는 목록
   trees: [],          // {x, z, r} - 나무 근처는 광합성으로 CO2가 낮게 나온다
   iceMeshes: [],      // 빙하(유빙) 메시
   beachRamp: null,    // 해변 모래 경사로
-  leafMeshes: [],     // 나뭇잎 덩어리 (겨울에 숨겨 낙엽 표현)
-  grass: null,        // {mesh, baseHSL, count} - 계절마다 다시 칠하려면 원본 색조가 필요
-  animalGroups: [],   // 온도계로 체온을 잴 수 있는 동물 (그룹 단위)
-  fishGroups: [],     // 어류 - 변온동물이라 체온이 수온을 따라간다
-  seasonSkin: null,   // 계절이 색을 바꾸는 재질들과 그 원래 색
   co2: 418,
   BOX_W, BOX_D, BOX_H, ZONE_W, GROUND_BASE, OCEAN_BASE, waveBaseY, TERRAIN_TOP,
   waveHeightAt, waveNormalAt, wetlandY,
 };
 
+// 4차 C5: 하늘은 늘 맑은 낮 색이다. 예전 HAZY_SKY(CO₂가 높으면 누렇게)는 지웠다 — CO₂는 무색 기체다(2차 D2, 조감과 같은 규칙).
 const CLEAR_SKY = new THREE.Color(0xbcdcf5);
-const HAZY_SKY = new THREE.Color(0xc99a5e);
 
 function buildFirstPersonWorld(renderer) {
   const scene = new THREE.Scene();
@@ -271,33 +268,11 @@ function buildFirstPersonWorld(renderer) {
   const ambient = new THREE.AmbientLight(0xffffff, 0.62);
   const hemi = new THREE.HemisphereLight(0xdcefff, 0x6b6350, 0.6);
   scene.add(ambient, hemi);
-  // 낮/밤 주기가 세기를 조절할 수 있게 기본값과 함께 들고 있는다
+  // 조명 기본 세기. 4차 B3에서 낮밤을 빼 지금은 applyEnvironment 가 이 값을 그대로 쓴다
   FPWorld.lights = {
     sun, lampSpot, ambient, hemi, bulbMat: lampBulb.material,
     base: { sun: 1.7, spot: 26, ambient: 0.62, hemi: 0.6 },
   };
-
-  // ── 별 ──────────────────────────────────────────────────────────────────
-  // 밤에만 보인다. 하늘 돔 안쪽에 점을 뿌려 두고 낮에는 opacity 0으로 감춘다.
-  {
-    const N = 700, sp = new Float32Array(N * 3);
-    for (let i = 0; i < N; i++) {
-      // 반구 위쪽에만 뿌린다(지평선 아래 별은 어차피 지형에 가린다)
-      const u = Math.random() * 2 - 1, th = Math.random() * Math.PI * 2;
-      const r = 34, s = Math.sqrt(1 - u * u);
-      sp[i * 3] = r * s * Math.cos(th);
-      sp[i * 3 + 1] = r * Math.abs(u) * 0.9 + 1;
-      sp[i * 3 + 2] = r * s * Math.sin(th);
-    }
-    const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.BufferAttribute(sp, 3));
-    const stars = new THREE.Points(g, new THREE.PointsMaterial({
-      color: 0xffffff, size: 0.16, transparent: true, opacity: 0, fog: false, depthWrite: false,
-    }));
-    stars.frustumCulled = false;
-    scene.add(stars);
-    FPWorld.stars = stars;
-  }
 
   // ── 구름 ────────────────────────────────────────────────────────────────
   // 흰 구(球)를 여러 개 뭉쳐 만든 만화풍 뭉게구름. 바람을 타고 +x로 흐르다가 맵 끝을
@@ -366,7 +341,7 @@ function buildFirstPersonWorld(renderer) {
     return block;
   }
   zoneFloor(-ZONE_W, OCEAN_BASE, T.oceanFloor, 0xa89f83);
-  const greenBlock = zoneFloor(0, GROUND_BASE, T.forestGrass, 0x2c331c);
+  zoneFloor(0, GROUND_BASE, T.forestGrass, 0x2c331c);
   const cityBlock = zoneFloor(ZONE_W, GROUND_BASE, T.cityPavement, 0x3a3832, 0x9a9a9a);
 
   // ── 절차적 지형 캡 (원본과 같은 노이즈, 세그먼트만 크게 올림) ─────────────
@@ -389,45 +364,7 @@ function buildFirstPersonWorld(renderer) {
     return mesh;
   }
   createTerrainCap(-ZONE_W, OCEAN_BASE, T.oceanFloor, OCEAN_TERRAIN_AMP, OCEAN_TERRAIN_SEED);
-  const greenCap = createTerrainCap(0, GROUND_BASE, T.forestGrass, WETLAND_TERRAIN_AMP, WETLAND_TERRAIN_SEED);
-  // ── 계절 지면 오버레이 ──────────────────────────────────────────────────
-  // 지면은 텍스처 맵을 쓴다. 재질 색은 텍스처에 '곱해지는' 값이라 어둡게만 만들 수 있고,
-  // 초록 텍스처를 흰색이나 갈색으로 바꿀 수는 없다(흰색은 곱셈의 항등원이라
-  // 겨울이 그대로 초록으로 나왔다). 그래서 지형과 같은 모양의 반투명 판을 위에 겹친다.
-  // 이 한 장으로 가을 마른 땅과 겨울 눈을 모두 처리한다.
-  const overlayMat = new THREE.MeshStandardMaterial({
-    color: 0xf4f8fc, roughness: 0.8, transparent: true, opacity: 0, depthWrite: false,
-  });
-  const groundOverlay = new THREE.Mesh(greenCap.geometry, overlayMat);   // 지오메트리 공유
-  groundOverlay.position.copy(greenCap.position);
-  // 진흙 웅덩이(지면+0.006)보다 위로 올려야 한다. 안 그러면 눈밭 한가운데 진흙만
-  // 초록으로 드러난다.
-  groundOverlay.position.y += 0.008;
-  groundOverlay.receiveShadow = true;
-  world.add(groundOverlay);
-
-  // 도시 포장면은 계절색을 안 탄다. 눈만 따로 얹는다.
-  // 도로(GROUND_BASE+0.002)보다 낮게 깔아야 눈이 도로를 덮지 않아
-  // '제설한 도로 + 눈 쌓인 주변'처럼 보인다.
-  const citySnowMat = new THREE.MeshStandardMaterial({
-    color: 0xf4f8fc, roughness: 0.8, transparent: true, opacity: 0, depthWrite: false,
-  });
-  const citySnowGeo = new THREE.PlaneGeometry(ZONE_W, BOX_D);
-  citySnowGeo.rotateX(-Math.PI / 2);
-  const citySnow = new THREE.Mesh(citySnowGeo, citySnowMat);
-  citySnow.position.set(ZONE_W, GROUND_BASE + 0.0015, 0);
-  citySnow.receiveShadow = true;
-  world.add(citySnow);
-
-  // 계절이 색을 바꿀 재질들. '원래 색'을 함께 들고 있어야 계절을 되돌릴 수 있다.
-  // (재질 색을 직접 곱해 놓으면 봄->여름->봄 왕복에서 색이 계속 어두워진다)
-  FPWorld.seasonSkin = {
-    // 지면 텍스처에 곱하는 색조 - 미세 조정용. 큰 변화는 오버레이가 맡는다.
-    grounds: [greenCap.material, greenBlock.material[2]].map(m => ({ mat: m, base: m.color.clone() })),
-    overlayMat, overlay: groundOverlay,
-    citySnowMat, citySnow,
-  };
-
+  createTerrainCap(0, GROUND_BASE, T.forestGrass, WETLAND_TERRAIN_AMP, WETLAND_TERRAIN_SEED);
   // ── 해변 경사로 ─────────────────────────────────────────────────────────
   // 육지(0.432)와 해저(0.138)의 낙차는 실척 약 15m라, 1인칭에선 바다에 한번 빠지면
   // 영영 못 올라온다(점프로 넘을 수 있는 높이가 아님). 걸어서 바다에 들어갔다 나올 수
@@ -455,7 +392,7 @@ function buildFirstPersonWorld(renderer) {
     ramp.castShadow = true;
     world.add(ramp);
     FPWorld.walkables.push(ramp);
-    FPWorld.beachRamp = ramp;   // 온도계가 '해변 모래'를 따로 집어낼 수 있게
+    FPWorld.beachRamp = ramp;   // 해변 경사로 (4차 C2부터 온도계는 여기서 해양 대기를 잰다 — 지면 온도 삭제)
   }
 
   // ── 해양: 수면 + 물 몸통 ────────────────────────────────────────────────
@@ -538,19 +475,18 @@ function buildFirstPersonWorld(renderer) {
   // 빙하: 1인칭에선 물 위에 뜬 거대한 유빙이라 올라설 수 있게 충돌체로도 등록
   const iceMat = new THREE.MeshPhysicalMaterial({ map: T.iceCrack, color: 0xf3fbff, roughness: 0.15, clearcoat: 0.8, flatShading: true });
   [[-0.5, -0.4], [0.3, 0.3], [0.55, -0.5], [-0.15, 0.5]].forEach(([x, z]) => {
+    // 난수는 예전과 같은 자리에서 한 번만 뽑는다(크기 분포가 그대로). s = 기온 편차 0 °C(glacierFrac 1)일 때 반지름.
+    // 4차 C4: 실제 크기는 applyIceSize(T)가 glacierFrac(T)배로 정한다(예전 여름 고정 0.75배 대신 — 2023년 T 1.19 °C ≈ 0.76배).
     const s = 0.05 + Math.random() * 0.03;
     const ice = new THREE.Mesh(new THREE.IcosahedronGeometry(s, 0), iceMat);
+    ice.userData.baseS = s;
     ice.position.set(x, waveBaseY + s * 0.35, z);
     ice.castShadow = true;
     oceanGroup.add(ice);
     FPWorld.iceMeshes.push(ice);   // 온도계가 '빙하'를 따로 집어낼 수 있게
     const col = { x: x - ZONE_W, z, r: s * 0.95, top: ice.position.y + s * 0.5 };
     FPWorld.cylinders.push(col);
-    // 계절에 따라 유빙 크기가 변한다. 겉모습만 키우면 보이지 않는 벽이 생기므로
-    // 충돌체와 기준 치수를 같이 들고 있다가 applySeason()에서 함께 갱신한다.
-    ice.userData.baseSize = s;
-    ice.userData.baseY = ice.position.y;
-    ice.userData.collider = col;
+    ice.userData.collider = col;   // 냉수대(iceProximity)·횡단 조사가 가장자리 거리를 잰다
   });
 
   // ── 습지·숲 ─────────────────────────────────────────────────────────────
@@ -582,7 +518,6 @@ function buildFirstPersonWorld(renderer) {
 
   const trunkMat = new THREE.MeshStandardMaterial({ map: T.treeBark, roughness: 0.9 });
   const leafMat = new THREE.MeshStandardMaterial({ color: 0x3f7433, roughness: 0.8, flatShading: true });
-  FPWorld.leafMat = leafMat;   // 계절마다 색이 바뀐다 (겨울엔 잎 자체를 숨김)
   for (let i = 0; i < 26; i++) {
     const [x, z] = scatterInGreenZone();
     const tree = new THREE.Group();
@@ -600,7 +535,6 @@ function buildFirstPersonWorld(renderer) {
       leaf.position.set(Math.cos(ang) * 0.03, h * (0.7 + Math.random() * 0.25), Math.sin(ang) * 0.03);
       leaf.castShadow = true;
       tree.add(leaf);
-      FPWorld.leafMeshes.push(leaf);   // 겨울에 통째로 숨겨 낙엽을 표현한다
     }
     tree.position.set(x, wetlandY(x, z), z);
     world.add(tree);
@@ -611,6 +545,8 @@ function buildFirstPersonWorld(renderer) {
     // 늘어나므로 수관이 덮는 범위가 대략 0.11(실척 5.5m)이다.
     FPWorld.trees.push({ x, z, r: 0.11 });
   }
+  // 4차 T3: 숲 되살리기(fp-tech-world.js)의 추가 나무가 지금 나무와 같은 재질을 쓰게 내보낸다
+  FPWorld.treeMats = { trunk: trunkMat, leaf: leafMat };
 
   // 진흙 패치 + 물웅덩이 (걸어서 지나갈 수 있게 충돌체 없음)
   const mudY = wetlandY(MUD_X, MUD_Z);
@@ -646,9 +582,6 @@ function buildFirstPersonWorld(renderer) {
   {
     const dummy = new THREE.Object3D();
     const col = new THREE.Color();
-    // 계절마다 잔디를 다시 칠하려면 '이 포기의 원래 색조'를 알아야 한다.
-    // setColorAt()은 값을 넣기만 하고 되읽을 방법이 없어서 여기서 따로 보관해 둔다.
-    const baseHSL = new Float32Array(FP.GRASS_COUNT * 3);
     let placed = 0, attempts = 0;
     while (placed < FP.GRASS_COUNT && attempts < FP.GRASS_COUNT * 6) {
       attempts++;
@@ -669,7 +602,6 @@ function buildFirstPersonWorld(renderer) {
       const gh = 0.26 + Math.random() * 0.06;
       const gs2 = 0.42 + Math.random() * 0.22;
       const gl = 0.32 + Math.random() * 0.18;
-      baseHSL[placed * 3] = gh; baseHSL[placed * 3 + 1] = gs2; baseHSL[placed * 3 + 2] = gl;
       col.setHSL(gh, gs2, gl);
       grassMesh.setColorAt(placed, col);
       placed++;
@@ -677,7 +609,6 @@ function buildFirstPersonWorld(renderer) {
     grassMesh.count = placed;
     grassMesh.instanceMatrix.needsUpdate = true;
     if (grassMesh.instanceColor) grassMesh.instanceColor.needsUpdate = true;
-    FPWorld.grass = { mesh: grassMesh, baseHSL, count: placed };
   }
   world.add(grassMesh);
 
@@ -859,11 +790,6 @@ function buildFirstPersonWorld(renderer) {
         x, z, heading: Math.random() * Math.PI * 2,
         state: 'walk', timer: Math.random() * 2.5, phase: Math.random() * 10,
       };
-      // 온도계가 동물을 집어낼 수 있게 그룹에 자기 자신을 심어 둔다.
-      // 동물 한 마리는 메시가 여러 개라, 레이캐스트로 맞은 메시에서 부모를 거슬러
-      // 올라가며 이 표시를 찾는 방식이 가장 단순하다.
-      group.userData.animal = a;
-      FPWorld.animalGroups.push(group);
       FPWorld.animals.push(a);
     }
   });
@@ -933,8 +859,6 @@ function buildFirstPersonWorld(renderer) {
       const ly = floor + 0.012 + Math.random() * Math.max(0.004, SEA_CEIL - floor - 0.02);
       group.position.set(lx, ly, lz);
       oceanGroup.add(group);
-      group.userData.fish = true;
-      FPWorld.fishGroups.push(group);
       FPWorld.fish.push({
         group, tail, lx, ly, lz,
         heading: Math.random() * Math.PI * 2, pitch: 0,
@@ -1093,6 +1017,9 @@ function buildFirstPersonWorld(renderer) {
     [0.55, -0.15, 0.12, 0.28], [-0.5, 0.2, 0.15, 0.32], [-0.1, 0.5, 0.16, 0.42],
     [0.35, 0.45, 0.13, 0.22], [0.55, 0.15, 0.14, 0.36]
   ];
+  // 4차 C5: 건물 개수·높이는 그해 도시 규모(cityLevel(cumFossilMax))를 따른다 — applyWorldState 가 바꾼다.
+  // 낮은 건물부터 나타나게 높이 순으로 세워 둔다(1750년 = 가장 낮은 1채).
+  FPWorld.buildings = [];
   bldDefs.forEach(([x, z, w, h], i) => {
     const facade = T.buildingFacade.clone();
     facade.needsUpdate = true;
@@ -1111,12 +1038,15 @@ function buildFirstPersonWorld(renderer) {
     bld.receiveShadow = true;
     cityGroup.add(bld);
     // 충돌체는 월드 좌표로 등록 (cityGroup이 +ZONE_W만큼 밀려 있음)
-    FPWorld.boxes.push({
+    const box = {
       minX: x + ZONE_W - w / 2, maxX: x + ZONE_W + w / 2,
       minZ: z - w / 2, maxZ: z + w / 2,
       top: GROUND_BASE + h,
-    });
+    };
+    FPWorld.boxes.push(box);
+    FPWorld.buildings.push({ mesh: bld, box, h, w, facade });
   });
+  FPWorld.buildings.sort((a, b) => a.h - b.h);
 
   // 도로 (main 브랜치에서 추가한 십자 교차로 그대로)
   const ROAD_W = 0.12, MAIN_ROAD_Z = -0.01, CROSS_ROAD_X = 0.09;
@@ -1147,7 +1077,7 @@ function buildFirstPersonWorld(renderer) {
   const glassMat = new THREE.MeshStandardMaterial({ color: 0x9fd0e8, transparent: true, opacity: 0.55, roughness: 0.15, metalness: 0.3, side: THREE.DoubleSide });
   function buildCarModel() {
     const group = new THREE.Group();
-    const bodyMat = gasCarMat;   // 실제 재질은 applyWorldCO2()에서 EV/내연으로 교체됨
+    const bodyMat = gasCarMat;   // 실제 재질은 applyWorldState()에서 EV/내연으로 교체됨
     const bodyParts = [];        // 색을 갈아끼울 대상 (바퀴·유리·배기구는 제외)
     const wheelR = 0.011, bodyH = 0.028, cabinH = 0.024, cabinWidth = 0.038;
     const bodyBottomY = wheelR * 2;
@@ -1314,7 +1244,7 @@ function buildFirstPersonWorld(renderer) {
     c.speed = c.baseSpeed;
   }
 
-  FPWorld.cars = [];
+  FPWorld.cars = [];   // 4차 C5: 그해 달리는 차만 — applyWorldState 가 allCars 에서 고른다
   let carIndex = 0;
   for (const lane of ['main', 'cross']) {
     const R = ROADS[lane];
@@ -1341,6 +1271,16 @@ function buildFirstPersonWorld(renderer) {
       carIndex++;
     }
   }
+  // 4차 C5: 대수가 도시 규모를 따르므로 전체(allCars)와 그해 달리는 차(cars)를 나눈다. 주행·미니맵·배기·CO₂ 센서는 cars 만 본다.
+  // 차선이 한쪽으로 몰리지 않게 두 도로를 번갈아 켠다.
+  {
+    const m = FPWorld.cars.filter(c => c.lane === 'main'), x = FPWorld.cars.filter(c => c.lane === 'cross');
+    FPWorld.allCars = [];
+    for (let i = 0; i < Math.max(m.length, x.length); i++) {
+      if (m[i]) FPWorld.allCars.push(m[i]);
+      if (x[i]) FPWorld.allCars.push(x[i]);
+    }
+  }
   FPWorld.placeCar = placeCar;
   FPWorld.respawnCar = respawnCar;
   FPWorld.ROADS = ROADS;
@@ -1353,8 +1293,8 @@ function buildFirstPersonWorld(renderer) {
   FPWorld.evCarMat = evCarMat;
   FPWorld.gasCarMat = gasCarMat;
 
-  // 배기가스 파티클: 내연기관차 대수에 맞춰 파티클을 나눠 배정한다.
-  // (전부 전기차가 되면 opacity 0으로 통째로 사라짐)
+  // 배기가스 파티클: 내연기관차 한 대에 EXHAUST_PER_CAR 개씩(updateExhaust 가 drawRange 로 그 수만 그린다).
+  // 4차 C5: 예전에는 불투명도·크기가 CO₂에 비례했다 — 이제 한 대가 내는 배기는 늘 같고, 대수만 도시 규모·전기차 비율을 따른다.
   const EXHAUST_PER_CAR = 14;
   const exCount = FPWorld.cars.length * EXHAUST_PER_CAR;
   const exGeo = new THREE.BufferGeometry();
@@ -1362,7 +1302,7 @@ function buildFirstPersonWorld(renderer) {
   const exLife = new Float32Array(exCount);
   for (let i = 0; i < exCount; i++) exLife[i] = Math.random();
   const exhaust = new THREE.Points(exGeo, new THREE.PointsMaterial({
-    color: 0x6b6660, size: 0.012, transparent: true, opacity: 0.5, depthWrite: false,
+    color: 0x6b6660, size: 0.014, transparent: true, opacity: 0.35, depthWrite: false,   // 고정값(연출) — 예전 2023년 무렵 값보다 조금 진하게
   }));
   // 프러스텀 컬링 끄기. three.js는 boundingSphere를 지오메트리 생성 시점에 한 번만
   // 계산하고, 정점을 매 프레임 갱신해도 다시 계산하지 않는다. 배기 입자는 "살아 있는
@@ -1388,7 +1328,9 @@ function buildFirstPersonWorld(renderer) {
   stack.position.set(0.6, GROUND_BASE + 0.175, 0.55);
   stack.castShadow = true;
   cityGroup.add(stack);
-  FPWorld.cylinders.push({ x: 0.6 + ZONE_W, z: 0.55, r: 0.045, top: GROUND_BASE + 0.35 });
+  const stackCol = { x: 0.6 + ZONE_W, z: 0.55, r: 0.045, top: GROUND_BASE + 0.35 };
+  FPWorld.cylinders.push(stackCol);
+  FPWorld.stack = { mesh: stack, col: stackCol, top: stackCol.top };
 
   const smokeCount = 90;
   const smokeGeo = new THREE.BufferGeometry();
@@ -1400,8 +1342,8 @@ function buildFirstPersonWorld(renderer) {
   const smoke = new THREE.Points(smokeGeo, smokeMat);
   smoke.frustumCulled = false;   // 배기가스와 같은 이유(굴뚝 연기도 매 프레임 위치가 바뀜)
   cityGroup.add(smoke);
-  // rate/opacity/size는 applyWorldCO2()가 CO2 농도에 맞춰 계속 바꿔준다
-  FPWorld.smoke = { geo: smokeGeo, mat: smokeMat, life: smokeLife, count: smokeCount, x: 0.6, z: 0.55, rate: 0.3 };
+  // rate/opacity/size는 applyWorldState()가 그해 화석 배출(stackLevel)에 맞춰 바꿔준다
+  FPWorld.smoke = { points: smoke, geo: smokeGeo, mat: smokeMat, life: smokeLife, count: smokeCount, x: 0.6, z: 0.55, rate: 0.3 };
 
   // 탄소포집 타워
   const tower = new THREE.Mesh(
@@ -1419,7 +1361,10 @@ function buildFirstPersonWorld(renderer) {
   towerFan.rotation.x = Math.PI / 2;
   cityGroup.add(towerFan);
   FPWorld.towerFan = towerFan;
-  FPWorld.cylinders.push({ x: -0.65 + ZONE_W, z: 0.15, r: 0.065, top: GROUND_BASE + 0.3 });
+  const towerCol = { x: -0.65 + ZONE_W, z: 0.15, r: 0.065, top: GROUND_BASE + 0.3 };
+  FPWorld.cylinders.push(towerCol);
+  // 4차 C5: 포집 타워는 대기에서 탄소를 거둬들이는 해(조감과 같은 presetSociety.removal > 0)에만 선다. 예전에는 1750년에도 서 있었다.
+  FPWorld.tower = { meshes: [tower, towerFan], col: towerCol, top: towerCol.top, speed: 0 };
 
   return FPWorld;
 }
@@ -1429,228 +1374,46 @@ function buildFirstPersonWorld(renderer) {
 // "CO2를 줄이면 전부 전기차가 되고 매연이 멎는다"를 눈으로 보게 하는 게 목적.
 // CO2_MIN / CO2_MAX / CO2_NOW 는 js/earth-model.js 에서 온다 (조감 모드와 공유)
 
-// ── 낮과 밤 ─────────────────────────────────────────────────────────────────
-// 왜 넣었나: 도시 열섬의 정의 자체가 "밤에도 안 식는 것"이다. 정오에 고정된 세계에서는
-// 열섬을 낮 기온 차이로밖에 못 보여주는데, 실제로 열섬 강도는 밤에 가장 커진다.
-// 숲도 마찬가지다. 낮에는 광합성이 CO2를 빨아들이지만 밤에는 호흡만 남아 CO2가 오른다.
-// 이 두 가지는 시간이 흐르지 않으면 아예 보여줄 수 없는 현상이라 시간을 넣었다.
-//
-// 기본은 정오에 '멈춰' 있다. 조사를 하는 중에 시간이 흘러가면 같은 지점을 다시 재도
-// 값이 달라져 자료가 못 쓰게 된다. T키나 설정창 슬라이더로 켜고 옮긴다.
+// ── 시각 ────────────────────────────────────────────────────────────────────
+// 4차 B3(마스터 D2): 낮 고정. 시각 슬라이더·시간 흐름(T)·밤·노을·별을 뺐다.
+// 4차 C2: 측정값이 '그해 연평균(하루 평균)'이 되면서 일교차 곡선(diurnal)도 지웠다. 화면은 낮이어도 값에는 시각 항이 없다.
+// hour 는 야장 CSV 의 열(fp-field.js)만 쓴다 — 열 정리는 G에서.
 FPWorld.hour = 12;
-FPWorld.timeFlowing = false;
-const DAY_SECONDS = 300;    // 시간을 켰을 때 하루가 흐르는 데 걸리는 실제 시간(5분)
-
-// 일주 변화 곡선: -1(새벽 5시 최저) ~ +1(오후 2시 최고).
-// 해가 뜬 뒤 지면이 데워지는 데 시간이 걸리기 때문에 최고기온은 정오가 아니라 오후 2시다.
-// 상승 9시간 / 하강 15시간으로 비대칭이라, 반코사인 두 조각을 이어 붙인다.
-const T_MIN_H = 5, T_MAX_H = 14;
-function diurnal(hour) {
-  let h = ((hour % 24) + 24) % 24;
-  if (h >= T_MIN_H && h <= T_MAX_H) {
-    // 새벽 최저 -> 오후 최고 (9시간 동안 상승)
-    return -Math.cos((h - T_MIN_H) / (T_MAX_H - T_MIN_H) * Math.PI);
-  }
-  // 오후 최고 -> 다음날 새벽 최저 (15시간 동안 하강)
-  const t = (h > T_MAX_H ? h - T_MAX_H : h + 24 - T_MAX_H) / (24 - (T_MAX_H - T_MIN_H));
-  return Math.cos(t * Math.PI);
-}
-const DIURNAL_AT_NOON = diurnal(12);   // 정오를 기준점으로 삼아 기존 보정값을 유지한다
-
-// 햇빛의 세기(0=한밤, 1=한낮). 광합성량과 조명이 이 값을 따른다.
-// 일출·일몰 시각은 계절이 정한다(여름은 길고 겨울은 짧다). 앞뒤 1.5시간을
-// 여명/황혼으로 부드럽게 잇는다.
-function daylight(hour) {
-  const h = ((hour % 24) + 24) % 24;
-  const S = SEASONS[FPWorld.season] || SEASONS.summer;
-  const ramp = (x, a, b) => Math.min(1, Math.max(0, (x - a) / (b - a)));
-  return Math.min(ramp(h, S.rise - 1.5, S.rise + 1.5),
-                  1 - ramp(h, S.set - 1.5, S.set + 1.5));
-}
-function isNight(hour) { return daylight(hour) < 0.5; }
-function hourLabel(hour) {
-  const h = ((hour % 24) + 24) % 24;
-  const hh = Math.floor(h), mm = Math.floor((h - hh) * 60);
-  const d = daylight(h);
-  const part = d > 0.85 ? '낮' : (d < 0.15 ? '밤' : (hh < 12 ? '새벽' : '해질녘'));
-  return `${part} ${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
-}
-
-const NIGHT_SKY = new THREE.Color(0x0b1526);
-const DUSK_SKY = new THREE.Color(0xd98a52);
 
 // ── 환경 합성 ───────────────────────────────────────────────────────────────
-// 하늘색·안개·조명은 CO2 / 시간 / 계절 / 날씨 네 가지가 동시에 건드린다.
+// 하늘색·안개 반영은 이 함수 하나가 전담한다(4차 B2에서 날씨를, B3에서 시간을, C2에서 계절을 뺐다).
 // 예전엔 applyWorldCO2()가 하늘색과 안개를 직접 써 놓고 applyTimeOfDay()가 그 위에
-// 덮어쓰는 구조였다. 여기에 계절과 날씨를 더하면 "비가 개면 계절 색이 사라지는" 식으로
-// 마지막에 부른 쪽만 남는 버그가 반드시 난다.
-// 그래서 각 요인은 '자기 몫'만 상태에 적어 두고, 화면 반영은 이 함수 하나가 전담한다.
-//   하늘색 = CO2 기준색 → 계절 색조 → 시간(밤/황혼) → 날씨(흐림)
-//   안개   = CO2 기준거리 × 계절계수 × 날씨계수      (곱셈으로 합성, 덮어쓰기 금지)
-//   조명   = 기본세기 × 시간계수 × 날씨계수
-//
-// 계절/날씨 테이블의 실제 값은 Stage B/C에서 채운다. 지금은 전부 중립값(1.0, 가중치 0)이라
-// 이 리팩터만으로는 화면이 조금도 바뀌지 않아야 한다.
-FPWorld.season = 'summer';
-FPWorld.weather = 'clear';
+// 덮어써서 마지막에 부른 쪽만 남는 버그가 났다 — 요인이 하나만 남았어도 반영 경로는 하나로 둔다.
+//   하늘색 = 맑은 낮 색 · 안개 = 기준거리 · 조명 = 기본세기 (낮 고정, 4차 C5부터 CO₂와 무관)
 
-// ── 계절 ────────────────────────────────────────────────────────────────────
-// temp   : 기온 오프셋 [°C]. 중위도 연교차(최난월-최한월)는 20°C 안팎이라 여름 +8 / 겨울 -10.
-// seaT   : 해수 기온 오프셋. 훨씬 작은 건 물의 열용량 때문이다(SEA_WARM_AMP과 같은 이유).
-// rise/set: 일출·일몰 시각. 여름은 길고 겨울은 짧다.
-// co2    : CO2 계절 진동 [ppm]. 이 기능의 과학적 핵심이다.
-//          실제 킬링 곡선은 북반구 식생 때문에 연 6ppm 안팎으로 오르내린다
-//          (5월 최고 / 9월 최저). 이미 구현한 '낮=광합성 흡수 / 밤=호흡 배출'의
-//          연 단위 판이라, 학생이 CO2 센서로 직접 재서 확인할 수 있다.
-//          슬라이더 값은 '연평균'이고 실측값은 계절을 탄다고 설명하면 된다.
-// grass  : 잔디 색조 가산 (H, S, L). leaf: 나뭇잎 색. snow: 지면 눈 덮임 비율.
-// ice    : 유빙 크기 배수.
-const SEASONS = {
-  spring: { ko: '봄',   temp: 0.0,  seaT: 0.0,  rise: 6.0, set: 18.0, co2: +3,
-            sky: 0xd8f0c0, skyW: 0.10, fogK: 1.00,
-            grass: [+0.02, +0.10, +0.06], leaf: 0x6cae4a, snow: 0.00, ice: 1.00,
-            ground: 0xd9f0b8, groundW: 0.20, ov: 0x9ed46a, ovW: 0.12 },
-  summer: { ko: '여름', temp: +8.0, seaT: +2.5, rise: 5.0, set: 19.5, co2: -1,
-            sky: 0xffffff, skyW: 0.00, fogK: 1.00,
-            grass: [0, 0, 0],             leaf: 0x3f7433, snow: 0.00, ice: 0.75,
-            ground: 0xffffff, groundW: 0.00, ov: 0xffffff, ovW: 0.00 },
-  autumn: { ko: '가을', temp: +0.5, seaT: +1.0, rise: 6.0, set: 18.0, co2: -3,
-            sky: 0xf0d68c, skyW: 0.12, fogK: 0.95,
-            grass: [-0.16, -0.05, +0.02], leaf: 0xc9772a, snow: 0.00, ice: 1.00,
-            ground: 0xc9a45c, groundW: 0.35, ov: 0xb07d33, ovW: 0.55 },
-  winter: { ko: '겨울', temp: -10.0, seaT: -3.0, rise: 7.5, set: 17.0, co2: +2,
-            sky: 0xdfe8f2, skyW: 0.18, fogK: 0.85,
-            grass: [-0.10, -0.35, +0.10], leaf: null,     snow: 0.82, ice: 1.35,
-            ground: 0xa8b0a4, groundW: 0.20, ov: 0xf4f8fc, ovW: 0.88 },
-};
-const SEASON_ORDER = ['spring', 'summer', 'autumn', 'winter'];
-function seasonDef() { return SEASONS[FPWorld.season] || SEASONS.summer; }
-// applyEnvironment()가 쓰는 이름을 그대로 유지 (하늘색·안개 몫만 꺼내 준다)
-const SEASON_ENV = SEASONS;
-// 날씨가 환경에 주는 몫 (입자·소리·기온 보정은 Stage C에서 fp-weather.js가 맡는다)
-const WEATHER_ENV = {
-  clear:  { sky: 0xffffff, skyW: 0.00, fogK: 1.00, lightK: 1.00 },
-  rain:   { sky: 0x6b7a85, skyW: 0.55, fogK: 0.55, lightK: 0.62 },
-  storm:  { sky: 0x3c4650, skyW: 0.75, fogK: 0.35, lightK: 0.45 },
-  snow:   { sky: 0x9aa8b4, skyW: 0.60, fogK: 0.45, lightK: 0.75 },
-  squall: { sky: 0x55626d, skyW: 0.70, fogK: 0.30, lightK: 0.55 },
-  fog:    { sky: 0xb8c0c6, skyW: 0.80, fogK: 0.12, lightK: 0.80 },
-};
-function seasonEnv() { return SEASON_ENV[FPWorld.season] || SEASON_ENV.summer; }
-function weatherEnv() { return WEATHER_ENV[FPWorld.weather] || WEATHER_ENV.clear; }
+// 4차 C2: B3에서 남겨 둔 계절 표(SEASONS 'summer' 하나 — 기온 +8·해수 +2.5·CO₂ −1·하늘 색조 0·안개 계수 1)를 지웠다.
+// 측정값이 연평균이 되어 '여름 정오' 기준이 필요 없어졌고, 하늘 색조·안개 계수는 여름이 중립값(0·1)이라 화면은 같다.
 
 const _envColor = new THREE.Color();
-const _envTint = new THREE.Color();
 
 function applyEnvironment() {
-  const h = FPWorld.hour, d = daylight(h);
-  FPWorld.daylight = d;
   const L = FPWorld.lights;
   if (!L) return;
-  const S = seasonEnv(), W = weatherEnv();
 
-  // 1) CO2가 정한 '맑은 낮의 하늘색'에서 출발
-  _envColor.copy(FPWorld.daySky || CLEAR_SKY);
-  // 2) 계절 색조 (봄 연둣빛 / 가을 노란빛 / 겨울 창백)
-  if (S.skyW > 0) _envColor.lerp(_envTint.setHex(S.sky), S.skyW);
-  // 3) 시간: 밤으로 갈수록 어두워지고, 여명·황혼에는 붉은 하늘을 잠깐 거쳐 간다
-  const dusk = 1 - Math.abs(d - 0.5) * 2;
-  _envColor.lerpColors(NIGHT_SKY, _envTint.copy(_envColor), d);
-  _envColor.lerp(DUSK_SKY, dusk * 0.55);
-  // 4) 날씨: 흐릴수록 회색으로 끌어당긴다. 밤에는 흐림도 어둡게 보여야 하므로
-  //    날씨 색조 자체를 그 시각의 밝기만큼 낮춰서 섞는다.
-  if (W.skyW > 0) {
-    _envTint.setHex(W.sky).multiplyScalar(0.25 + 0.75 * d);
-    _envColor.lerp(_envTint, W.skyW);
-  }
+  // 맑은 낮의 하늘색·안개 기준거리 고정 (계절 색조·계수는 C2에서, CO₂ 항은 C5에서 지웠다)
+  _envColor.copy(CLEAR_SKY);
   FPWorld.skyMat.color.copy(_envColor);
   FPWorld.scene.fog.color.copy(_envColor);
-
-  // 안개 거리: CO2가 정한 기준거리에 계절·날씨 계수를 곱한다
   const fb = FPWorld.fogBase;
-  const k = S.fogK * W.fogK;
-  FPWorld.scene.fog.far = fb.far * k;
-  FPWorld.scene.fog.near = fb.near * k;
+  FPWorld.scene.fog.far = fb.far;
+  FPWorld.scene.fog.near = fb.near;
 
-  // 조명: 밤에도 완전히 캄캄하면 아무것도 못 하므로 달빛 정도(15%)는 남긴다
-  const lit = (0.15 + 0.85 * d) * W.lightK;
-  L.sun.intensity = L.base.sun * lit;
-  L.lampSpot.intensity = L.base.spot * lit;
-  L.ambient.intensity = L.base.ambient * (0.30 + 0.70 * d) * W.lightK;
-  L.hemi.intensity = L.base.hemi * (0.25 + 0.75 * d) * W.lightK;
-  // 거대 전등의 전구도 같이 꺼진다 - 이 세계의 광원이 저것이라는 걸 보여주는 부분
-  L.bulbMat.color.setRGB(1, 0.972, 0.886).multiplyScalar(0.25 + 0.75 * d);
-  // 별은 밤이면서 하늘이 뚫려 있을 때만 보인다 (구름이 덮으면 안 보여야 한다)
-  if (FPWorld.stars) {
-    FPWorld.stars.material.opacity = Math.max(0, 1 - d * 1.6) * (1 - W.skyW);
-  }
+  // 조명: 낮 고정이라 기본 세기 그대로 (예전 한낮 daylight = 1 일 때와 같은 값)
+  L.sun.intensity = L.base.sun;
+  L.lampSpot.intensity = L.base.spot;
+  L.ambient.intensity = L.base.ambient;
+  L.hemi.intensity = L.base.hemi;
+  L.bulbMat.color.setRGB(1, 0.972, 0.886);
 }
 
-// 계절이 '겉모습'을 바꾸는 부분. 색·크기라 매 프레임 돌 필요가 없고 바뀔 때만 부른다.
-// (기온·일장·CO2 진동은 fp-tools.js와 daylight()가 SEASONS 테이블을 직접 읽는다)
-const _sc = new THREE.Color();
-const SNOW_COLOR = new THREE.Color(0xf2f6fa);
-function applySeason(name) {
-  if (SEASONS[name]) FPWorld.season = name;
-  const S = seasonDef();
-
-  // 잔디: 저장해 둔 원본 HSL에 계절 가산값을 더해 다시 칠한다.
-  // 원본을 안 들고 있으면 계절을 왕복할 때마다 색이 계속 어긋난다.
-  const G = FPWorld.grass;
-  if (G) {
-    const [dh, ds, dl] = S.grass;
-    for (let i = 0; i < G.count; i++) {
-      _sc.setHSL(
-        (G.baseHSL[i * 3] + dh + 1) % 1,
-        Math.min(1, Math.max(0, G.baseHSL[i * 3 + 1] + ds)),
-        Math.min(1, Math.max(0, G.baseHSL[i * 3 + 2] + dl))
-      );
-      // 겨울엔 눈에 파묻힌 만큼 흰색으로 끌어당긴다
-      if (S.snow > 0) _sc.lerp(SNOW_COLOR, S.snow * 0.8);
-      G.mesh.setColorAt(i, _sc);
-    }
-    if (G.mesh.instanceColor) G.mesh.instanceColor.needsUpdate = true;
-  }
-
-  // 나뭇잎: 겨울은 통째로 숨겨 낙엽을 표현한다
-  if (FPWorld.leafMat && S.leaf != null) FPWorld.leafMat.color.setHex(S.leaf);
-  FPWorld.leafMeshes.forEach(m => { m.visible = S.leaf != null; });
-
-  // 지면: 텍스처에 계절 색조를 살짝 곱하고, 큰 변화는 반투명 오버레이가 만든다
-  const SK = FPWorld.seasonSkin;
-  if (SK) {
-    SK.grounds.forEach(({ mat, base }) => mat.color.copy(base).lerp(_sc.setHex(S.ground), S.groundW));
-    SK.overlayMat.color.setHex(S.ov);
-    SK.overlayMat.opacity = S.ovW;
-    SK.overlay.visible = S.ovW > 0.01;
-    SK.citySnowMat.opacity = S.snow;
-    SK.citySnow.visible = S.snow > 0.01;
-  }
-
-  // 유빙: 겨울에 커지고 여름에 녹아 작아진다. 충돌체도 같이 따라가야 한다.
-  FPWorld.iceMeshes.forEach(ice => {
-    const u = ice.userData;
-    if (!u.baseSize) return;
-    ice.scale.setScalar(S.ice);
-    ice.position.y = waveBaseY + u.baseSize * S.ice * 0.35;
-    if (u.collider) {
-      u.collider.r = u.baseSize * S.ice * 0.95;
-      u.collider.top = ice.position.y + u.baseSize * S.ice * 0.5;
-    }
-  });
-
-  FPWorld.refresh();
-}
-
-// 상태를 바꾼 쪽(CO2·시간·계절·날씨 UI)은 전부 이것만 부르면 된다.
-// 갱신 경로를 하나로 모아 두면 "어떤 순서로 눌러도 넷 다 반영"이 보장된다.
-FPWorld.refresh = function () { applyWorldCO2(FPWorld.co2); };
-
-function updateTime(dt) {
-  if (!FPWorld.timeFlowing) return;
-  FPWorld.hour = (FPWorld.hour + dt * 24 / DAY_SECONDS) % 24;
-  FPWorld.refresh();   // 광합성량도 시간을 타므로 대기 상태까지 통째로 다시 계산
-}
+// 상태를 바꾼 쪽(연도·배출 경로 UI)은 전부 이것만 부르면 된다.
+// 갱신 경로를 하나로 모아 두면 "어떤 순서로 눌러도 전부 반영"이 보장된다.
+FPWorld.refresh = function () { if (FPWorld.sample) applyWorldState(FPWorld.sample, FPWorld.society); };
 
 // ── 해양 pH ─────────────────────────────────────────────────────────────────
 // 예전엔 여기서 자체 곡선을 썼다. 1000ppm에서 pH 6.15까지 떨어뜨려 백화를 극적으로
@@ -1663,11 +1426,8 @@ function updateTime(dt) {
 //   (25 °C) 280ppm -> 8.18 / 418ppm -> 8.04 / 600ppm -> 7.91 / 1000ppm -> 7.71
 // 변화폭이 0.48로 줄어든 만큼, '눈에 보이는 변화'는 pH 자체가 아니라
 // 아라고나이트 포화도 Ω와 수온으로 만든다. 아래 백화/석회화 참고.
-// 1인칭에서는 바다가 슬라이더 값이 아니라 해수 pCO2(위 동적 평형)를 녹이고 있으므로
-// 개방 해역 수온·해수 pCO2로 푼 값을 돌려준다 (HUD 표시용).
-function oceanPH(ppm) {
-  return openSeaState(ppm).pH;
-}
+// 4차 C4: 1인칭 바다는 그해 엔진의 표층 해양 상태(DIC)를 쓴다 — 개방 해역 pH·Ω = 엔진 o.pH·o.omega.
+// (쓰는 곳이 없던 oceanPH()는 지웠다. openSeaState()는 산호·어류 갱신이 읽는다 — HUD 바다 줄은 4차 D2에서 뺐다.)
 
 // ── 산호에 일어나는 두 가지 서로 다른 일 ────────────────────────────────────
 // 예전엔 pH 하나로 백화와 개체수 감소를 전부 굴렸는데, 기작이 틀렸다.
@@ -1677,22 +1437,18 @@ function oceanPH(ppm) {
 // 둘을 분리하면 새로 만든 수온 모델도 살아나고, 학생이 "산성화 = 백화"라는 흔한
 // 오개념을 갖지 않게 된다.
 
-// 열 스트레스: 표층 수온이 백화 임계를 넘긴 정도 (0=정상, 1=완전 백화)
-// 산호는 '평년 최고수온 + 1°C'가 몇 주 이어지면 백화한다(NOAA의 Degree Heating Week
-// 개념). 여기서는 그 임계를 산업화 이전 해수온 + 1.0°C로 잡고, +3.5°C에서 전면 백화로 본다.
-// 이 두 값은 fp-tools.js의 온도표(SPOT.sea)가 그대로 가져다 쓴다.
-// 수온을 두 군데서 따로 정의하면 "잰 값"과 "산호가 반응하는 값"이 어긋난다.
-const SEA_BASE_T = 18.0;        // 280ppm에서의 표층 수온 [°C]
-const SEA_WARM_AMP = 0.75;      // 바다는 열용량이 커서 전 지구 승온보다 덜 오른다
-// 백화 임계. 실제로는 '그 지역 월최고수온 + 1°C가 몇 주'가 기준인데 이 모형엔 계절이
-// 없으므로, 산업화 이전 수온 대비 +1.5°C에서 시작해 +4.0°C에서 전면 백화로 잡았다.
-//   418ppm -> 14% (요즘 실제로 관측되는 정도) / 600ppm -> 80% / 667ppm 이상 -> 전면
-const BLEACH_ON = 1.5, BLEACH_FULL = 4.0;
-function seaTemperature(ppm) {
-  // 계절도 탄다. 여름 바다가 따뜻해지면 백화가 더 잘 일어나야 한다.
-  // (fp-tools.js의 SPOT.sea와 같은 기준: 여름을 0점으로 삼는다)
-  const S = SEASONS[FPWorld.season] || SEASONS.summer;
-  return SEA_BASE_T + SEA_WARM_AMP * warmingSince280(ppm) + (S.seaT - SEASONS.summer.seaT);
+// 4차 C4: 백화 = 1 − EarthVisual.coralHealthy(T)(등록부 coral_sr15, 조감 3D 산호와 같은 식 — FPModel.coralState).
+// 예전 '산업화 이전 수온 18 °C + 1.5 °C에서 시작'(BLEACH_ON·BLEACH_FULL·SEA_BASE_T) 임계는 1인칭 옛 회귀 수온에 맞춘 값이라
+// 엔진 해수온(2023 약 19.2 °C)과 맞지 않아 지웠다.
+// 지금 연도·경로의 엔진 표본(fp-main.js 가 연도·경로를 바꿀 때 FPWorld.sample 에 넣는다).
+// 첫 화면을 그리기 전(buildFirstPersonWorld 중)에 불리면 아직 비어 있으므로 2023년 역사 값으로 대신한다.
+function fpSample() {
+  return FPWorld.sample || FPModel.sample(EarthSystem.LAST_HIST_YEAR, FPModel.pathRun('ssp245'));
+}
+// 개방 해역 수온 = 엔진 o.sst (4차 C2 — 예전 18 + 0.75 × 회귀식 대신. 조감 기록 표 water_temp 와 같은 값)
+// ppm 인자는 받지 않는다: 수온은 그해 엔진 상태가 정하고, 그 자리의 CO₂ 농도가 정하지 않는다.
+function seaTemperature() {
+  return FPModel.seaTemp(0, fpSample());
 }
 
 // ── 빙하 냉수대 ─────────────────────────────────────────────────────────────
@@ -1703,17 +1459,16 @@ function seaTemperature(ppm) {
 //
 // 온도계(해수)·해수 분석기·산호가 전부 이 함수 하나를 읽는다. 셋이 같은 값을 써야
 // "내가 잰 수온"과 "산호가 반응하는 수온"이 어긋나지 않는다.
-const COLD_POOL_DT = 12;      // 유빙 바로 옆에서 개방 해역보다 낮아지는 폭 [°C]
+// 냉수대 폭(12 °C)·어는점(−1.9 °C)은 FPModel.K(COLD_POOL_DT·SEA_FREEZE_T, 등록부 fp_cold_pool)로 옮겼다. 반경은 세계 기하라 여기 둔다.
 const COLD_POOL_R = 0.35;     // 유빙 가장자리에서 냉수대가 사라지는 거리 [유닛] (≈ 17m)
-const SEA_FREEZE_T = -1.9;    // 염분 35 해수의 어는점 [°C] - 이보다 차가워질 수는 없다
 // 0 = 냉수대 밖, 1 = 유빙 바로 옆. 가장 가까운 유빙 하나가 정한다.
-// 거리는 유빙 '중심'이 아니라 '가장자리'에서 잰다 - 계절마다 유빙 크기가 바뀌므로
-// (겨울 1.35배, 여름 0.75배) 충돌체 반지름을 그대로 쓴다. 충돌체 좌표는 이미 월드 좌표다.
+// 거리는 유빙 '중심'이 아니라 '가장자리'에서 잰다 - 유빙마다 크기가 달라서
+// 충돌체 반지름을 그대로 쓴다. 충돌체 좌표는 이미 월드 좌표다.
 function iceProximity(x, z) {
   let p = 0;
   for (const ice of FPWorld.iceMeshes) {
     const c = ice.userData.collider;
-    if (!c) continue;
+    if (!c || !ice.visible) continue;   // 다 녹은 유빙(glacierFrac 0)은 냉수대도 없다
     const d = Math.max(0, Math.hypot(x - c.x, z - c.z) - c.r) / COLD_POOL_R;
     if (d >= 1) continue;
     const s = 1 - d * d * (3 - 2 * d);   // smoothstep 감쇠: 경계에서 꺾이지 않고 0이 된다
@@ -1721,127 +1476,102 @@ function iceProximity(x, z) {
   }
   return p;
 }
-function seaTempAt(x, z, ppm) {
-  const base = seaTemperature(ppm);     // CO2·계절 반영 (개방 해역 수온)
-  return Math.max(SEA_FREEZE_T, base - COLD_POOL_DT * iceProximity(x, z));
+function seaTempAt(x, z) {
+  return FPModel.seaTemp(iceProximity(x, z), fpSample());
 }
 
-// ── 해수 pCO2의 동적 평형 ───────────────────────────────────────────────────
-// 바다는 바로 위 해양 대기와 CO2를 주고받지만 즉시 맞춰지지는 않는다:
-//   dpCO2_sw/dt = (C_ocean − pCO2_sw) / τ_sw
-// C_ocean은 해양 구역 대기 CO2(fp-tools.js FPAir - 해륙풍이 도심 공기를 실어 오면 오른다).
-// 대기를 갑자기 바꿔도 해수 pH가 바로 안 따라오고 시간에 걸쳐 수렴한다 =
-// "평형은 즉시가 아니라 시간에 걸쳐 도달한다"를 측정으로 보이는 장치다.
-// τ_sw 2게임일(실시간 10분)은 실제 표층 해양의 평형 시간(수개월)을 압축한 값이다.
-// 바다 전체가 한 값을 쓴다(공간 변이는 수온이 만든다). 0.2초 틱에서 FPAir와 같이 돈다.
-const SEA_TAU_SW = 2;          // 해수 pCO2가 해양 대기를 따라가는 시간 [게임 일]
-FPWorld.pco2Sea = null;        // 해수 pCO2 [µatm ≈ ppm]. null이면 아직 초기화 전
-function oceanAirCO2() {
-  return typeof FPAir !== 'undefined' ? FPAir.zoneCO2('ocean') : FPWorld.co2;
-}
-function stepSeaCO2(dtDay) {
-  if (FPWorld.pco2Sea == null) FPWorld.pco2Sea = oceanAirCO2();
-  FPWorld.pco2Sea += (oceanAirCO2() - FPWorld.pco2Sea) * dtDay / SEA_TAU_SW;
-}
-// 해수를 지금 해양 대기와 바로 평형으로 맞춘다 (처음 열 때 / 설정창 버튼)
-function equilibrateSeaCO2() { FPWorld.pco2Sea = oceanAirCO2(); }
+// 4차 C4: 해수 pCO2 동적 평형(stepSeaCO2·equilibrateSeaCO2·SEA_TAU_SW·FPWorld.pco2Sea·oceanAirCO2)을 지웠다.
+// 해수가 해양 대기를 2게임일로 따라가던 장치인데, 연도를 뛰어넘는 시간 여행과 맞지 않는다 — 엔진이 이미 그해 표층 DIC를 계산한다.
 
 // ── 지점의 해수 상태 ────────────────────────────────────────────────────────
-// 해수가 녹이고 있는 CO2(pCO2)와 그 지점의 수온으로 탄산 평형을 한 번 푼다.
-// pH미터·해수 분석기·산호가 전부 이 함수 하나만 읽는다 - 측정값과 세계 상태가
-// 어긋나지 않게 하려는 것이다. 돌려주는 값은 seawaterState()의 결과(mol/kg)에
-// 수온(temp)과 pCO2를 덧붙인 것이다.
-function seaPCO2(ppm) {
-  return FPWorld.pco2Sea != null ? FPWorld.pco2Sea : ppm;
+// 그해 엔진 해수 pCO2(pco2FromDic(o.dic, o.sst))와 그 지점의 수온으로 탄산 평형을 한 번 푼다(FPModel.seaState).
+// pH미터·해수 분석기·산호가 전부 이 함수 하나만 읽는다 - 측정값과 세계 상태가 어긋나지 않게 하려는 것이다.
+// 돌려주는 값은 seawaterState()의 결과(mol/kg)에 수온(temp)과 pCO2를 덧붙인 것이다.
+function seaStateAt(x, z) {
+  return FPModel.seaState(iceProximity(x, z), fpSample());
 }
-function seaStateAt(x, z, ppm) {
-  const temp = seaTempAt(x, z, ppm);
-  const pco2 = seaPCO2(ppm);
-  const s = seawaterState(pco2, temp);
-  s.temp = temp;
-  s.pco2 = pco2;
-  return s;
+// 개방 해역(냉수대 밖)의 해수 상태 - HUD가 쓰는 '바다 대표값' = 엔진 o.pH·o.omega·o.sst
+function openSeaState() {
+  return FPModel.seaState(0, fpSample());
 }
-// 개방 해역(냉수대 밖)의 해수 상태 - HUD가 쓰는 '바다 대표값'
-function openSeaState(ppm) {
-  const temp = seaTemperature(ppm), pco2 = seaPCO2(ppm);
-  const s = seawaterState(pco2, temp);
-  s.temp = temp;
-  s.pco2 = pco2;
-  return s;
+// 가장 차가운 물(유빙 바로 옆)의 Ω - Ω<1 경고는 여기가 먼저 켜진다.
+// 현재 정책 2100년에도 1 위면 경고가 안 뜨는 것이 정직한 결과다(억지로 켜지 않는다).
+function coldPoolOmega() {
+  return FPModel.seaState(1, fpSample()).omega;
 }
-// 백화·석회화 둘 다 '지점'의 함수다. (x, z)를 주면 그 자리의 수온(seaTempAt)·Ω(seaStateAt),
-// 안 주면 개방 해역 값을 쓴다. 온도계·해수 분석기가 읽는 것과 같은 함수라
-// "내가 잰 수온·Ω"와 "산호가 반응하는 수온·Ω"가 반드시 같다.
-// 같은 바다 안에서 따뜻한 곳(개방 해역)은 백화가, 차가운 곳(냉수대)은 석회화 저해가
-// 먼저 온다 - 두 현상의 원인(열 스트레스 vs 산성화)이 다르다는 걸 공간으로 보여준다.
-function bleachFromTemp(t) {
-  const excess = t - (SEA_BASE_T + BLEACH_ON);
-  return Math.min(1, Math.max(0, excess / (BLEACH_FULL - BLEACH_ON)));
-}
-function coralBleaching(ppm, x, z) {
-  return bleachFromTemp(x == null ? seaTemperature(ppm) : seaTempAt(x, z, ppm));
-}
-// 석회화 가능성: Ω가 3 아래로 내려가면 성장이 느려지고, 1 밑이면 골격이 녹는다.
-// 어류·수초가 기댈 서식지가 남아 있는지를 이 값이 정한다.
-function habitatFromOmega(om) {
-  return Math.min(1, Math.max(0, (om - 1.0) / (3.4 - 1.0)));
-}
-function calcificationHealth(ppm, x, z) {
-  return habitatFromOmega(x == null ? openSeaState(ppm).omega : seaStateAt(x, z, ppm).omega);
-}
-// 생태 종합 건강도(0~1). 서식지(Ω)가 주된 요인이고, 백화는 거기에 얹히는 스트레스다.
-// 백화만으로 물고기가 전멸하지는 않으므로 계수를 0.5로 눌러 놨다. 어류·수초는 바다 전체를
-// 돌아다니므로 개방 해역 값으로 정한다 (해수 pCO2·개방 해역 수온 기준).
-function oceanHealth(ppm) {
-  return calcificationHealth(ppm) * (1 - 0.5 * coralBleaching(ppm));
-}
-// 가장 차가운 물(유빙 바로 옆)의 Ω - Ω<1 경고는 여기가 먼저 켜진다
-function coldPoolOmega(ppm) {
-  const t = Math.max(SEA_FREEZE_T, seaTemperature(ppm) - COLD_POOL_DT);
-  return seawaterState(seaPCO2(ppm), t).omega;
-}
-function applyWorldCO2(ppm) {
-  FPWorld.co2 = ppm;
-  const k = Math.min(1, Math.max(0, (ppm - CO2_MIN) / (CO2_MAX - CO2_MIN)));
-  FPWorld.co2k = k;
+// ── 세계 상태 = 그해 엔진 표본 (4차 C5) ────────────────────────────────────────
+// 1인칭 세계 상태를 바꾸는 함수는 이것 하나다(예전 applyWorldCO2(ppm) 대체). E2(시간 이동)도 이것만 부른다.
+//   s   = 엔진 표본(FPModel.sample: ppm·T·sst·pH·omega·dic·fossil·cumFossilMax·year)
+//   soc = 그해 사회 모습(FPModel.society — 전기차·재생·원자력·포집). 없으면 시나리오(SSP) 규칙.
+// 시각 언어는 조감 EarthVisual 규칙을 따른다: 변수 하나에 표현 하나, CO₂는 보이지 않음(하늘·안개·파도 고정),
+// 도시·차·굴뚝은 배출의 역사(등록부 city_scale·fp_city — 연출), 산호·유빙은 기온(coral_sr15·glacier_scale).
+function applyWorldState(s, soc) {
+  soc = soc || FPModel.society(s);
+  FPWorld.sample = s;
+  FPWorld.society = soc;
+  FPWorld.co2 = s.ppm;   // 전 지구 CO₂ — HUD·야장 기록용 숫자일 뿐 화면 연출에는 쓰지 않는다
+  const C = FPModel.cityState(s, soc, FPWorld.buildings ? FPWorld.buildings.length : 0);
+  FPWorld.city = C;
 
-  // CO2는 '맑은 낮의 하늘색'과 '기준 시야거리'까지만 정한다.
-  // 실제 화면 값은 여기에 계절·시간·날씨를 합성한 결과라 applyEnvironment()가 마무리한다.
-  FPWorld.daySky = new THREE.Color().lerpColors(CLEAR_SKY, HAZY_SKY, k);
-  // 맑을 때 7유닛(≈350m)까지 보이다가, 1000ppm에선 1.1유닛(≈55m) 앞도 안 보이게
-  FPWorld.fogBase = { far: 7.0 - k * 5.9, near: 0.25 - k * 0.22 };
-  // 탁해진 대기에서는 수면 반사도 함께 죽는다
-  if (FPWorld.waterMesh) FPWorld.waterMesh.material.envMapIntensity = 1.6 - k * 0.9;
+  // 건물: 낮은 것부터 C.buildings 채, 높이 × heightK. 충돌 상자 윗면도 같이(안 그러면 낮아진 건물 위 허공에 선다)
+  if (FPWorld.buildings) {
+    FPWorld.buildings.forEach((b, i) => {
+      const on = i < C.buildings, h = b.h * C.heightK;
+      b.mesh.visible = on;
+      b.mesh.scale.y = C.heightK;
+      b.mesh.position.y = FPWorld.GROUND_BASE + h / 2;
+      b.facade.repeat.y = Math.max(1, Math.round(h * 4));   // 층수가 높이를 따라가게(창문이 늘어나 보이지 않게)
+      b.box.top = on ? FPWorld.GROUND_BASE + h : -Infinity;
+    });
+  }
 
-  // 자동차: CO2가 낮을수록 전기차 비율이 높아짐 (280ppm=전부 EV, 1000ppm=전부 내연)
-  if (FPWorld.cars) {
-    const gasCount = Math.round(FPWorld.cars.length * k);
-    FPWorld.cars.forEach((car, i) => {
-      const isGas = i < gasCount;
+  // 자동차: 대수 = 도시 규모(석유 시대 전에는 없음), 전기차 비율 = 그해 사회 모습(예전 'ppm 비례 — 280 ppm이면 전부 전기차' 삭제)
+  if (FPWorld.allCars) {
+    FPWorld.cars = FPWorld.allCars.slice(0, C.cars);
+    FPWorld.allCars.forEach((car, i) => {
+      const on = i < C.cars, isGas = on && i >= C.evCars;   // 앞쪽 evCars 대가 전기차
+      car.group.visible = on;
       car.isGas = isGas;
+      if (!on) {   // 서 있지 않은 차는 충돌·주행에서 빠진다
+        car.box.minX = car.box.maxX = car.box.minZ = car.box.maxZ = 1e9;
+        return;
+      }
       const mat = isGas ? FPWorld.gasCarMat : FPWorld.evCarMat;
       car.bodyParts.forEach(p => { p.material = mat; });
       car.tailMesh.visible = isGas;                         // 전기차엔 배기구 자체가 없음
       car.bolts.forEach(b => { b.visible = !isGas; });       // 후드 + 양 옆면 번개 마크
+      FPWorld.placeCar(car);
     });
-    FPWorld.gasCarCount = gasCount;
+    FPWorld.gasCarCount = C.gasCars;
   }
-  // 배기가스·굴뚝 연기의 양(불투명도/크기)도 같이 움직인다
-  if (FPWorld.exhaust) {
-    FPWorld.exhaust.points.material.opacity = 0.55 * k;
-    FPWorld.exhaust.points.material.size = 0.010 + k * 0.010;
+
+  // 굴뚝·연기: 그해 화석 배출(stackLevel). 배출이 0 이하(또는 굴뚝 0개 수준)면 굴뚝도 연기도 없다
+  if (FPWorld.stack) {
+    FPWorld.stack.mesh.visible = C.stackOn;
+    FPWorld.stack.col.top = C.stackOn ? FPWorld.stack.top : -Infinity;
   }
-  // 해양 산성화 -> 산호 백화 + 수초·어류 개체수 감소: 해수 pCO2와 같이 0.2초 틱에서 갱신한다
-  // (시간이 흐르면 applyWorldCO2가 매 프레임 불리므로 여기서 산호 수백 개를 다시 풀지 않는다)
   if (FPWorld.smoke) {
-    // CO2가 낮으면 굴뚝 연기가 거의 안 보이고, 높으면 시커멓게 뿜어져 나옴
-    FPWorld.smoke.mat.opacity = 0.05 + k * 0.55;
-    FPWorld.smoke.mat.size = 0.03 + k * 0.075;
-    FPWorld.smoke.mat.color.setHSL(0.09, 0.05, 0.62 - k * 0.35);
-    FPWorld.smoke.rate = 0.10 + k * 0.55;
+    const L = C.stackOn ? C.stack : 0;
+    FPWorld.smoke.points.visible = L > 0;
+    FPWorld.smoke.mat.opacity = 0.05 + L * 0.55;
+    FPWorld.smoke.mat.size = 0.03 + L * 0.075;
+    FPWorld.smoke.mat.color.setHSL(0.09, 0.05, 0.62 - L * 0.35);
+    FPWorld.smoke.rate = 0.10 + L * 0.55;
   }
-  applyEnvironment();   // 하늘색·안개·조명은 CO2·시간·계절·날씨가 함께 정한다
+  // 포집 타워: 대기에서 탄소를 거둬들이는 해에만
+  if (FPWorld.tower) {
+    const on = C.removal > 0;
+    FPWorld.tower.meshes.forEach(m => { m.visible = on; });
+    FPWorld.tower.col.top = on ? FPWorld.tower.top : -Infinity;
+    FPWorld.tower.speed = on ? 0.5 + 1.5 * C.removal : 0;   // 조감 towerFan 과 같은 회전 규칙
+  }
+  // 수면 반사: 맑은 낮 값으로 고정(예전에는 CO₂가 높으면 반사가 죽었다)
+  if (FPWorld.waterMesh) FPWorld.waterMesh.material.envMapIntensity = 1.6;
+
+  applyEnvironment();   // 하늘색·안개·조명 (고정)
+  applyOceanHealth();   // 산호·어류·수초·유빙 = 그해 엔진 표층 상태와 기온 (C4)
+  // 4차 T3: 세계 속 기후테크(해상풍력·지붕 태양광·숲·CCUS·DAC·SMR·충전소)도 이 통로로만 바뀐다 — 그해 사회 모습 soc 와 도시 C
+  FPTechWorld.apply(s, soc, C);
 }
 
 // 그림자 카메라를 플레이어 주변 좁은 범위로 계속 옮겨서 눈앞 그림자 해상도를 확보.
@@ -1900,32 +1630,49 @@ function seaZoneClass(x, z) {
 const _coralColor = new THREE.Color();
 const _coralScale = new THREE.Vector3();
 const _coralMat4 = new THREE.Matrix4();
-function applyOceanHealth(ppm) {
+// 유빙 크기 = EarthVisual.glacierFrac(T)(등록부 glacier_scale, 조감 빙하와 같은 식 — 계절 배수 대신).
+// 메시 배율·높이와 충돌체(반지름·윗면)를 같이 바꾼다 — 안 그러면 작아진 유빙 둘레 허공에 걸리고, 냉수대도 옛 크기를 따른다.
+function applyIceSize(T) {
+  const k = EarthVisual.glacierFrac(T);
+  for (const ice of FPWorld.iceMeshes) {
+    const u = ice.userData, s0 = u.baseS;
+    ice.visible = k > 0;
+    ice.scale.setScalar(Math.max(k, 1e-3));
+    ice.position.y = waveBaseY + s0 * k * 0.35;
+    u.collider.r = s0 * k * 0.95;
+    u.collider.top = k > 0 ? ice.position.y + s0 * k * 0.5 : -Infinity;
+  }
+  FPWorld.glacierFrac = k;
+}
+// 연도·경로가 바뀔 때 한 번 부른다(4차 C4: 바다 상태가 그해 엔진 값이라 0.2초 틱이 필요 없어졌다).
+function applyOceanHealth() {
   if (!FPWorld.fish || !FPWorld.seagrass) return;
-  const h = oceanHealth(ppm);
-  const open = openSeaState(ppm);
+  const s = fpSample();
+  applyIceSize(s.T);   // 냉수대(iceProximity)가 유빙 크기를 따르므로 먼저
+  const h = FPModel.oceanHealth(s);
+  const open = openSeaState();
   FPWorld.oceanHealth = h;
   FPWorld.aragonite = open.omega;
   FPWorld.seaTemp = open.temp;
-  FPWorld.coldPoolOmega = coldPoolOmega(ppm);
+  FPWorld.coldPoolOmega = coldPoolOmega();
 
-  // 산호: 개체마다 자기 자리의 수온·Ω로 반응한다.
-  //   백화(수온)  = 고유색 -> 표백된 흰색
-  //   석회화 저해(Ω) = 탁한 회갈색으로 바래고 골격이 녹아 작아진다 (Ω<1이면 최대 45% 줄어듦)
+  // 산호: 개체마다 자기 자리의 상태로 반응한다(FPModel.coralState).
+  //   백화(열 스트레스, coralHealthy(T)) = 고유색 -> 표백된 흰색. 개방 해역에서 그대로, 냉수대로 갈수록 약해진다
+  //   석회화 저해(그 자리 Ω) = 탁한 회갈색으로 바래고 골격이 녹아 작아진다 (Ω<1이면 최대 45% 줄어듦)
   const C = FPWorld.CORAL_COLORS;
   let sumB = 0, sumL = 0, n = 0, nDissolve = 0;
   for (const im of FPWorld.corals) {
     const S = im.userData.sites;
     if (!S) continue;
     for (let i = 0; i < S.lx.length; i++) {
-      const st = seaStateAt(S.lx[i] - ZONE_W, S.lz[i], ppm);   // 로컬 x -> 월드 x
-      const b = bleachFromTemp(st.temp), hab = habitatFromOmega(st.omega);
+      const cs = FPModel.coralState(iceProximity(S.lx[i] - ZONE_W, S.lz[i]), s);   // 로컬 x -> 월드 x
+      const b = cs.bleach, hab = cs.habitat;
       _coralColor.copy(S.healthy).lerp(C.bleached, b).lerp(C.dissolved, (1 - hab) * 0.75);
       im.setColorAt(i, _coralColor);
       _coralScale.copy(S.scale[i]).multiplyScalar(0.55 + 0.45 * hab);
       im.setMatrixAt(i, _coralMat4.compose(S.pos[i], S.quat[i], _coralScale));
       sumB += b; sumL += 1 - hab; n++;
-      if (st.omega < 1) nDissolve++;
+      if (cs.omega < 1) nDissolve++;
     }
     im.instanceColor.needsUpdate = true;
     im.instanceMatrix.needsUpdate = true;
@@ -2089,12 +1836,12 @@ function updateAnimals(dt, t) {
 
 // ── 물 옆면: 윗변을 수면(파도) 높이에 맞춘다 ────────────────────────────────
 // 윗변 정점만 훑으므로 파도 본체(7천 정점)에 비하면 비용은 무시할 수준이다.
-function updateWaterWalls(t, intensity, halfD) {
+function updateWaterWalls(t) {
   const W = FPWorld.waterWall;
   if (!W) return;
   const arr = W.attr.array;
   for (let k = 0; k < W.topN; k++) {
-    arr[k * 6 + 1] = FPWorld.waveBaseY + FPWorld.waveHeightAt(W.sx[k], W.sy[k], t, intensity, halfD);
+    arr[k * 6 + 1] = FPWorld.waveBaseY + FPWorld.waveHeightAt(W.sx[k], W.sy[k], t);
   }
   W.attr.needsUpdate = true;
 }
@@ -2118,7 +1865,7 @@ const CAR_PLAYER_SLOW = CAR_PLAYER_STOP + 0.10;   // 여기서부터 감속
 // '가장 가까운 면'으로 밀어내느라 사람이 한 프레임에 차 옆이나 반대편으로 순간이동했다
 // (시점·위치가 갑자기 튀는 버그의 주원인. 헤드리스로 걸어 다니게 해서 재현함).
 function playerAheadGap(c, player) {
-  if (!player || player.flying) return Infinity;
+  if (!player) return Infinity;
   const b = c.box, m = 0.009 + 0.004;   // 사람 반지름 + 여유
   if (player.pos.y >= b.top - 0.005) return Infinity;   // 지붕 위에 올라탄 사람은 막는 게 아님
   let along;
@@ -2221,7 +1968,9 @@ function updateExhaust(dt) {
     return;
   }
   ex.points.visible = true;
-  for (let i = 0; i < ex.count; i++) {
+  const n = Math.min(ex.count, gasCars.length * ex.perCar);   // 내연기관차 한 대당 같은 양
+  ex.geo.setDrawRange(0, n);
+  for (let i = 0; i < n; i++) {
     const car = gasCars[i % gasCars.length];
     ex.life[i] += dt * (0.9 + (i % 5) * 0.12);
     if (ex.life[i] > 1) ex.life[i] -= 1;

@@ -10,26 +10,35 @@
 //   조감 모드는 전 지구 평균값 하나뿐이라 도시 열섬도, 나무 밑 CO2 저하도 보여줄 수 없다.
 //   그 공간 변이를 숫자로 붙잡아 가져 나갈 수 있게 하는 것이 이 파일의 목적이다.
 //
-// CSV는 조감 모드 '실시간 실험' 탭과 같은 모양으로 뽑는다. 학생이 아두이노 실측과
-// 1인칭 조사 결과를 같은 표에 놓고 비교할 수 있어야 하기 때문이다.
+// 4차 G1: 측정 기록은 학습지 공용 저장소 fp.records 에 한 측정 = 한 줄로 쌓는다(새로 고쳐도 남는다, 최대 RECORD_MAX 줄).
+// 내보내기(.xlsx 시트 7장 · .csv 측정 기록만)는 firstperson/fp-export.js(FPExport)가 맡는다 — 예전 19열 야장 CSV(시각·바람·게임 시간 등)는 지웠다.
+//
+// 4차 D3: 야장 패널(#fieldPanel)은 오른쪽 학습지 패널(firstperson/fp-sheet.js)의 [과제]·[기록] 탭으로 옮겼다.
+// 이 파일은 내용(기록·통계·횡단 조사·과제 카드)만 그리고, 열고 닫기·탭은 FPSheet 가 맡는다.
+// 현장 과제 답은 학습지 공용 저장소(js/worksheet-store.js)의 fp.tasks 에 둔다.
 // ============================================================================
 
 const FPField = {
-  rows: [],          // {n, kind, label, spot, zone, value, unit, x, z, co2, hour, iso}
+  // {n, iso, year, branch, branchKo, path, society, scale, city, kind, kindKo, spot, spotKo, zone, seaClass, nearCoral, value, unit,
+  //  x, z(세계 유닛), transect(m), co2, sw, waterTemp} — year·branch·path 는 4차 E3, society·scale·city·transect 는 G1
+  rows: [],
   transect: null,    // 진행 중인 횡단 조사
-  panelOpen: false,
-  tab: 'tasks',      // 야장을 열면 먼저 보이는 탭 - 처음 온 학생에게는 '무엇을 할지'가 먼저다
-  exports: 0,        // CSV 내보내기 횟수 (탐구 과제 ④)
   _doneTasks: new Set(),
 };
 
 const SPOT_KO = {
-  sea: '해수', ice: '빙하', beach: '해변 모래', green: '녹지 지면', city: '도시 지면',
+  // 4차 C2(마스터 D9): 지면 3종(해변 모래·녹지 지면·도시 지면)을 뺐다 — 땅을 겨눠도 그 구역 대기를 잰다
+  sea: '해수', ice: '빙하',
   airOcean: '해양 대기', airGreen: '녹지 대기', airCity: '도심 대기',
-  bodyRabbit: '토끼 체온', bodyDeer: '사슴 체온', bodyWolf: '늑대 체온',
-  bodyBear: '곰 체온', bodyFish: '어류 체온',
 };
 const KIND_KO = { temp: '온도', ph: 'pH', co2: 'CO2', sea: '해수분석' };
+// 기록 알림(토스트) 글: 항목 + 값 + 단위. 자릿수는 계측기 분해능(fp-tools TOOL_SPEC.res)과 같게
+function recordText(r) {
+  if (r.kind === 'co2') return `CO₂ ${r.value.toFixed(0)} ppm`;
+  if (r.kind === 'temp') return `온도 ${r.value.toFixed(1)} °C`;
+  if (r.kind === 'ph') return `pH ${r.value.toFixed(2)}` + (r.waterTemp != null ? ` (수온 ${r.waterTemp.toFixed(1)} °C)` : '');
+  return `Ω ${r.value.toFixed(2)}` + (r.sw ? ` · 수온 ${r.sw.temp.toFixed(1)} °C` : '');
+}
 // 바다를 잰 기록은 냉수대·경계·개방 해역으로 나눠 적는다 (유빙과의 거리로 정하는 위치 구분)
 const SEA_CLASS_KO = { cold: '냉수대', edge: '냉수대 경계', open: '개방 해역' };
 const CORAL_NEAR = 0.06;   // 산호에서 이 거리(실척 3m) 안에서 잰 바다 기록은 '산호 곁'으로 본다
@@ -40,6 +49,50 @@ const SW_CH = [
   { key: 'omega', ko: '해수분석 Ω',                unit: '',        dec: 2 },
   { key: 'temp',  ko: '해수분석 수온(°C)',          unit: '°C',      dec: 2 },
 ];
+
+// ── 저장할 기록 한 줄 (4차 G1, 학습지 공용 저장소 fp.records) ──────────────────────
+// fp.records[i] = { n, time, year, branch, society, scale, city, path, zone, spot, spotKo, seaClass, nearCoral,
+//                   tool, value, unit, x, z(실척 m), transect(m | null), co2, channels(해수 분석기 네 값 | null), waterTemp }
+// 한 측정 = 한 줄로 둔다. 해수 분석기의 네 값(용존CO₂·DIC·Ω·수온)은 channels 에 같이 넣고, 학습지 표·CSV 로 내보낼 때
+// 채널마다 한 줄로 펼친다(FPExport.lines) — 저장을 채널 줄로 하면 과제 판정·미니맵이 쓰는 '한 측정' 묶음을 다시 맞춰야 해서.
+// 2,000줄 상한: localStorage 약 5 MB 안에서 한 줄 약 0.3 KB → 0.6 MB. 넘으면 저장하지 않고 안내한다(자동 삭제 없음).
+const RECORD_MAX = 2000;
+const FIELD_BRANCH_KO = { past: '과거', now: '현재', base: '기준 미래', mine: '나의 미래' };   // fp-main BRANCH_KO 와 같은 이름(저장값에서 되살릴 때)
+const recRound1 = v => (Number.isFinite(v) ? Math.round(v * 10) / 10 : null);
+// 기록 path → 사회의 선택 · 참여 규모 · 우리 도시(%). 기준 미래 = '선택', 나의 미래 = 'mine:선택:규모:행동', 우리 도시 참여 = 끝 ':cityNN'(fp-main recordTag)
+//   과거·현재는 사회의 선택과 무관한 하나의 역사(D6)라 사회의 선택·참여 규모를 비운다(우리 도시만 현재에 있을 수 있다)
+function pathParts(branch, path) {
+  const p = String(path || ''), cm = /:city(\d+)$/.exec(p), parts = p.replace(/:city\d+$/, '').split(':');
+  const city = cm ? Number(cm[1]) : 0;
+  if (branch === 'mine') return { society: parts[1] || '', scale: parts[2] || '', city };
+  if (branch === 'base') return { society: parts[0] || '', scale: '', city };
+  return { society: '', scale: '', city };
+}
+// 메모리의 기록 줄(row) → 저장 줄. 순수(node 검사용). 값은 계측기에 뜬 값 그대로(이미 분해능으로 맞춰져 있다)
+function toRecord(r) {
+  return {
+    n: r.n, time: r.iso, year: r.year, branch: r.branch, society: r.society || '', scale: r.scale || '', city: r.city || 0, path: r.path || '',
+    zone: r.zone || '', spot: r.spot || '', spotKo: r.spotKo || '', seaClass: r.seaClass || null, nearCoral: !!r.nearCoral,
+    tool: r.kind, value: r.value, unit: r.unit, x: recRound1(r.x * 50), z: recRound1(r.z * 50), transect: r.transect == null ? null : recRound1(r.transect),
+    co2: recRound1(r.co2), channels: r.sw ? { ...r.sw } : null, waterTemp: r.waterTemp == null ? null : r.waterTemp,
+  };
+}
+// 저장 줄 → 메모리의 기록 줄. 저장값이 낡거나 깨졌으면 null(그 줄은 버린다)
+function fromRecord(d) {
+  if (!d || typeof d !== 'object' || !KIND_KO[d.tool] || !Number.isFinite(d.value)) return null;
+  return {
+    n: d.n, iso: d.time || '', year: d.year, branch: d.branch, branchKo: FIELD_BRANCH_KO[d.branch] || '', path: d.path || '',
+    society: d.society || '', scale: d.scale || '', city: d.city || 0,
+    kind: d.tool, kindKo: KIND_KO[d.tool], spot: d.spot || '', spotKo: d.spotKo || '', zone: d.zone || '',
+    seaClass: d.seaClass || null, nearCoral: !!d.nearCoral, value: d.value, unit: d.unit,
+    x: (Number(d.x) || 0) / 50, z: (Number(d.z) || 0) / 50, transect: d.transect == null ? null : d.transect,
+    co2: d.co2, sw: d.channels && typeof d.channels === 'object' ? { ...d.channels } : null, waterTemp: d.waterTemp == null ? null : d.waterTemp,
+  };
+}
+FPField.RECORD_MAX = RECORD_MAX;
+FPField.toRecord = toRecord;
+FPField.fromRecord = fromRecord;
+FPField.pathParts = pathParts;
 
 // ── 기록 ────────────────────────────────────────────────────────────────────
 // FPTools가 측정을 '확정'했을 때만 부른다(수렴 중인 값은 기록하지 않는다).
@@ -52,8 +105,16 @@ FPField.record = function (tool, value, reading) {
   // 바다를 잰 기록(온도계·pH미터·해수 분석기)은 어느 바다인지까지 적는다
   const isSea = reading.spot === 'sea' && tool.kind !== 'co2';
   const seaClass = isSea ? seaZoneClass(x, z) : null;
+  // 4차 E3: 어느 해·어느 갈래·어느 경로에서 잰 값인지(fp-main FPScenario.recordTag). 측정 중에 연도가 바뀌면 E2 가 그 측정을 취소하므로
+  // 확정 순간의 연도 = 겨눈 순간의 연도다
+  const tag = typeof FPScenario !== 'undefined' && FPScenario.recordTag ? FPScenario.recordTag()
+    : { year: FPModel.NOW_YEAR, branch: 'now', branchKo: '현재', path: FPModel.BASE_PRESET };
+  // 4차 G1: 횡단 조사 중이면 '그 순간의' 시작점 거리를 기록에 남긴다(예전 CSV 는 내보낼 때의 횡단 조사로 다시 재서, 조사를 끝내면 빈칸이 됐다)
+  const T = this.transect;
   const row = {
     n: this.rows.length + 1,
+    year: tag.year, branch: tag.branch, branchKo: tag.branchKo, path: tag.path,
+    ...pathParts(tag.branch, tag.path),   // 사회의 선택 · 참여 규모 · 우리 도시(%) — 학습지 표의 칸(G1)
     kind: tool.kind,
     kindKo: KIND_KO[tool.kind],
     spot: reading.spot || '',
@@ -64,27 +125,23 @@ FPField.record = function (tool, value, reading) {
     value,
     unit: spec,
     x, z,
-    co2: FPWorld.co2,
-    // ── 해수 상태·바람·게임 시간 (CSV 뒤쪽 열) ──
+    transect: T ? Math.hypot(x - T.x0, z - T.z0) * 50 : null,
+    co2: FPWorld.co2,                                       // 그해 전 지구 CO₂ — 미니맵 'CO₂ 평균 대비' 색점이 쓴다
     sw: reading.values ? { ...reading.values } : null,     // 해수 분석기 측정값 (용존CO2·DIC·Ω·수온)
     waterTemp: reading.waterTemp != null ? reading.waterTemp                 // pH미터 병기 수온
              : (reading.values ? reading.values.temp
              : (tool.kind === 'temp' && isSea ? value : null)),               // 온도계로 잰 해수
-    pco2Sw: FPWorld.pco2Sea,                  // 그 순간 해수 pCO2 (모형 상태)
-    wind: FPAir.windLabel(),                  // 해풍 / 육풍 / 무풍
-    gameTime: FPAir.elapsedDays * 24,         // 조사 시작 후 흐른 게임 시간 [h] (시각을 멈춰도 흐름)
-    hour: FPWorld.hour,
+    // 4차 G1: 해수 pCO₂(학생이 재는 값이 아님)·바람('무풍' 고정, B3)·게임 시간(빈칸, C4)·시각(12 고정, D2) 칸은 뺐다
     iso: new Date().toISOString(),
   };
   this.rows.push(row);
-  // 이스터에그: 살아 있는 것의 체온을 처음 쟀을 때만 요점을 한 번 짚어 준다
-  if (reading.creature && !this._bodySeen) {
-    this._bodySeen = true;
-    this.toast(row.spotKo.includes('어류')
-      ? '🐟 어류는 변온동물이라 체온이 곧 수온입니다. 육지 동물과 비교해 보세요.'
-      : '🐾 정온동물은 바깥 온도가 변해도 체온이 일정합니다. CO₂를 올려 보세요.', 6500);
-  }
   if (this.transect) this.addTransectPoint(row);
+  // 4차 G1: 저장소에 한 줄. 상한(RECORD_MAX)이 차면 저장하지 않고 안내만 한다(자동 삭제 없음 — 3차 C4 증거 상한과 같은 방식)
+  const saved = FieldStore.addRecord(toRecord(row));
+  // 4차 D2: HUD 에서 측정값을 뺐으므로, 확정된 값은 이 짧은 알림으로 한 번 보여 준다(예: '도심 대기 CO₂ 449 ppm · 기록 #12').
+  // 과제 완료 알림이 이걸 덮어써야 하므로 checkTasks 보다 먼저 띄운다.
+  if (saved) this.toast(`${row.spotKo} ${recordText(row)} · 기록 #${row.n}`, 2600);
+  else this.toast(`기록 #${row.n} — 저장할 수 있는 기록 ${RECORD_MAX.toLocaleString('ko-KR')}줄이 찼어요. [엑셀로 내보내기] 뒤 [기록 지우기]로 비우세요(이 뒤의 기록은 새로 고치면 사라져요).`, 6500);
   this.checkTasks();
   this.refresh();
   this.flash();
@@ -92,8 +149,8 @@ FPField.record = function (tool, value, reading) {
 
 FPField.clear = function () {
   this.rows.length = 0;
+  FieldStore.clearRecords();
   this.transect = null;
-  this.exports = 0;
   this._doneTasks.clear();
   // 진행 중이던 측정이 나중에 확정돼서 '지운 뒤'에 한 줄 끼어드는 일을 막는다
   if (typeof FPTools !== 'undefined') FPTools.slots.forEach(t => { if (t) t.reading = null; });
@@ -102,13 +159,17 @@ FPField.clear = function () {
 
 // ── 탐구 과제 ───────────────────────────────────────────────────────────────
 // 이 모드에 튜토리얼도 과제도 없어서, 학생을 떨어뜨려 놓으면 뭘 할지 몰랐다.
-// 새 과학을 만들지 않고 설계안(10.09변경사항정리.md) 8절의 학습 활동 ①~④를 그대로 옮겼다.
+// 새 과학을 만들지 않고 설계안(10.09변경사항정리.md — 4차 A6에서 지움, 협동판 태그 v2.0-collab-final 에 있음) 8절의 학습 활동 ①~④를 그대로 옮겼다.
 //
 // 판정은 '야장에 쌓인 기록 수'로만 한다. 모형 값이나 측정값이 맞는지는 보지 않는다 -
 // 계측 노이즈 때문에 판정이 흔들리면 안 되고, 결론은 학생이 평균·표준편차로 내야 하기 때문이다.
 // 바다 기록의 '냉수대/개방 해역'·'산호 곁'은 값이 아니라 잰 위치로 나눈 것이다(record 참고).
-const NIGHT_FROM = 18, NIGHT_TO = 6;       // 활동 ②의 '저녁~새벽' (시계 시각 기준)
-function isEveningToDawn(hour) { return hour >= NIGHT_FROM || hour < NIGHT_TO; }
+// 4차 B5: ② 밤바람(낮밤·해륙풍이 없어짐)과 ④ 상자 속 바다(직접 실험 탭이 없음)를 뺐다.
+// 4차 D3: 건너뛴 번호(①③ · ⑤⑥⑦)를 측정 과제 ①② · 현장 과제 ③④⑤ 로 다시 매겼다. 현장 과제 제목은 저장소(fp.tasks[id].title)에도
+// 들어 있고 조감 [기록] 탭이 그 저장값을 보여 주므로, 1인칭을 열 때 FieldStore.syncTitles 가 저장된 제목을 새 번호로 고친다
+// (id 는 coral·shell·glacier 그대로 — 답은 id 로 찾으므로 이미 쓴 관찰 글은 그대로 이어진다).
+// ③의 '생각해 볼 것'은 예전에 "CO₂를 600 ppm 이상으로 올려 보세요"였다. B4에서 교사용 직접 입력을 빼
+// 기본 경로로는 600 ppm에 못 닿아(현재 정책 2200년 ≈ 576 ppm) 연도를 옮기라는 말로 바꿨다.
 const INQUIRY = [
   {
     id: 1, title: '① 차가운 바다 vs 따뜻한 바다',
@@ -124,39 +185,15 @@ const INQUIRY = [
     ],
   },
   {
-    id: 2, title: '② 밤바람이 바다를 바꾼다',
-    concept: '대기–해양 상호작용 · 동적 평형 · 측정 오차와 평균',
-    goal: '밤 육풍이 도심 CO₂를 바다로 실어 오면 해수 pH가 어떻게 변하는지 시간을 두고 본다.',
-    how: '저녁~새벽(18~06시)에 바다 위 공기 CO₂(3번)와 해수 pH(2번)를 각각 5회 이상, 비교용으로 낮에도 해수 pH를 5회 재시오. 시각은 설정(E)에서 옮기거나 T로 흐르게 하세요.',
-    think: '바다는 대기를 천천히 따라갑니다(약 2게임일). 밤으로 옮기자마자 재면 아직 낮의 바다입니다 — 설정창의 해수 pCO₂가 해양 대기에 다가갈 때까지 기다리며 반복해서 재고 평균을 비교하세요. 차이(약 0.02~0.03)는 pH미터 오차(±0.02)와 비슷합니다.',
-    subs: [
-      { label: '밤 해양 대기 CO₂', goal: 5, test: r => r.kind === 'co2' && r.zone === 'ocean' && isEveningToDawn(r.hour) },
-      { label: '밤 해수 pH', goal: 5, test: r => r.kind === 'ph' && isEveningToDawn(r.hour) },
-      { label: '낮 해수 pH', goal: 5, test: r => r.kind === 'ph' && !isEveningToDawn(r.hour) },
-    ],
-  },
-  {
-    id: 3, title: '③ 백화인가, 석회화 저해인가',
+    id: 2, title: '② 백화인가, 석회화 저해인가',
     concept: '열 스트레스와 산성화의 구분 (오개념 교정)',
     goal: '따뜻한 곳 산호와 차가운 곳 산호가 서로 다른 이유로 아프다는 것을 구분한다.',
     how: '산호 바로 곁(3 m 이내) 바다를 4번 해수분석기로 — 개방 해역 산호 3회, 냉수대 산호 3회 재시오.',
-    think: 'CO₂를 600 ppm 이상으로 올려 보세요. 하얗게 바랜 산호(백화)와 회갈색으로 쪼그라든 산호(석회화 저해)는 각각 어디에 있나? 원인은 수온인가 Ω인가?',
+    // 4차 F5 문구 점검: 'CO₂를 높여 보세요'는 CO₂를 조작 대상으로 쓰는 말이라(3차 결정 9 — CO₂는 배출의 결과) 연도를 옮기는 말로만 둔다
+    think: '화면 위 타임라인에서 연도를 2100년 이후로 옮겨 배출이 쌓인 미래로 가 보세요. 하얗게 바랜 산호(백화)와 회갈색으로 쪼그라든 산호(석회화 저해)는 각각 어디에 있나? 원인은 수온인가 Ω인가?',
     subs: [
       { label: '개방 해역 산호', goal: 3, test: r => r.kind === 'sea' && r.nearCoral && r.seaClass === 'open' },
       { label: '냉수대 산호', goal: 3, test: r => r.kind === 'sea' && r.nearCoral && r.seaClass !== 'open' },
-    ],
-  },
-  {
-    id: 4, title: '④ 상자 속 바다와 모형',
-    concept: '평형 모형의 예측력과 한계 · 완충 작용 · 실측–가상 융합',
-    goal: '아크릴 상자 실측과 비교할 가상 바다의 기준값을 만든다.',
-    how: '해양 대기 CO₂ · 해수 수온 · 해수 pH를 각각 3회 이상 기록하고 CSV로 내보내시오. 상자 실측은 조감 모드 \'실시간 실험\' 탭에서 같은 형식의 CSV로 받아 한 표에 놓고 비교합니다.',
-    think: '같은 CO₂ · 같은 수온이면 모형은 같은 pH를 냅니다. 상자 속 실측 pH는 모형을 얼마나 따르나? 어긋난다면 왜일까? (인공해수 · 총알칼리도 · 평형까지 걸리는 시간)',
-    subs: [
-      { label: '해양 대기 CO₂', goal: 3, test: r => r.kind === 'co2' && r.zone === 'ocean' },
-      { label: '해수 수온', goal: 3, test: r => r.waterTemp != null && r.zone === 'ocean' },
-      { label: '해수 pH', goal: 3, test: r => r.kind === 'ph' },
-      { label: 'CSV 내보내기', goal: 1, exportCount: true },
     ],
   },
 ];
@@ -165,40 +202,71 @@ const INQUIRY = [
 // 위의 측정 과제는 기록 수로 판정하지만, 이 과제는 관찰 글이 있으면 그 칸을 채운 것으로 본다(맞고 틀림은 보지 않는다).
 // 문구는 데이터로 둔다. link = 조감 탐구 경로 C의 단계 id(조감 학습지 [기록]의 '1인칭 현장 기록'에 함께 적힌다).
 // 1인칭 세계가 실제로 바꾸는 것만 묻는다: 산호 백화(수온)·냉수대 골격 용해(Ω)·빙하 곁 온도. 1인칭에는 조개가 없고
-// 유빙 크기는 계절만 따른다 — 그래서 ⑥은 냉수대 산호 골격으로, ⑦은 빙하 곁 온도로 본다.
+// 유빙 크기는 고정이다(4차 B3) — 그래서 ⑥은 냉수대 산호 골격으로, ⑦은 빙하 곁 온도로 본다.
 // 답은 localStorage['worksheet.v1'].fp.tasks 에 둔다(조감 학습지 공용 저장소와 같은 키 — js/worksheet.js).
+// 4차 E3: 두 연도 = [현재(NOW_YEAR 2026), 2100] — 예전 [2023, 2100]. 2023 은 '마지막 실제 배출 해'지 학생의 '지금'이 아니다(마스터 D6).
+//   저장된 예전 2023년 관찰 글(fp.tasks[id].obs[2023])은 지우지도 옮기지도 않는다 — 2023년 세계를 보고 쓴 글이라 2026 칸에 옮기면
+//   다른 해의 관찰이 된다. 조감 [기록] 탭(worksheet.js renderFp)은 obs 의 모든 해를 그대로 보여 주므로 거기엔 남아 보인다.
+//   [O년으로 가기] = goTo(y, 'base') — 관찰은 기준 미래에서 한다(나의 미래 비교는 F 의 [나의 행동]).
+const FIELD_YEARS = [FPModel.NOW_YEAR, 2100];
 const FIELD_TASKS = [
-  { id: 'coral', link: 'C3', title: '⑤ 산호 — 해수온', concept: '해수온 상승 · 산호 백화', years: [2023, 2100],
+  { id: 'coral', link: 'C3', title: '③ 산호 — 해수온', concept: '해수온 상승 · 산호 백화', years: FIELD_YEARS,
     goal: '같은 산호를 지금과 2100년에 보고 색이 어떻게 달라지는지 비교한다.',
-    how: '설정(E)에서 배출 경로를 고르고, 아래 [이 연도로 가기]로 연도를 바꿔 개방 해역 산호를 가까이서 보시오. 4번 해수분석기로 수온도 재 보세요.',
-    think: '산호가 하얗게 바래는(백화) 까닭은 무엇일까? 배출 경로를 바꾸면 2100년의 산호는 어떻게 다를까?' },
-  { id: 'shell', link: 'C3', title: '⑥ 껍데기·골격 — pH · Ω', concept: '해양 산성화 · 아라고나이트 포화도', years: [2023, 2100],
+    how: '[O년으로 가기](또는 화면 위 타임라인)로 연도를 바꿔 개방 해역 산호를 가까이서 보시오. 4번 해수분석기로 수온도 재 보세요.',
+    think: '산호가 하얗게 바래는(백화) 까닭은 무엇일까? 학습지 [나의 행동]에서 사회의 선택(배출 경로)을 1.5 °C 탄소중립으로 바꾸고 2100년에 다시 가 보면 산호는 어떻게 다를까?' },
+  { id: 'shell', link: 'C3', title: '④ 껍데기·골격 — pH · Ω', concept: '해양 산성화 · 아라고나이트 포화도', years: FIELD_YEARS,
     goal: '유빙 옆 차가운 바다(냉수대) 산호의 탄산칼슘 골격을 지금과 2100년에 보고 비교한다. (조개 껍데기와 같은 재료)',
-    how: '유빙 바로 옆 냉수대로 가서 [이 연도로 가기]로 연도를 바꿔 보시오. 2번 pH미터와 4번 해수분석기(Ω)로 재 보세요. HUD 산호 줄에 냉수대 Ω가 있습니다.',
+    how: '유빙 바로 옆 냉수대로 가서 [O년으로 가기]로 연도를 바꿔 보시오. 2번 pH미터와 4번 해수분석기(Ω)로 재 보세요.',
     think: 'Ω가 1보다 작아지면 껍데기·골격에 무슨 일이 생길까? 차가운 바다가 먼저 위험한 까닭은?' },
-  { id: 'glacier', link: 'C2', title: '⑦ 빙하 — 기온', concept: '기온 상승 · 빙하', years: [2023, 2100],
+  { id: 'glacier', link: 'C2', title: '⑤ 빙하 — 기온', concept: '기온 상승 · 빙하', years: FIELD_YEARS,
     goal: '빙하(유빙) 곁의 온도를 지금과 2100년에 재고 비교한다.',
-    how: '유빙 곁에서 1번 온도계로 빙하 표면과 해양 대기 온도를 재시오. [이 연도로 가기]로 연도를 바꿔 다시 재세요. (이 세계의 유빙 크기는 계절만 따릅니다 — 그래서 온도를 잽니다)',
+    // 4차 C4: 유빙 크기가 그해 기온을 따르게 됐다(glacierFrac, 조감 빙하와 같은 연출) — '크기는 안 바뀐다'는 괄호를 바꿨다.
+    how: '유빙 곁에서 1번 온도계로 빙하 표면과 해양 대기 온도를 재시오. [O년으로 가기]로 연도를 바꿔 다시 재세요. (유빙 크기도 그해 기온을 따라 바뀝니다 — 크기는 연출, 온도는 측정값입니다)',
     think: '빙하 표면이 0 °C에 가까워지면 무슨 일이 생길까? 조감 모드에서 고른 경로의 2100년 기온과 견주어 보세요.' },
 ];
-// 공용 저장소의 fp 묶음 읽기·쓰기. file:// 등에서 저장소가 막히면 조용히 넘어간다(이번 화면 동안만 메모리)
+// fp.tasks[id].scenario: 조감 [기록] 탭(worksheet.js renderFp)이 PRESET_KO[scenario] 로 이름을 찾는다 — SSP 세 경로는 그 키 그대로,
+// 4차 F3 의 NDC·설계한 사회는 조감에 키가 없으므로 한국어 이름을 그대로 넣는다(조감은 못 찾으면 글을 그대로 보인다)
+const scenarioTag = () => (/^ssp/.test(FPScenario.choice) ? FPScenario.choice : FPScenario.shortName());
+// 공용 저장소의 fp 묶음 읽기·쓰기 (4차 D3: js/worksheet-store.js — try/catch·메모리 대체는 그쪽이 맡는다)
+// fp.tasks[id] = { id, title, link, obs: {연도: 글}, diff, scenario, time } — 조감 [기록] 탭 renderFp 가 이 모양을 읽는다(마스터 §6-4)
 const FieldStore = {
-  key: 'worksheet.v1',
-  mem: null,
-  read() {
-    try { const d = JSON.parse(localStorage.getItem(this.key) || 'null') || {}; d.fp = d.fp || {}; d.fp.tasks = d.fp.tasks || {}; return d; }
-    catch (e) { return this.mem || (this.mem = { fp: { tasks: {} } }); }
+  read: () => WorksheetStore.readFp(),
+  // 4차 G1: 측정 기록(fp.records). 저장소가 막혀도 WorksheetStore 가 메모리로 받아 준다 — 여기서는 예외만 삼킨다(마스터 §6-4)
+  addRecord(rec) {
+    let ok = true;
+    try {
+      WorksheetStore.updateFp(fp => {
+        if (fp.records.length >= RECORD_MAX) { ok = false; return; }
+        fp.records.push(rec);
+      });
+    } catch (e) { /* 이번 화면 동안만(FPField.rows) */ }
+    return ok;
+  },
+  clearRecords() {
+    try { WorksheetStore.updateFp(fp => { fp.records = []; }); } catch (e) { /* 메모리만 비운다 */ }
+  },
+  loadRecords() {
+    try { return (this.read().records || []).map(fromRecord).filter(Boolean); } catch (e) { return []; }
   },
   setTask(id, patch) {
-    const d = this.read(), t = FIELD_TASKS.find(x => x.id === id);
-    const cur = d.fp.tasks[id] || { id, title: t.title, link: t.link, obs: {} };
-    Object.assign(cur, patch, { title: t.title, link: t.link, scenario: typeof FPScenario !== 'undefined' ? FPScenario.preset : '', time: new Date().toISOString() });
-    d.fp.tasks[id] = cur;
-    try { localStorage.setItem(this.key, JSON.stringify(d)); } catch (e) { this.mem = d; }
+    const t = FIELD_TASKS.find(x => x.id === id);
+    WorksheetStore.updateFp(fp => {
+      const cur = fp.tasks[id] || { id, title: t.title, link: t.link, obs: {} };
+      Object.assign(cur, patch, { title: t.title, link: t.link, scenario: typeof FPScenario !== 'undefined' ? scenarioTag() : '', time: new Date().toISOString() });
+      fp.tasks[id] = cur;
+    });
+  },
+  // 저장된 제목·연결 단계가 지금 과제 정의와 다르면(D3 번호 정리 전 기록) 고친다. 다를 때만 쓴다
+  syncTitles() {
+    const old = this.read().tasks;
+    if (!FIELD_TASKS.some(t => old[t.id] && (old[t.id].title !== t.title || old[t.id].link !== t.link))) return;
+    WorksheetStore.updateFp(fp => {
+      for (const t of FIELD_TASKS) if (fp.tasks[t.id]) Object.assign(fp.tasks[t.id], { title: t.title, link: t.link });
+    });
   },
 };
 FPField.fieldProgress = function () {
-  const saved = FieldStore.read().fp.tasks;
+  const saved = FieldStore.read().tasks;
   return FIELD_TASKS.map(t => {
     const a = saved[t.id] || { obs: {} };
     const subs = [...t.years.map(y => ({ label: `${y}년 관찰`, ok: !!(a.obs && String(a.obs[y] || '').trim()) })),
@@ -218,7 +286,7 @@ FPField.renderFieldTasks = function () {
       `<div class="t-concept">${t.concept} · 조감 ${t.link}</div>` +
       `<p class="t-line"><b>목표</b> ${t.goal}</p>` +
       `<p class="t-line"><b>방법</b> ${t.how}</p>` +
-      t.years.map(y => `<div class="ft-year"><button class="settings-btn ft-go" type="button" data-year="${y}">${y}년으로 가기</button>` +
+      t.years.map(y => `<div class="ft-year"><button class="btn btn--time btn--sm ft-go" type="button" data-year="${y}">${y}년으로 가기</button>` +
         `<label><span>${y}년에 본 것</span><textarea rows="2" data-obs="${y}" placeholder="본 것·잰 값을 쓰세요">${esc(p.a.obs && p.a.obs[y])}</textarea></label></div>`).join('') +
       `<label class="ft-diff"><span>달라진 점</span><textarea rows="2" data-diff placeholder="두 연도에서 무엇이 왜 달라졌나요?">${esc(p.a.diff)}</textarea></label>` +
       `<div class="t-subs">${p.subs.map(s => `<span class="t-sub${s.ok ? ' ok' : ''}">${s.label}</span>`).join('')}</div>` +
@@ -233,7 +301,7 @@ FPField.bindFieldTasks = function () {
   box.addEventListener('input', e => {
     const card = e.target.closest('[data-ft]');
     if (!card) return;
-    const id = card.dataset.ft, a = FieldStore.read().fp.tasks[id] || { obs: {} };
+    const id = card.dataset.ft, a = FieldStore.read().tasks[id] || { obs: {} };
     if (e.target.dataset.obs) FieldStore.setTask(id, { obs: { ...(a.obs || {}), [e.target.dataset.obs]: e.target.value } });
     else if (e.target.hasAttribute('data-diff')) FieldStore.setTask(id, { diff: e.target.value });
   });
@@ -241,14 +309,232 @@ FPField.bindFieldTasks = function () {
   box.addEventListener('focusout', () => setTimeout(() => { if (!box.contains(document.activeElement)) this.renderTasks(); }, 0));
   box.addEventListener('click', e => {
     const b = e.target.closest('.ft-go');
-    if (b && typeof FPScenario !== 'undefined') { FPScenario.goYear(Number(b.dataset.year)); this.toast(`${b.dataset.year}년으로 바꿨습니다 (${FPScenario.label()})`, 2500); }
+    // 4차 E3: 현장 과제의 관찰은 기준 미래에서 — 갈래를 'base' 로 정해 간다(E2 goTo 한 통로)
+    if (b && typeof FPScenario !== 'undefined') { const y = Number(b.dataset.year); FPScenario.goTo(y, 'base'); this.toast(`${y}년으로 바꿨습니다 (${FPScenario.label(y)})`, 2500); }
+  });
+};
+
+// ── 행동 과제 ⑥~⑪ (4차 F5 — 2장 '시민') ─────────────────────────────────────
+// 지시서(F §5)의 번호는 ⑧~⑬이지만 D3 에서 1장을 ①~⑤로 다시 매겨 빈 번호 없이 ⑥~⑪을 쓴다(번호는 FPSociety.CHAPTERS 2장 줄과 같다).
+// 판정은 기록 수·글 유무·체험 여부로만(2차 이후 원칙) — 잰 값이 맞는지, 차이가 났는지는 보지 않는다.
+// 저장 모양은 현장 과제와 같다: fp.tasks[id] = { id, title, link, obs: {칸 이름: 글}, diff, scenario, time } — 조감 [기록] 탭(renderFp)이 그대로 보인다(함정 4).
+// 측정 과제(⑦⑧⑨)는 '기록 평균의 차이'와 '계측 오차로 생길 수 있는 차이'를 나란히 적는다(F §6-4 정직한 체감):
+//   차이가 오차보다 작으면 "이 측정으로는 구분할 수 없어요"라고 그대로 말한다 — 행동의 효과를 부풀리지 않는다(F §0).
+const ACT_LINK = '나의 행동';
+const ACT_GOAL = 5;
+// 같은 자리 = 같은 지점(spot). 기준 미래 path = '경로[:cityNN]', 나의 미래 path = 'mine:경로:규모:행동[:cityNN]'(fp-main recordTag)
+const pathPart = (r, i) => String(r.path || '').split(':')[i] || '';
+const choiceOf = r => (r.branch === 'mine' ? pathPart(r, 1) : pathPart(r, 0));
+const isCity = r => /:city\d+$/.test(String(r.path || ''));
+const isCO2 = r => r.kind === 'co2';
+const ACT_TASKS = [
+  { id: 'act_size', no: '⑥', title: '⑥ 내 행동의 크기', concept: '① 나의 탄소 · 행동마다 크기가 다르다',
+    goal: '행동을 3개 이상 고르고 크기 막대를 본 뒤, 가장 큰 행동과 가장 작은 행동, 그 차이를 쓴다.',
+    how: '학습지 [나의 행동]에서 행동을 고르세요(도시의 멀티탭·자전거 거치대·버스 정류장·여행사 표지판에서 E 로도 갈 수 있어요). 여섯 막대는 같은 눈금이에요.',
+    btns: [{ act: 'sheet', label: '나의 행동 열기' }],
+    fields: [{ key: '가장 큰 행동 · 가장 작은 행동', ph: '어느 행동이 가장 크고, 어느 행동이 가장 작았나요?' },
+      { key: '그 차이', ph: '몇 kg, 몇 배쯤 차이 나나요?', diff: true }] },
+  { id: 'act_future', no: '⑦', title: '⑦ 미래가 달라졌나?', concept: '② 모두의 선택 · 나의 미래 갈래',
+    goal: '같은 사회의 선택에서 2100년 \'기준 미래\'와 \'나의 미래\'의 같은 자리 CO₂를 각각 5번 이상 재고, 두 평균의 차이를 견준다.',
+    how: '행동을 하나 이상 고르면 타임라인에 [나의 미래]가 열려요. 2100년의 한 자리에 선 채 갈래만 바꿔 가며 CO₂센서(3번)로 재세요.',
+    btns: [{ act: 'go', year: 2100, branch: 'base', label: '2100년 기준 미래로' }, { act: 'go', year: 2100, branch: 'mine', label: '2100년 나의 미래로' }],
+    fields: [{ key: '두 평균의 차이', ph: '평균 차이는 몇 ppm인가요? 계측 오차보다 큰가요?', diff: true }] },
+  { id: 'act_city', no: '⑧', title: '⑧ 도시 공기는 바로 바뀐다', concept: '현재의 국지 효과 · 도시 증가분',
+    goal: '현재(2026) 도심 대기 CO₂를 \'우리 도시\' 참여 전과 후에 각각 5번 이상 재고 견준다.',
+    how: '먼저 도심에서 CO₂센서로 5번 재세요(참여 전). 그다음 [나의 행동]에서 걷기·자전거나 대중교통을 고르고 \'우리 도시\' 참여 비율을 정한 뒤, 같은 자리에서 다시 5번 재세요.',
+    btns: [{ act: 'go', year: null, branch: 'base', label: '현재로 가기' }, { act: 'sheet', label: '나의 행동 열기' }],
+    fields: [{ key: '참여 전·후의 차이', ph: '두 평균은 몇 ppm 차이 났나요? 계측 오차보다 큰가요?', diff: true }] },
+  { id: 'act_society', no: '⑨', title: '⑨ 사회의 선택', concept: '③ 사회의 선택 · 배출 경로',
+    goal: '2100년 같은 자리 CO₂를 \'현재 정책\'과 \'1.5 °C 탄소중립\' 경로에서 재고, ⑦의 차이와 견준다.',
+    how: '사회의 선택은 현재(2026)에서만 바꿀 수 있어요 — [나의 행동] 맨 위 ③ 사회의 선택을 고른 뒤 2100년 기준 미래로 가서 재세요. 경로마다 한 번 이상.',
+    btns: [{ act: 'sheet', label: '사회의 선택 고르기' }, { act: 'go', year: 2100, branch: 'base', label: '2100년 기준 미래로' }],
+    fields: [{ key: '⑦과 견준 결과', ph: '사회의 선택이 만든 차이는 나의 행동이 만든 차이와 어떻게 다른가요?', diff: true }] },
+  { id: 'act_cafe', no: '⑩', title: '⑩ 텀블러는 몇 번 써야 할까', concept: '미니게임 · 초록잔 카페',
+    goal: '카페에서 음료를 한 번 받고 결과 카드의 \'본전 약 220번\'을 본 뒤, 내 텀블러 사용 습관을 쓴다.',
+    how: '[카페 위치 보기]를 누르면 미니맵에 카페가 표시돼요. 일회용 컵이든 텀블러든 한 번 받으면 돼요.',
+    btns: [{ act: 'minigame', id: 'tumbler', label: '카페 위치 보기' }], src: 'tumbler_breakeven',
+    fields: [{ key: '내 텀블러 사용 습관', ph: '텀블러를 몇 번쯤 썼나요? 220번을 넘기려면 어떻게 써야 할까요?', diff: true }] },
+  { id: 'act_recycle', no: '⑪', title: '⑪ 헷갈리는 분리배출', concept: '미니게임 · 분리배출장',
+    goal: '분리배출장에서 한 판을 하고, 틀린 품목 하나를 골라 왜 그런지 쓴다.',
+    how: '[분리배출장 위치 보기]를 누르면 미니맵에 표시돼요. 다 맞혔다면 가장 헷갈렸던 품목을 쓰세요.',
+    btns: [{ act: 'minigame', id: 'recycle', label: '분리배출장 위치 보기' }],
+    fields: [{ key: '틀린 품목', ph: '품목 이름' }, { key: '왜 그런지', ph: '왜 그 수거함이 아닌가요? 준비(헹구기·라벨 떼기)는?', diff: true }] },
+];
+// 두 묶음의 평균 차이와 '계측 오차로 생길 수 있는 차이'(두 평균, 약 95 % — 2 × √(sa²/na + sb²/nb)).
+//   s = max(계측기 재현성 σ, 그 묶음의 표본표준편차) — 자리마다 값이 조금씩 달라 흩어짐이 σ보다 크면 그쪽을 쓴다(보수적으로).
+//   기준은 F4 '재서 구분할 수 있나요?'(fp_detect_n)와 같은 2σ 어림이다.
+function meanGap(a, b, sigma) {
+  if (!a.length || !b.length) return null;
+  const st = v => {
+    const n = v.length, m = v.reduce((x, y) => x + y, 0) / n;
+    const sd = n > 1 ? Math.sqrt(v.reduce((x, y) => x + (y - m) ** 2, 0) / (n - 1)) : 0;
+    return { n, m, s: Math.max(sigma, sd) };
+  };
+  const A = st(a), B = st(b), d = B.m - A.m, err = 2 * Math.sqrt(A.s ** 2 / A.n + B.s ** 2 / B.n);
+  return { na: A.n, nb: B.n, ma: A.m, mb: B.m, d, err, distinct: Math.abs(d) > err };
+}
+// 같은 자리 두 묶음 고르기: rows 를 key(r) 로 묶어 (A 조건, B 조건) 을 함께 가장 많이 채운 자리를 고른다.
+//   ⑦은 나의 미래 path 전체(규모·행동)까지 같아야 한 묶음 — 행동을 바꾼 뒤의 기록이 앞 평균과 섞이지 않게(E3 summary 와 같은 규칙)
+function bestPair(rows, keyA, keyB, goal) {
+  const A = new Map(), B = new Map();
+  for (const r of rows) {
+    const ka = keyA(r), kb = ka == null ? keyB(r) : null;
+    if (ka != null) { if (!A.has(ka)) A.set(ka, []); A.get(ka).push(r); }
+    if (kb != null) { if (!B.has(kb.k)) B.set(kb.k, { join: kb.join, v: [] }); B.get(kb.k).v.push(r); }
+  }
+  let best = { a: [], b: [], score: -1 };
+  const cap = n => Math.min(n, goal);
+  for (const [ka, a] of A) {
+    const pairs = [...B.values()].filter(x => x.join === ka);
+    if (!pairs.length && cap(a.length) > best.score) best = { a, b: [], score: cap(a.length) };
+    // 점수가 같으면 나중에 잰 묶음(Map 에 늦게 들어온 쪽)을 고른다 — 대한민국으로 5번 잰 뒤 세계로 5번 다시 재면 세계 쪽을 보인다
+    // (예전 '>' 는 먼저 잰 묶음에 머물러 '세계 규모로 다시 재기'가 화면에 안 바뀌었다. 2026-11-19 사람 결정 '최근 묶음 우선')
+    for (const p of pairs) if (cap(a.length) + cap(p.v.length) >= best.score) best = { a, b: p.v, score: cap(a.length) + cap(p.v.length) };
+  }
+  for (const p of B.values()) if (!A.has(p.join) && cap(p.v.length) > best.score) best = { a: [], b: p.v, score: cap(p.v.length) };
+  return best;
+}
+// 순수: 저장값(fp) + 측정 기록(rows) + 지금 고른 행동 수 → 과제마다 { task, a, subs[{label, ok, n?, goal?}], frac, done, gap? }
+//   chosenN 은 FPActions.chosen()(D13 체험 규칙을 거친 값)을 넘긴다 — 저장값 fp.actions.chosen 에는 꺼져야 할 행동이 남아 있을 수 있다
+function actionTaskProgress(fp, rows, chosenN, sigma = 8) {
+  const tasks = (fp && fp.tasks) || {}, log = (fp && fp.actions && fp.actions.minigameLog) || {};
+  rows = rows || [];
+  const nowY = FPModel.NOW_YEAR;
+  const cnt = (label, list, goal) => ({ label, n: list.length, goal, ok: list.length >= goal });
+  return ACT_TASKS.map(t => {
+    const a = tasks[t.id] || { obs: {} }, obs = a.obs || {};
+    let subs = [], gap = null;
+    if (t.id === 'act_size') subs.push({ label: '행동 3개 이상 고름', n: Math.min(chosenN || 0, 3), goal: 3, ok: (chosenN || 0) >= 3 });
+    if (t.id === 'act_future') {
+      // 2100 · CO₂ · 기준(같은 경로) / 나의(그 경로 위 나의 행동). 자리·경로가 같은 쌍
+      const r2 = rows.filter(r => r.year === 2100 && isCO2(r) && (r.branch === 'base' || r.branch === 'mine'));
+      const p = bestPair(r2, r => (r.branch === 'base' ? `${r.spot}|${choiceOf(r)}` : null),
+        r => (r.branch === 'mine' ? { k: `${r.spot}|${r.path}`, join: `${r.spot}|${choiceOf(r)}` } : null), ACT_GOAL);
+      subs.push(cnt('기준 미래 CO₂', p.a, ACT_GOAL), cnt('나의 미래 CO₂', p.b, ACT_GOAL));
+      gap = meanGap(p.a.map(r => r.value), p.b.map(r => r.value), sigma);
+    }
+    if (t.id === 'act_city') {
+      const r2 = rows.filter(r => r.year === nowY && isCO2(r) && r.spot === 'airCity');
+      const before = r2.filter(r => !isCity(r)), after = r2.filter(isCity);
+      // 참여 비율을 바꿔 가며 쟀으면 가장 많이 잰 비율 하나만(서로 다른 세계를 섞지 않게)
+      const byPct = new Map();
+      for (const r of after) { if (!byPct.has(r.path)) byPct.set(r.path, []); byPct.get(r.path).push(r); }
+      const af = [...byPct.values()].sort((x, y) => y.length - x.length)[0] || [];
+      subs.push(cnt('참여 전 도심 CO₂', before, ACT_GOAL), cnt('참여 후 도심 CO₂', af, ACT_GOAL));
+      gap = meanGap(before.map(r => r.value), af.map(r => r.value), sigma);
+    }
+    if (t.id === 'act_society') {
+      const r2 = rows.filter(r => r.year === 2100 && isCO2(r) && r.branch === 'base' && !isCity(r));
+      const p = bestPair(r2, r => (pathPart(r, 0) === 'ssp245' ? r.spot : null),
+        r => (pathPart(r, 0) === 'ssp119' ? { k: r.spot, join: r.spot } : null), 1);
+      subs.push(cnt('현재 정책 2100 CO₂', p.a, 1), cnt('1.5 °C 2100 CO₂', p.b, 1));
+      gap = meanGap(p.a.map(r => r.value), p.b.map(r => r.value), sigma);
+    }
+    if (t.id === 'act_cafe') subs.push({ label: '카페 1회', ok: Array.isArray(log.cafe) && log.cafe.length > 0 });
+    if (t.id === 'act_recycle') subs.push({ label: '분리배출 한 판', ok: Array.isArray(log.recycle) && log.recycle.length > 0 });
+    subs.push(...t.fields.map(f => ({ label: f.key, ok: !!String((f.diff ? a.diff : obs[f.key]) || '').trim() })));
+    const frac = subs.reduce((x, s) => x + (s.goal ? Math.min(s.n, s.goal) / s.goal : s.ok ? 1 : 0), 0) / subs.length;
+    return { task: t, a, subs, frac, done: subs.every(s => s.ok), gap };
+  });
+}
+FPField.ACT_TASKS = ACT_TASKS;
+FPField.actionTaskProgress = actionTaskProgress;
+FPField.meanGap = meanGap;
+// 탐험 지도 2장(FPSociety.chapterItems)이 [{ task: {title}, done, frac }] 로 읽는다
+FPField.actionProgress = function () {
+  let fp = {};
+  try { fp = WorksheetStore.readFp(); } catch (e) { fp = {}; }
+  const chosenN = typeof FPActions !== 'undefined' ? FPActions.chosen().ids.length
+    : (fp.actions && Array.isArray(fp.actions.chosen) ? fp.actions.chosen.length : 0);
+  const sigma = typeof TOOL_SPEC !== 'undefined' ? TOOL_SPEC.co2.sigma : 8;   // CO₂센서 재현성(fp-tools.js) — fp_detect_n 과 같은 σ
+  return actionTaskProgress(fp, this.rows, chosenN, sigma);
+};
+function setActTask(id, patch) {
+  const t = ACT_TASKS.find(x => x.id === id);
+  try {
+    WorksheetStore.updateFp(fp => {
+      const cur = fp.tasks[id] || { id, title: t.title, link: ACT_LINK, obs: {} };
+      Object.assign(cur, patch, { title: t.title, link: ACT_LINK, scenario: typeof FPScenario !== 'undefined' ? scenarioTag() : '', time: new Date().toISOString() });
+      fp.tasks[id] = cur;
+    });
+  } catch (e) { /* 저장이 막히면 이번 화면 동안만 */ }
+}
+// 측정 과제의 '기록 평균 차이 vs 계측 오차' 한 줄. 판정과 무관한 안내 — 차이가 오차보다 작으면 그대로 말한다
+function gapLine(t, g, ref) {
+  if (!g) return '';
+  const names = { act_future: ['기준 미래', '나의 미래'], act_city: ['참여 전', '참여 후'], act_society: ['현재 정책', '1.5 °C'] }[t.id];
+  const sg = v => (Math.abs(v) < 0.05 ? '0.0' : (v > 0 ? '+' : '−') + Math.abs(v).toFixed(1));
+  const verdict = g.distinct
+    ? '차이가 계측 오차보다 커요 — 이 측정으로 두 값을 구분할 수 있어요.'
+    : '차이가 계측 오차보다 작아요 — 이 측정으로는 두 값을 구분할 수 없어요.';
+  let more = '';
+  // 재는 횟수를 늘리면 오차가 줄어든다 — 몇 번이면 되는지는 F4 의 같은 어림(fp_detect_n)이 이미 보여 주므로 그쪽으로 안내한다
+  if (t.id === 'act_future' && !g.distinct) more = ' 재는 횟수를 늘리면 오차가 줄어요 — 몇 번이면 될지는 [나의 행동] 미래 비교 표의 \'재서 구분\' 칸을 보세요.';
+  if (t.id === 'act_city' && !g.distinct) more = ' 재는 횟수를 늘리면 오차가 줄어요 — 몇 번이면 될지는 [나의 행동] \'우리 도시 공기\' 줄을 보세요.';
+  if (t.id === 'act_society' && ref) more = ` ⑦의 기록 평균 차이는 ${sg(ref.d)} ppm(오차 ±${ref.err.toFixed(1)})이었어요.`;
+  return `<p class="t-line"><b>기록 평균</b> ${names[0]} ${g.ma.toFixed(1)} ppm(${g.na}회) · ${names[1]} ${g.mb.toFixed(1)} ppm(${g.nb}회) → 차이 <b>${sg(g.d)} ppm</b>,`
+    + ` 계측 오차로 생길 수 있는 차이 약 ±${g.err.toFixed(1)} ppm. ${verdict}${more}${typeof srcButton === 'function' ? srcButton('fp_detect_n') : ''}</p>`;
+}
+FPField.renderActionTasks = function () {
+  const box = document.getElementById('actTasks');
+  if (!box || box.contains(document.activeElement)) return;   // 글을 쓰는 중에는 다시 그리지 않는다(커서가 튄다)
+  const esc = v => String(v == null ? '' : v).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const prog = this.actionProgress(), ref = prog.find(p => p.task.id === 'act_future').gap;
+  const nowY = FPModel.NOW_YEAR;
+  box.innerHTML = `<h4 class="t-section">행동 과제 — 2장 시민 (현재의 행동 → 나의 미래)</h4>` + prog.map(p => {
+    const t = p.task, obs = p.a.obs || {};
+    const btns = t.btns.map(b => `<button class="btn ${b.act === 'go' ? 'btn--time' : 'btn--nav'} btn--sm" type="button" data-act-btn="${b.act}"`
+      + (b.act === 'go' ? ` data-year="${b.year == null ? nowY : b.year}" data-branch="${b.branch}"` : '') + (b.id ? ` data-mg="${b.id}"` : '') + `>${esc(b.label)}</button>`).join(' ');
+    let extra = gapLine(t, p.gap, t.id === 'act_society' ? ref : null);
+    if (t.id === 'act_recycle' && typeof FPActions !== 'undefined' && FPActions.lastLog) {
+      // 최근 판에서 첫 시도에 못 맞힌 품목 — 고를 거리를 바로 보인다
+      const last = FPActions.lastLog('recycle'), wrong = last ? (last.items || []).filter(x => x.score < 1).map(x => x.name) : [];
+      if (last) extra += `<p class="t-line">최근 판(${last.round}번째)에서 첫 시도에 못 맞힌 품목: ${wrong.length ? esc(wrong.join(' · ')) : '없어요 — 다 맞혔어요'}</p>`;
+    }
+    return `<div class="task-card field-task act-task${p.done ? ' done' : ''}" data-at="${t.id}">` +
+      `<div class="t-head"><span class="t-title">${esc(t.title)}</span><span class="t-badge">${p.done ? '✓ 완료' : Math.round(p.frac * 100) + '%'}</span></div>` +
+      `<div class="t-concept">2장 · 시민 — ${esc(t.concept)}</div>` +
+      `<p class="t-line"><b>목표</b> ${esc(t.goal)}${t.src && typeof srcButton === 'function' ? srcButton(t.src) : ''}</p>` +
+      `<p class="t-line"><b>방법</b> ${esc(t.how)} ${btns}</p>${extra}` +
+      t.fields.map(f => `<label class="ft-diff"><span>${esc(f.key)}</span><textarea rows="2" data-key="${esc(f.key)}"${f.diff ? ' data-diff' : ''} placeholder="${esc(f.ph)}">${esc(f.diff ? p.a.diff : obs[f.key])}</textarea></label>`).join('') +
+      `<div class="t-subs">${p.subs.map(s => `<span class="t-sub${s.ok ? ' ok' : ''}">${esc(s.label)}${s.goal ? ` ${Math.min(s.n, s.goal)}/${s.goal}` : ''}</span>`).join('')}</div></div>`;
+  }).join('');
+  if (typeof Icons !== 'undefined' && Icons.fill) Icons.fill(box);
+};
+// 글 칸·버튼 (한 번만 연결 — 카드는 다시 그려도 상자는 그대로)
+FPField.bindActionTasks = function () {
+  const box = document.getElementById('actTasks');
+  if (!box || box.dataset.atBound) return;
+  box.dataset.atBound = '1';
+  box.addEventListener('input', e => {
+    const card = e.target.closest('[data-at]');
+    if (!card || !e.target.dataset.key) return;
+    const id = card.dataset.at;
+    let a = { obs: {} };
+    try { a = WorksheetStore.readFp().tasks[id] || a; } catch (err) { /* 빈 답 */ }
+    if (e.target.hasAttribute('data-diff')) setActTask(id, { diff: e.target.value });
+    else setActTask(id, { obs: { ...(a.obs || {}), [e.target.dataset.key]: e.target.value } });
+  });
+  box.addEventListener('focusout', () => setTimeout(() => { if (!box.contains(document.activeElement)) this.renderTasks(); }, 0));
+  box.addEventListener('click', e => {
+    const b = e.target.closest('button[data-act-btn]');
+    if (!b) return;
+    const kind = b.dataset.actBtn;
+    if (kind === 'go' && typeof FPScenario !== 'undefined') {
+      const y = Number(b.dataset.year), br = b.dataset.branch;
+      // '나의 미래'는 행동을 하나 이상 골라야 열린다 — 닫혀 있으면 goTo 가 기준 미래로 가므로 그 사실을 알린다(F2 [미래 보러 가기]와 같은 말)
+      if (br === 'mine' && typeof FPTimeline !== 'undefined' && !FPTimeline.mineEnabled) this.toast('행동을 하나 이상 고르면 \'나의 미래\'가 열려요 — 지금은 기준 미래로 갑니다', 3200);
+      FPScenario.goTo(y, br);
+    }
+    if (kind === 'sheet' && typeof FPSheet !== 'undefined') FPSheet.show('actions', true);
+    if (kind === 'minigame' && typeof FPActions !== 'undefined' && typeof FPActions.minigameHook === 'function') FPActions.minigameHook(b.dataset.mg);
   });
 };
 
 FPField.taskProgress = function () {
   return INQUIRY.map(t => {
     const subs = t.subs.map(s => {
-      const n = s.exportCount ? this.exports : this.rows.reduce((a, r) => a + (s.test(r) ? 1 : 0), 0);
+      const n = this.rows.reduce((a, r) => a + (s.test(r) ? 1 : 0), 0);
       return { label: s.label, goal: s.goal, n, ok: n >= s.goal };
     });
     const need = subs.reduce((a, s) => a + s.goal, 0);
@@ -261,7 +547,7 @@ FPField.checkTasks = function () {
   for (const p of this.taskProgress()) {
     if (p.done && !this._doneTasks.has(p.task.id)) {
       this._doneTasks.add(p.task.id);
-      this.toast(`✅ 탐구 과제 ${p.task.title} 완료 — 야장(F) '기록 · 통계'에서 평균을 비교해 보세요.`, 6500);
+      this.toast(`✅ 탐구 과제 ${p.task.title} 완료 — 학습지(F) [기록] 탭에서 평균을 비교해 보세요.`, 6500);
     }
   }
 };
@@ -270,15 +556,14 @@ FPField.renderTasks = function () {
   if (!box || box.contains(document.activeElement)) return;   // 현장 과제 글을 쓰는 중에는 다시 그리지 않는다
   const prog = this.taskProgress();
   const doneN = prog.filter(p => p.done).length;
-  const tally = document.getElementById('fieldTaskTally');
-  if (tally) tally.textContent = `${doneN}/${prog.length}`;
+  this.updateBadge();
   const intro = document.getElementById('fieldTaskIntro');
   if (intro) {
     intro.innerHTML = !this.rows.length
       ? '<b>어디서부터?</b> ①부터 시작하세요. 키 <b>4</b>로 해수분석기를 들고, 바다 위 흰 얼음(유빙) <b>바로 옆 바다</b>를 겨눠 좌클릭합니다. ' +
-        '표시창 아래 막대가 다 차면 값이 야장에 자동으로 기록되고, 아래 카드의 진행도가 올라갑니다. 그다음 유빙에서 멀리 떨어진 바다에서도 똑같이 재세요.'
+        '표시창 아래 막대가 다 차면 값이 학습지 [기록]에 자동으로 기록되고, 아래 카드의 진행도가 올라갑니다. 그다음 유빙에서 멀리 떨어진 바다에서도 똑같이 재세요.'
       : (doneN === prog.length
-        ? '<b>네 과제를 모두 마쳤습니다.</b> \'기록 · 통계\' 탭의 평균·표준편차로 각 과제의 질문에 답해 보세요.'
+        ? '<b>측정 과제를 모두 마쳤습니다.</b> [기록] 탭의 평균·표준편차로 각 과제의 질문에 답해 보세요.'
         : `<b>${doneN}/${prog.length} 완료.</b> 회색 칸이 남은 조건입니다. 같은 지점을 여러 번 재야 하는 이유는 계측기 오차 때문입니다 — 한 번 잰 값은 못 믿습니다.`);
   }
   box.innerHTML = prog.map(p => {
@@ -296,31 +581,27 @@ FPField.renderTasks = function () {
       `</div>`;
   }).join('');
   this.renderFieldTasks();   // 3차 E4 현장 과제 카드 (위)
+  this.renderActionTasks();  // 4차 F5 행동 과제 ⑥~⑪ (2장)
+  if (typeof FPSociety !== 'undefined' && FPSociety.renderTasks) FPSociety.renderTasks();   // 4차 T5 탐험 지도 · 과제 ⑫~⑮ (기록이 쌓이면 ⑬ 진행도)
 };
-FPField.setTab = function (tab) {
-  this.tab = tab;
-  document.querySelectorAll('.field-tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
-  const tv = document.getElementById('fieldTasksView'), rv = document.getElementById('fieldRecordsView');
-  if (tv) tv.classList.toggle('hidden', tab !== 'tasks');
-  if (rv) rv.classList.toggle('hidden', tab !== 'records');
-  if (tab === 'records') this.drawTransect();
-};
-
 // ── 통계: 같은 지점 종류를 반복 측정했을 때의 평균과 표준편차 ────────────────
 // 계측기에 재현성 오차를 넣어 둔 이유가 여기 있다. 한 번 잰 값은 못 믿고,
 // 여러 번 재서 평균을 내야 참값에 가까워진다는 걸 표로 보게 하려는 것이다.
 // 해수 분석기 기록 한 줄은 용존CO2·DIC·Ω·수온 네 항목으로 펼쳐서 센다.
+// 4차 E3: (연도, 갈래, 구역, 지점, 항목)으로 묶는다 — 다른 해 값끼리 평균하면 '반복측정'이 아니라 서로 다른 세계를 섞은 값이 된다.
+// 경로(path)도 묶음 키에 넣는다: 현재까지는 늘 같은 값이라 지시서의 다섯 키와 같고, 미래는 고른 경로가 다르면 따로 센다(F3 대비).
 FPField.summary = function () {
   const g = new Map();
-  const add = (key, kindKo, spotKo, unit, dec, v) => {
-    if (!g.has(key)) g.set(key, { kindKo, spotKo, unit, dec, v: [] });
+  const add = (r, item, kindKo, unit, dec, v) => {
+    const key = [r.year, r.branch, r.path, r.zone, r.spotKo, item].join('|');
+    if (!g.has(key)) g.set(key, { year: r.year, branch: r.branch, branchKo: r.branchKo, path: r.path, zone: r.zone, kindKo, spotKo: r.spotKo, unit, dec, v: [] });
     g.get(key).v.push(v);
   };
   for (const r of this.rows) {
     if (r.sw) {
-      for (const ch of SW_CH) add(r.kind + ch.key + '|' + r.spotKo, ch.ko, r.spotKo, ch.unit, ch.dec, r.sw[ch.key]);
+      for (const ch of SW_CH) add(r, r.kind + ch.key, ch.ko, ch.unit, ch.dec, r.sw[ch.key]);
     } else {
-      add(r.kind + '|' + r.spotKo, r.kindKo, r.spotKo, r.unit, r.unit === 'ppm' ? 0 : 2, r.value);
+      add(r, r.kind, r.kindKo, r.unit, r.unit === 'ppm' ? 0 : 2, r.value);
     }
   }
   const out = [];
@@ -331,7 +612,8 @@ FPField.summary = function () {
     const sd = n > 1 ? Math.sqrt(s.v.reduce((a, b) => a + (b - mean) ** 2, 0) / (n - 1)) : null;
     out.push({ ...s, n, mean, sd });
   }
-  out.sort((a, b) => a.kindKo.localeCompare(b.kindKo) || a.spotKo.localeCompare(b.spotKo));
+  out.sort((a, b) => a.kindKo.localeCompare(b.kindKo) || a.spotKo.localeCompare(b.spotKo) || a.year - b.year
+    || String(a.branch).localeCompare(String(b.branch)) || String(a.path).localeCompare(String(b.path)));   // 같은 지점의 여러 해가 나란히 — 비교하기 쉽게
   return out;
 };
 
@@ -402,77 +684,35 @@ FPField.endTransect = function () {
   this.refresh();
 };
 
-// ── CSV ─────────────────────────────────────────────────────────────────────
-// 조감 모드 '실시간 실험' 탭이 내보내는 CSV와 같은 자리에 같은 뜻의 열을 둔다.
-// BOM을 붙이는 이유: 안 붙이면 엑셀이 한글 헤더를 깨서 연다.
-FPField.toCSV = function () {
-  // 앞 12열은 예전 그대로(순서·이름 불변). 해수 상태·바람·게임 시간은 그 뒤에 붙인다.
-  // 해당 없는 칸은 비워 둔다(예: 온도계 기록의 co2_aq).
-  const head = ['번호', '측정항목', '측정지점', '구역', '측정값', '단위',
-                'X(m)', 'Z(m)', '시작점거리(m)', '설정CO2(ppm)', '시각(h)', '기록시각',
-                'water_temp(°C)', 'co2_aq(µmol/kg)', 'dic(µmol/kg)', 'omega',
-                'pco2_sw(ppm)', 'wind', 'game_time(h)'];
-  const f = (v, d) => (v == null || !isFinite(v) ? '' : v.toFixed(d));
-  const T = this.transect;
-  const lines = [head.join(',')];
-  for (const r of this.rows) {
-    const d = T ? (Math.hypot(r.x - T.x0, r.z - T.z0) * 50).toFixed(1) : '';
-    lines.push([
-      r.n, r.kindKo, r.spotKo, r.zone, r.value.toFixed(r.unit === 'ppm' ? 0 : 2), r.unit,
-      (r.x * 50).toFixed(1), (r.z * 50).toFixed(1), d, r.co2,
-      r.hour == null ? '' : r.hour.toFixed(2), r.iso,
-      f(r.waterTemp, 1), f(r.sw && r.sw.co2aq, 1), f(r.sw && r.sw.dic, 0), f(r.sw && r.sw.omega, 2),
-      f(r.pco2Sw, 1), r.wind || '', f(r.gameTime, 2),
-    ].join(','));
-  }
-  return '﻿' + lines.join('\r\n');
-};
-FPField.download = function () {
-  if (!this.rows.length) return;
-  this.exports++;
-  this.checkTasks();
-  this.refresh();
-  const blob = new Blob([this.toCSV()], { type: 'text/csv;charset=utf-8' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  const d = new Date();
-  const p = n => String(n).padStart(2, '0');
-  a.download = `미니지구_야외조사_${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}.csv`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-};
-
 // ── 화면 ────────────────────────────────────────────────────────────────────
 FPField.init = function () {
-  this.el = document.getElementById('fieldPanel');
+  // 4차 D3: 내용이 그려질 자리는 학습지 패널(#sheet) — 열고 닫기·탭 전환은 FPSheet(fp-sheet.js)
+  this.el = document.getElementById('sheet');
   this.badge = document.getElementById('fieldBadge');
-  document.getElementById('fieldCsvBtn').addEventListener('click', () => this.download());
-  document.getElementById('fieldClearBtn').addEventListener('click', () => this.clear());
+  // 4차 G1: 지난 기록을 저장소에서 되살린다(새로 고쳐도 [기록]·과제 진행도·미니맵 점이 그대로). 이미 끝난 과제는 다시 알리지 않는다
+  this.rows.push(...FieldStore.loadRecords());
+  for (const p of this.taskProgress()) if (p.done) this._doneTasks.add(p.task.id);
+  // 내보내기는 FPExport(fp-export.js). 지우기는 되돌릴 수 없으므로 확인을 받는다
+  document.getElementById('fieldXlsxBtn').addEventListener('click', () => FPExport.xlsx());
+  document.getElementById('fieldCsvBtn').addEventListener('click', () => FPExport.csv());
+  document.getElementById('fieldClearBtn').addEventListener('click', () => {
+    if (!this.rows.length) return;
+    if (!confirm(`측정 기록 ${this.rows.length}건을 모두 지울까요? 지운 기록은 되돌릴 수 없어요 — 먼저 엑셀로 내보내 두세요.`)) return;
+    this.clear();
+  });
   document.getElementById('fieldTransectBtn').addEventListener('click', () => {
     if (this.transect) this.endTransect(); else this.startTransect();
   });
   document.getElementById('fieldCoastBtn').addEventListener('click', () => {
     if (this.transect) this.endTransect(); else this.startCoastTransect();
   });
-  document.getElementById('fieldCloseBtn').addEventListener('click', () => this.close());
-  document.querySelectorAll('.field-tabs button').forEach(b =>
-    b.addEventListener('click', () => this.setTab(b.dataset.tab)));
+  FieldStore.syncTitles();   // D3 번호 정리 전에 저장된 현장 과제 제목을 새 번호로
   this.bindFieldTasks();
-  this.setTab(this.tab);
+  this.bindActionTasks();    // 4차 F5 행동 과제 ⑥~⑪
+  // 행동·규모·우리 도시·미니게임 결과가 바뀌면 ⑥⑩⑪ 진행도와 배지 숫자를 고친다(FPActions 는 이 뒤에 저장값을 읽으므로 fp-main 이 한 번 더 refresh)
+  if (typeof FPActions !== 'undefined') FPActions.onChange(() => { this.renderActionTasks(); this.updateBadge(); });
   this.refresh();
 };
-FPField.open = function () {
-  this.panelOpen = true;
-  this.el.classList.remove('hidden');
-  this.refresh();
-};
-FPField.close = function () {
-  this.panelOpen = false;
-  this.el.classList.add('hidden');
-};
-FPField.toggle = function () { this.panelOpen ? this.close() : this.open(); };
 
 // 짧은 안내 문구. 이스터에그를 처음 발견했을 때 한 번만 띄운다.
 FPField.toast = function (msg, ms) {
@@ -492,31 +732,69 @@ FPField.flash = function () {
   this._flashT = setTimeout(() => this.badge.classList.remove('on'), 700);
 };
 
+// 4차 E3: 표의 '연도·갈래' 칸 — '2100 기준 미래'. 미래 경로가 현재 정책이 아니면 경로 이름을 덧붙인다(F3 '사회의 선택' 대비)
+// 4차 F3: 사회의 선택 다섯(+ 조감에서 가져온 직접 설계). 나의 미래 path = 'mine:선택:규모:행동' — 선택 부분으로 이름을 붙인다
+const PATH_KO = { ssp245: '현재 정책', ssp126: '파리협약 2 °C', ssp119: '1.5 °C 탄소중립', ndc: '국가 목표(NDC)',
+  custom: '우리가 설계한 사회', aerial: '직접 설계(조감)', mine: '' };
+// 참여 규모 짧은 이름(ActionsCore.SCALES 의 id). 40 % 패널 표 칸이라 '세계 — 비슷한 생활을 하는 사람' 대신 '세계'
+const SCALE_KO = { me: '나', class: '우리 반', school: '우리 학교', korea: '대한민국', world: '세계' };
+function yearCell(r) {
+  if (r.year == null) return '';
+  const p = r.branch === 'mine' && r.path ? String(r.path).split(':')[1] : String(r.path || '').split(':')[0];
+  let extra = (r.branch === 'base' || r.branch === 'mine') && p && p !== 'ssp245' && PATH_KO[p] ? ` (${PATH_KO[p]})` : '';
+  // 나의 미래는 참여 규모마다 다른 세계다 — 규모를 안 붙이면 '대한민국'과 '세계'로 잰 두 묶음이 같은 이름으로 나란히 보였다
+  // (2026-11-19 사람 확인 F 묶음, 사람 결정 '규모를 붙임'). 화면 표에만 쓰고 저장·내보내기 구조는 그대로다
+  if (r.branch === 'mine' && r.path) { const sk = SCALE_KO[String(r.path).split(':')[2]]; if (sk) extra += ` (${sk})`; }
+  // 4차 F4: '우리 도시' 참여 중에 잰 기록(path 끝 ':city42')
+  const cm = /:city(\d+)$/.exec(String(r.path || ''));
+  if (cm) extra += ` (우리 도시 −${cm[1]} %)`;
+  return `${r.year} ${r.branchKo || ''}${extra}`;
+}
+// 4차 F5: 화면 구석 배지·[과제] 탭 숫자 = 네 장 과제 전체(①~⑮)의 완료 수. 예전에는 측정 과제 ①②만 셌다(B5·D3 때 과제가 둘뿐이던 흔적).
+//   탐험 지도와 같은 목록(FPSociety.chapterItems)으로 세어 두 곳의 숫자가 어긋나지 않게 한다. 지도가 없으면(검사 등) 측정 과제만
+FPField.taskTally = function () {
+  if (typeof FPSociety !== 'undefined' && FPSociety.chapterItems && FPSociety.CHAPTERS) {
+    let fp = {};
+    try { fp = WorksheetStore.readFp(); } catch (e) { fp = {}; }
+    const items = FPSociety.CHAPTERS.flatMap(c => FPSociety.chapterItems(c.n, fp, this.rows));
+    return { done: items.filter(x => x.done).length, total: items.length };
+  }
+  const prog = this.taskProgress();
+  return { done: prog.filter(p => p.done).length, total: prog.length };
+};
+FPField.updateBadge = function () {
+  const t = this.taskTally();
+  if (this.badge) this.badge.textContent = `기록 ${this.rows.length} · 과제 ${t.done}/${t.total}`;
+  const tally = document.getElementById('fieldTaskTally');
+  if (tally) tally.textContent = `${t.done}/${t.total}`;
+};
 FPField.refresh = function () {
   if (!this.el) return;
   const cnt = document.getElementById('fieldCount');
   if (cnt) cnt.textContent = this.rows.length;
-  const doneN = this._doneTasks.size;
-  if (this.badge) this.badge.textContent = `야장 ${this.rows.length} · 과제 ${doneN}/${INQUIRY.length}`;
+  // 4차 G1: 저장 상한이 찼으면 내보내기 줄 아래에 안내(자동 삭제는 하지 않는다)
+  const cap = document.getElementById('fieldCapNote');
+  if (cap) cap.hidden = this.rows.length < RECORD_MAX;
+  this.updateBadge();
   this.renderTasks();
   const tb = document.getElementById('fieldTBody');
   if (tb) {
     const recent = this.rows.slice(-12).reverse();
     tb.innerHTML = recent.length ? recent.map(r =>
-      `<tr><td>${r.n}</td><td>${r.kindKo}</td><td>${r.spotKo}</td>` +
+      `<tr><td>${r.n}</td><td>${yearCell(r)}</td><td>${r.kindKo}</td><td>${r.spotKo}</td>` +
       `<td class="num">${r.sw ? `Ω ${r.sw.omega.toFixed(2)} · ${r.sw.temp.toFixed(1)}°C`
                                : `${r.value.toFixed(r.unit === 'ppm' ? 0 : 2)} ${r.unit}`}</td>` +
       `<td class="num dim">${(r.x * 50).toFixed(0)}, ${(r.z * 50).toFixed(0)}</td></tr>`).join('')
-      : '<tr><td colspan="5" class="empty">아직 기록이 없습니다. 도구를 들고 좌클릭해 측정하세요.</td></tr>';
+      : '<tr><td colspan="6" class="empty">아직 기록이 없습니다. 도구를 들고 좌클릭해 측정하세요.</td></tr>';
   }
   const sb = document.getElementById('fieldSummary');
   if (sb) {
     const s = this.summary();
     sb.innerHTML = s.length ? s.map(r =>
-      `<tr><td>${r.kindKo}</td><td>${r.spotKo}</td><td class="num">${r.n}</td>` +
+      `<tr><td>${yearCell(r)}</td><td>${r.kindKo}</td><td>${r.spotKo}</td><td class="num">${r.n}</td>` +
       `<td class="num">${r.mean.toFixed(r.dec)}</td>` +
       `<td class="num">${r.sd == null ? '—' : '±' + r.sd.toFixed(r.dec + 1)}</td></tr>`).join('')
-      : '<tr><td colspan="5" class="empty">같은 지점을 두 번 이상 재면 평균과 표준편차가 나옵니다.</td></tr>';
+      : '<tr><td colspan="6" class="empty">같은 해·같은 지점을 두 번 이상 재면 평균과 표준편차가 나옵니다.</td></tr>';
   }
   const tBtn = document.getElementById('fieldTransectBtn');
   if (tBtn) tBtn.textContent = this.transect ? '횡단 조사 종료' : '횡단 조사 시작';
@@ -546,19 +824,27 @@ FPField.refresh = function () {
 FPField.drawTransect = function () {
   const cv = document.getElementById('fieldChart');
   if (!cv) return;
+  // 4차 D3: 학습지 칸 폭(40 %)이 화면마다 달라 캔버스 해상도를 보이는 폭에 맞춘다 — 늘이거나 줄이면 13 px 글자가 작아진다.
+  // 숨은 탭(폭 0)일 때는 다시 그리지 않는다(탭을 열 때 FPSheet 가 다시 부른다)
+  const cssW = Math.round(cv.clientWidth);
+  if (!cssW) return;
+  if (cv.width !== cssW) cv.width = cssW;
   const c = cv.getContext('2d');
   const W = cv.width, H = cv.height;
   c.clearRect(0, 0, W, H);
   const T = this.transect;
   const series = this.transectSeries();
   const pts = series ? series.points : [];
-  const PAD_L = 46, PAD_R = 12, PAD_T = 12, PAD_B = 26;
+  const PAD_L = 50, PAD_R = 12, PAD_T = 16, PAD_B = 28;
+  // 4차 D1: 야장이 종이 패널로 바뀌어 그래프도 종이 토큰으로 그린다(조감 그래프 작업대와 같은 색 규칙).
+  // 글자는 --fs-1(13.2 px) 이상 — 캔버스는 표시 폭과 거의 1:1 이라 올림한 px 를 그대로 쓴다.
+  const FS = Math.ceil(Theme.px('--fs-1')), FONT = `${FS}px ${Theme.color('--font-body') || 'sans-serif'}`;
 
-  c.fillStyle = '#0d1418';
+  c.fillStyle = Theme.color('--paper');
   c.fillRect(0, 0, W, H);
   if (pts.length < 2) {
-    c.fillStyle = '#5b6a72';
-    c.font = '13px sans-serif';
+    c.fillStyle = Theme.color('--ink-3');
+    c.font = FONT;
     c.textAlign = 'center';
     c.fillText(T ? '두 지점 이상 측정하면 그래프가 그려집니다' : '횡단 조사를 시작하세요', W / 2, H / 2);
     return;
@@ -572,30 +858,30 @@ FPField.drawTransect = function () {
   const Y = v => H - PAD_B - ((v - vMin) / (vMax - vMin)) * (H - PAD_T - PAD_B);
 
   // 축 + 눈금
-  c.strokeStyle = '#2a3a42'; c.lineWidth = 1;
+  c.strokeStyle = Theme.color('--rule'); c.lineWidth = 1;
   c.beginPath(); c.moveTo(PAD_L, PAD_T); c.lineTo(PAD_L, H - PAD_B); c.lineTo(W - PAD_R, H - PAD_B); c.stroke();
-  c.fillStyle = '#7e8f99'; c.font = '11px sans-serif'; c.textAlign = 'right';
+  c.fillStyle = Theme.color('--ink-3'); c.font = FONT; c.textAlign = 'right';
   for (let i = 0; i <= 3; i++) {
     const v = vMin + (vMax - vMin) * i / 3;
     c.fillText(v.toFixed(1), PAD_L - 5, Y(v) + 4);
-    c.strokeStyle = '#1c2a31';
+    c.strokeStyle = Theme.alpha('--rule', 0.55);
     c.beginPath(); c.moveTo(PAD_L, Y(v)); c.lineTo(W - PAD_R, Y(v)); c.stroke();
   }
   c.textAlign = 'center';
   c.fillText('0', PAD_L, H - 8);
   c.fillText(dMax.toFixed(0) + ' m', W - PAD_R, H - 8);
 
-  // 구역별 점 색: 해양 파랑 / 녹지 초록 / 도심 주황
-  const ZC = { ocean: '#5aa9d6', green: '#6fbf5a', city: '#e2934b' };
-  c.strokeStyle = '#9fb3bd'; c.lineWidth = 2;
+  // 구역별 점 색: 해양 파랑 / 녹지 초록 / 도심 주황 (theme.css --zone-*)
+  const ZC = { ocean: Theme.color('--zone-ocean'), green: Theme.color('--zone-green'), city: Theme.color('--zone-city') };
+  c.strokeStyle = Theme.color('--ink-3'); c.lineWidth = 2;
   c.beginPath();
   pts.forEach((p, i) => { const x = X(p.d), y = Y(p.v); i ? c.lineTo(x, y) : c.moveTo(x, y); });
   c.stroke();
   for (const p of pts) {
-    c.fillStyle = ZC[p.zone] || '#9fb3bd';
+    c.fillStyle = ZC[p.zone] || Theme.color('--ink-3');
     c.beginPath(); c.arc(X(p.d), Y(p.v), 4, 0, Math.PI * 2); c.fill();
   }
-  c.fillStyle = '#7e8f99'; c.font = '11px sans-serif'; c.textAlign = 'left';
+  c.fillStyle = Theme.color('--ink-2'); c.font = FONT; c.textAlign = 'left';
   c.fillText(series.kind === 'sea' ? 'Ω (해수 분석기)' : (KIND_KO[series.kind] || ''), PAD_L + 4, PAD_T + 10);
 
   // 해수 분석기: 같은 점들의 수온을 오른쪽 축으로 겹쳐 그린다 (냉수대에서 멀어질수록 수온↑ Ω↑)
@@ -606,13 +892,14 @@ FPField.drawTransect = function () {
     const tPad = (tMax - tMin) * 0.15;
     tMin -= tPad; tMax += tPad;
     const YT = v => H - PAD_B - ((v - tMin) / (tMax - tMin)) * (H - PAD_T - PAD_B);
-    c.strokeStyle = '#e2934b'; c.lineWidth = 1.5; c.setLineDash([4, 3]);
+    const SST = Theme.color('--data-sst');   // 수온 = 조감 해수온 그래프와 같은 색
+    c.strokeStyle = SST; c.lineWidth = 1.5; c.setLineDash([4, 3]);
     c.beginPath();
     tp.forEach((p, i) => { const x = X(p.d), y = YT(p.t); i ? c.lineTo(x, y) : c.moveTo(x, y); });
     c.stroke(); c.setLineDash([]);
-    c.fillStyle = '#e2934b';
+    c.fillStyle = SST;
     for (const p of tp) { c.beginPath(); c.arc(X(p.d), YT(p.t), 3, 0, Math.PI * 2); c.fill(); }
-    c.textAlign = 'right'; c.font = '11px sans-serif';
+    c.textAlign = 'right'; c.font = FONT;
     c.fillText(`수온 ${tMax.toFixed(1)}°C`, W - PAD_R, PAD_T + 10);
     c.fillText(`${tMin.toFixed(1)}°C`, W - PAD_R, H - PAD_B - 4);
   }

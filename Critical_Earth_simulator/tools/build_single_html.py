@@ -94,7 +94,11 @@ LIB = {
 
 # ── 2. 텍스처 → data URI ─────────────────────────────────────────────
 TEX = {}
+# 시작 화면 카드 그림(아래 4절 CARD_BG)은 껍데기만 쓰므로 앱 텍스처 묶음에 다시 넣지 않는다(같은 그림이 두 벌 들어가지 않게)
+CARD_BG_FILES = {"current": "start_current.jpg", "future": "start_future.jpg", "fp": "start_fp.jpg"}
 for p in sorted((ROOT / "texture_image").iterdir()):
+    if p.name in CARD_BG_FILES.values():
+        continue
     if p.is_file() and p.suffix.lower() in MIME:
         TEX["texture_image/" + p.name] = data_uri(p)
 
@@ -108,19 +112,43 @@ _links = [h.split("?")[0].lstrip("/") for h in re.findall(r'<link[^>]+rel="style
 if _links != AERIAL_CSS:
     sys.exit("[실패] index.html 의 스타일시트 순서가 빌더 목록과 다릅니다.\n  HTML : %s\n  빌더 : %s" % (_links, AERIAL_CSS))
 
+# 4차 D1: 1인칭도 조감과 같은 토큰(css/theme.css)을 먼저 읽는다(마스터 §6-1). 예전에는 firstperson/style.css 만 합쳐서
+# 토큰을 붙이면 단일 HTML 의 1인칭만 var(--…) 가 비어 글자·패널 색이 사라졌을 것이다. 순서가 어긋나면 멈춘다.
+FP_CSS = ["css/theme.css", "firstperson/style.css"]
+_fp_links = [h.split("?")[0].lstrip("/") for h in re.findall(r'<link[^>]+rel="stylesheet"[^>]+href="([^"]+)"', fp_html)]
+_fp_links = [h if "/" in h else "firstperson/" + h for h in _fp_links]
+if _fp_links != FP_CSS:
+    sys.exit("[실패] firstperson/index.html 의 스타일시트 순서가 빌더 목록과 다릅니다.\n  HTML : %s\n  빌더 : %s" % (_fp_links, FP_CSS))
+
 CSS = {
     "aerial": "\n".join(read(f) for f in AERIAL_CSS) + "\n" + inline_styles_of(aerial_html),
-    "fp": read("firstperson/style.css") + "\n" + inline_styles_of(fp_html),
+    "fp": "\n".join(read(f) for f in FP_CSS) + "\n" + inline_styles_of(fp_html),
 }
 BODY = {"aerial": body_of(aerial_html), "fp": body_of(fp_html)}
 
 AERIAL_JS = ["js/earth-model.js", "js/earth-data.js", "js/sources.js", "js/theme.js", "js/icons.js",
-             "js/source-tip.js", "js/earth-system.js", "js/earth-visual.js", "js/common.js", "js/ir-scope.js", "js/data-catalog.js", "js/graph-workspace.js", "js/worksheet.js", "js/tab-current.js",
-             "js/tab-future.js", "js/inquiry-steps.js", "js/inquiry.js", "js/live-fit.js", "js/xlsx-lite.js", "js/tab-live.js",
-             "js/live-analysis.js", "js/live-setup.js", "js/live-file.js", "js/main.js"]
-FP_JS = ["js/earth-model.js", "js/earth-data.js", "js/earth-system.js", "firstperson/fp-world.js", "firstperson/fp-weather.js",
-         "firstperson/fp-audio.js", "firstperson/fp-minimap.js", "firstperson/fp-field.js",
-         "firstperson/fp-tools.js", "firstperson/fp-player.js", "firstperson/fp-main.js"]
+             "js/source-tip.js", "js/earth-system.js", "js/earth-visual.js", "js/common.js", "js/ir-scope.js", "js/data-catalog.js", "js/graph-workspace.js", "js/worksheet-store.js", "js/worksheet.js", "js/tab-current.js",
+             "js/tab-future.js", "js/inquiry-steps.js", "js/inquiry.js", "js/xlsx-lite.js", "js/main.js"]
+# 4차 A3: 직접 실험 스크립트 5개(live-fit·tab-live·live-analysis·live-setup·live-file)를 뺐다.
+# xlsx-lite.js 는 남긴다 — downloadBlob 을 tab-future.js·inquiry.js·worksheet.js 가 쓴다(마스터 §6-2).
+# 4차 B2: fp-weather.js·fp-audio.js 를 뺐다(날씨·환경음 삭제, 마스터 D4).
+# 4차 C1: earth-visual(조감과 같은 시각 언어 식)·fp-model(1인칭 값 계산)을 fp-world 앞에 넣었다.
+# 4차 D1: 조감과 같은 공용 부품 넷(sources·theme·icons·source-tip)을 earth-data 뒤, earth-system 앞에 넣었다.
+# 4차 D3: 학습지 공용 저장소(worksheet-store)를 공용 부품 뒤에, 학습지 패널(fp-sheet)을 fp-field 뒤에 넣었다.
+# 4차 D4: 첫 진입 안내(fp-onboard)를 fp-sheet 뒤에 넣었다.
+# 4차 E1: 타임라인 막대(fp-timeline)를 fp-onboard 뒤에 넣었다.
+# 4차 F2: 행동 카드·행동 지점(fp-actions)을 fp-timeline 뒤에 넣었다.
+# 4차 M2: 카페 미니게임(fp-stage-cafe)을 fp-stage 뒤에 넣었다.
+# 4차 G1: 1인칭 학습지 내보내기 — 엑셀 쓰기(xlsx-lite, 조감과 같은 파일)를 worksheet-store 뒤에, fp-export 를 fp-society 뒤에 넣었다.
+# 4차 M1: 미니게임 무대 — 소품 도구(fp-stage-kit)·무대 관리자(fp-stage)를 fp-player 뒤, fp-main 앞에 넣었다.
+FP_JS = ["js/earth-model.js", "js/earth-data.js", "js/sources.js", "js/theme.js", "js/icons.js",
+         "js/source-tip.js", "js/worksheet-store.js", "js/xlsx-lite.js", "js/earth-system.js", "js/earth-visual.js",
+         "js/society-core.js", "js/actions-core.js", "firstperson/fp-model.js", "firstperson/fp-world.js", "firstperson/fp-tech-world.js",
+         "firstperson/fp-minimap.js", "firstperson/fp-field.js", "firstperson/fp-sheet.js", "firstperson/fp-onboard.js", "firstperson/fp-timeline.js",
+         "firstperson/fp-actions.js", "firstperson/fp-society.js", "firstperson/fp-export.js", "firstperson/fp-tools.js", "firstperson/fp-player.js",
+         "firstperson/fp-stage-kit.js", "firstperson/fp-stage.js", "firstperson/fp-stage-cafe.js",
+         "firstperson/fp-recycle-items.js", "firstperson/fp-stage-recycle.js", "firstperson/fp-stage-council.js",
+         "firstperson/fp-main.js"]
 
 
 # index.html 쪽에 스크립트가 추가됐는데 이 목록을 안 고치면 조용히 깨진 파일이 나온다.
@@ -158,9 +186,10 @@ body { background: var(--paper); color: var(--ink); }
 .header { text-align:center; margin-bottom: var(--sp-5); }
 .header h1 { font-family: var(--font-title); font-size: var(--fs-6); font-weight:700; margin:0 0 var(--sp-2); }
 .header p { font-size: var(--fs-3); color: var(--ink-2); margin:0; line-height:1.6; }
-.grid { display:grid; grid-template-columns:repeat(2, minmax(240px,340px)); gap: var(--sp-4);
-  width:100%; max-width:720px; }
-@media (max-width:560px){ .grid { grid-template-columns:1fr; } }
+/* 4차 A5: 카드 3장 한 줄 (select.html 과 같은 격자) */
+.grid { display:grid; grid-template-columns:repeat(3, minmax(220px,300px)); gap: var(--sp-4);
+  width:100%; max-width:932px; justify-content:center; }
+@media (max-width:760px){ .grid { grid-template-columns:minmax(0,340px); } }
 /* 모드 카드 = 이동(nav) 영역 버튼 (.btn 규칙은 css/theme.css) */
 .card.btn { flex-direction:column; align-items:flex-start; justify-content:flex-start; gap: var(--sp-1);
   padding: var(--sp-4); white-space:normal; text-align:left; background: var(--paper-2); font-weight:400; }
@@ -169,8 +198,14 @@ body { background: var(--paper); color: var(--ink); }
 .card .icon svg { width:30px; height:30px; }
 .card .title { font-size: var(--fs-4); font-weight:700; color: var(--ink); }
 .card .desc { font-size: var(--fs-2); color: var(--ink-2); line-height:1.55; }
-.card .badge { align-self:flex-start; font-size: var(--fs-1); font-weight:600; margin-top:2px; padding:0 var(--sp-2);
-  border-radius:999px; background: var(--paper); color: var(--ink-2); border:1px solid var(--rule); }
+/* 껍데기에는 3D가 없어 카드마다 그 모드의 정지 그림을 배경으로 깐다(그림이 있을 때만 .has-bg).
+   글자가 그림 위에서도 읽히게 위쪽은 종이색을 짙게, 아래로 갈수록 그림이 보이게 덮는다 */
+.card.btn.has-bg { background: linear-gradient(to bottom, color-mix(in srgb, var(--paper-2) 94%, transparent) 0%,
+  color-mix(in srgb, var(--paper-2) 86%, transparent) 60%, color-mix(in srgb, var(--paper-2) 55%, transparent) 100%),
+  var(--card-bg) center / cover no-repeat; min-height: 200px; }
+.card.btn.has-bg:hover { background: linear-gradient(to bottom, color-mix(in srgb, var(--paper-2) 90%, transparent) 0%,
+  color-mix(in srgb, var(--paper-2) 80%, transparent) 60%, color-mix(in srgb, var(--paper-2) 45%, transparent) 100%),
+  var(--card-bg) center / cover no-repeat; }
 .footer-hint { margin-top: var(--sp-5); font-size: var(--fs-1); color: var(--ink-2); text-align:center; line-height:1.7; }
 #viewer { display:none; position:fixed; inset:0; background: var(--paper); }
 #viewer.on { display:block; }
@@ -188,19 +223,32 @@ CARDS = [
      "관측 자료로 본 지구의 지금 — 대기 CO₂·기온·바다 pH·화석연료 배출 (NOAA·HadCRUT5·HOT·GCP)", ""),
     ("future", "globe", "미래 예측",
      "1750~2200년 · 사람이 내보낸 탄소가 지구를 어떻게 바꾸는지 재생하고, IPCC 시나리오와 직접 설계로 미래를 예측", ""),
-    ("live", "beaker", "직접 실험",
-     "센서 실시간 측정 — 이 단일 파일 버전에서는 쓸 수 없습니다 (server.py 필요)", "off"),
-    ("fp", "compass", "탐험",
+    ("fp", "compass", "1인칭 탐험",
      "1인칭 시점으로 걸어다니며 환경을 조사하는 탐험 모드", ""),
 ]
+# 문구는 select.html 카드와 같게 둔다(서버판과 파일판 시작 화면이 같은 말을 하게).
+
+# 카드 배경 그림: 사람이 1440×900에서 찍어 texture_image/ 에 넣는다(각 200 KB 이하).
+# 없으면 지금처럼 단색 카드로 두고 빌드는 멈추지 않는다 — 경고만.
+CARD_BG_MAX = 200 * 1024
+CARD_BG = {}
+for _k, _name in CARD_BG_FILES.items():
+    _p = ROOT / "texture_image" / _name
+    if not _p.exists():
+        print("[주의] 시작 화면 카드 그림이 없어 단색으로 둡니다: texture_image/%s" % _name)
+        continue
+    if _p.stat().st_size > CARD_BG_MAX:
+        print("[주의] 시작 화면 카드 그림이 200 KB를 넘습니다(%d KB): texture_image/%s" % (_p.stat().st_size // 1024, _name))
+    CARD_BG[_k] = data_uri(_p)
 
 # 아이콘은 js/icons.js 를 껍데기에도 넣고 Icons.fill()로 채운다(이모지는 OS마다 모양이 달라 쓰지 않는다)
 cards_html = "\n".join(
-    '    <button class="card btn btn--nav" data-go="{key}"{dis}>'
+    '    <button class="card btn btn--nav{cls}" data-go="{key}"{dis}{bg}>'
     '<span class="icon" data-icon="{icon}" data-icon-size="30"></span><span class="title">{title}</span>'
-    '<span class="desc">{desc}</span>{badge}</button>'.format(
+    '<span class="desc">{desc}</span></button>'.format(
         key=k, icon=i, title=t, desc=d, dis=" disabled" if off else "",
-        badge='<span class="badge">별도 모드</span>' if k == "fp" else "")
+        cls=" has-bg" if k in CARD_BG else "",
+        bg=' style="--card-bg: url(%s)"' % CARD_BG[k] if k in CARD_BG else "")
     for k, i, t, d, off in CARDS)
 ICONS_JS = read("js/icons.js")
 
@@ -251,6 +299,8 @@ window.__boot__ = function (w, mode, tab) {
 
   // 1인칭 시작 값(배출 경로·연도). srcdoc 문서에는 주소 쿼리가 없어서 전역으로 넘긴다 (firstperson/fp-main.js FPScenario)
   if (mode === 'fp') w.__FP_QUERY__ = tab || '';
+  // 4차 T4: 조감도 'future?preset=custom&levers=…' 처럼 쿼리를 받으면 앞은 탭, 뒤는 주소 쿼리 대신(js/tab-future.js 가 읽는다)
+  if (mode === 'aerial' && tab && tab.indexOf('?') >= 0) { w.__AERIAL_QUERY__ = tab.slice(tab.indexOf('?')); tab = tab.slice(0, tab.indexOf('?')); }
   runIn(w, SHIM_STORAGE);
   runIn(w, A.lib.three);
   if (mode === 'aerial') runIn(w, A.lib.chart);
@@ -268,11 +318,6 @@ window.__boot__ = function (w, mode, tab) {
     d.querySelectorAll('[data-tab-go]').forEach(function (a) {
       var go = a.getAttribute('data-tab-go');
       a.removeAttribute('href');
-      if (go === 'live') {   // 센서 탭은 단일 파일에서 쓸 수 없다 (시작 화면 카드도 꺼져 있음)
-        a.setAttribute('aria-disabled', 'true');
-        a.title = '단일 파일 버전에서는 직접 실험을 쓸 수 없습니다';
-        return;
-      }
       a.style.cursor = 'pointer';
       a.addEventListener('click', function (e) { e.preventDefault(); w.switchTab(go); });
     });
@@ -285,29 +330,17 @@ window.__boot__ = function (w, mode, tab) {
       fpGo.addEventListener('click', function (e) { e.preventDefault(); open_('fp', w.firstPersonQuery()); });
     }
 
-    // 센서 탭은 server.py(WebSocket)가 있어야 돈다. 단일 파일에서는 막고 이유를 알린다.
-    var btn = d.getElementById('startStopBtn');
-    if (btn) {
-      btn.disabled = true;
-      btn.title = '단일 파일 버전에서는 센서 연결을 쓸 수 없습니다';
-      // disabled 만으로는 초록색 그대로라 눌리는 것처럼 보인다
-      btn.style.opacity = '.4';
-      btn.style.cursor = 'not-allowed';
-    }
-    var live = d.getElementById('tab-live');
-    if (live) {
-      var note = d.createElement('div');
-      note.style.cssText = 'margin:10px 0;padding:11px 14px;border-radius:9px;line-height:1.7;' +
-        'background:#2a2118;border:1px solid #6b4f2a;color:#e8c893;font-size:12.5px';
-      note.innerHTML = '이 <b>단일 HTML 파일</b> 버전에서는 실시간 센서 측정을 쓸 수 없습니다. ' +
-        '센서 값은 <b>server.py</b> 가 중계하는데, 파일 하나만으로는 그 서버가 없기 때문입니다.<br>' +
-        '실제 측정을 하려면 저장소를 받아 <b>run_server.bat</b> 을 실행한 뒤 ' +
-        '<b>http://127.0.0.1:8000</b> 으로 접속하세요.';
-      live.insertBefore(note, live.firstChild);
-    }
   } else {
     // 1인칭에는 "처음으로" 링크가 없다. 포인터락이 풀려 있을 때만 껍데기 버튼을 보여 준다.
     document.getElementById('back').classList.add('on');
+    // 4차 T4: 학습지 [우리 사회]의 [조감에서 그래프로 보기] — 서버에서는 /dashboard?tab=future&preset=custom&levers=… 로 가고,
+    //   파일 하나에서는 껍데기가 조감을 열며 같은 값을 넘긴다(링크는 학습지가 다시 그리므로 문서에서 받는다)
+    d.addEventListener('click', function (e) {
+      var a = e.target.closest && e.target.closest('[data-aerial-go]');
+      if (!a) return;
+      e.preventDefault();
+      open_('aerial', a.getAttribute('data-aerial-go'));
+    });
     w.document.addEventListener('pointerlockchange', function () {
       var locked = !!w.document.pointerLockElement;
       document.getElementById('back').classList.toggle('on', !locked);
@@ -370,8 +403,7 @@ page = """<!DOCTYPE html>
   <div class="grid">
 %s
   </div>
-  <div class="footer-hint">이 파일 하나에 전부 들어 있습니다 — 더블클릭하면 바로 열립니다.<br>
-  실시간 센서 측정만 server.py 가 필요합니다.</div>
+  <div class="footer-hint">이 파일 하나에 전부 들어 있습니다 — 더블클릭하면 바로 열립니다.</div>
 </div>
 <div id="viewer"><iframe id="frame" allow="pointer-lock; fullscreen; autoplay"></iframe></div>
 <div id="loading">불러오는 중…</div>
