@@ -179,16 +179,21 @@ const FPTechWorld = (() => {
 
     // ④ 도시 굴뚝 옆 CCUS 설비 3기: 흡수탑(높이 6.5 m) + 압축기 + 굴뚝 쪽 배관 + 콘크리트 받침. 굴뚝 자리 (0.6, 0.55) 둘레.
     {
-      const g = bake([
+      // 굴뚝이 없는 해(그해 화석 배출 0 이하 — C.stackOn false)에는 굴뚝 쪽 배관 끝이 허공에 떠 보였다(T3 ⚠ 경미, 2026-11-21 사람 결정 '배관 숨기기').
+      // 배관 있는 모양·없는 모양 두 지오메트리를 구워 두고 apply 가 그해 굴뚝에 맞춰 바꿔 끼운다 — 인스턴스 하나라 드로우콜은 그대로
+      const body = () => [
         [roundedBox(0.075, 0.006, 0.055, 0.002), 0xa9a69e, [0.004, 0.003, 0]],                       // 받침판(접지)
         [new THREE.CylinderGeometry(0.012, 0.013, 0.13, 16), 0xc9ced3, [0.018, 0.071, 0]],           // 흡수탑
         [new THREE.TorusGeometry(0.0128, 0.0016, 6, 16), 0x7d858c, [0.018, 0.05, 0], [Math.PI / 2, 0, 0]],
         [new THREE.TorusGeometry(0.0125, 0.0016, 6, 16), 0x7d858c, [0.018, 0.10, 0], [Math.PI / 2, 0, 0]],
         [new THREE.SphereGeometry(0.012, 14, 6, 0, Math.PI * 2, 0, Math.PI / 2), 0xc9ced3, [0.018, 0.136, 0]], // 둥근 지붕
         [roundedBox(0.03, 0.026, 0.032, 0.004), 0x2f8f7a, [-0.012, 0.019, 0.006]],                    // 압축기(포집 타워와 같은 청록)
+      ];
+      const pipes = () => [
         [new THREE.CylinderGeometry(0.003, 0.003, 0.06, 8), 0x8b9196, [-0.012, 0.11, 0], [0, 0, Math.PI / 2]], // 굴뚝 쪽 배관
         [new THREE.CylinderGeometry(0.003, 0.003, 0.012, 8), 0x8b9196, [0.008, 0.11, 0], [0, 0, Math.PI / 2]],
-      ]);
+      ];
+      const g = bake(body().concat(pipes())), gBare = bake(body());
       const im = instanced(g, vmat(0.38, 0.45), 3, true);
       const spots = [[0.69, 0.55], [0.60, 0.67], [0.71, 0.70]];
       const list = spots.map(([lx, z]) => {
@@ -198,7 +203,7 @@ const FPTechWorld = (() => {
         boxOn(b, false); W.boxes.push(b);
         return { x, z, yaw, box: b };
       });
-      B.ccus = { im, list, n: -1 };
+      B.ccus = { im, list, n: -1, geoPipe: g, geoBare: gBare };
     }
 
     // ⑤ 도시 DAC 팬 벽 3기: 길이 6.5 m · 높이 3.8 m 상자 앞면에 팬 2 × 4. 지금 포집 타워(−0.65, 0.15) 서쪽 줄.
@@ -345,6 +350,11 @@ const FPTechWorld = (() => {
       }
     }
 
+    // CCUS 배관: 그해 굴뚝이 서 있을 때만(C.stackOn — fp-world 굴뚝 메시와 같은 값)
+    {
+      const want = C && C.stackOn ? B.ccus.geoPipe : B.ccus.geoBare;
+      if (B.ccus.im.geometry !== want) B.ccus.im.geometry = want;
+    }
     // CCUS · DAC · SMR · 충전소
     for (const [key, n] of [['ccus', st.ccusUnits], ['dac', st.dacUnits], ['smr', st.smrUnits], ['chargers', st.chargers]]) {
       const o = B[key];
