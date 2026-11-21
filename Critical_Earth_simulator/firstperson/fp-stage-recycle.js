@@ -1226,8 +1226,10 @@ const FPStageRecycle = (() => {
     const VIEW = { pos: [0, 1.95, 2.75], target: [0, 0.82, -0.5], fov: 54 };
     const shots = {
       wide: { pos: [0.7, 1.8, 4.9], target: [0, 1.15, -0.7], fov: 56 },
-      bench: { pos: [0.05, 1.5, 1.2], target: [-0.08, 0.96, 0.05], fov: 48 },
-      label: { pos: [-0.1, 1.16, 0.72], target: [-0.12, 1.0, 0.17], fov: 38, t: 0.35, freeze: true },
+      // bench·label: 왼쪽 위 준비 패널이 수거함 ①~③ 이름표를 가렸다(2026-11-21 사람 결정 '카메라 자세 조정').
+      // bench 는 오른쪽 위에서 왼쪽 안쪽을 비스듬히 내려다봐 ①~⑥이 패널 오른쪽에 오게, label 은 병을 화면 오른쪽으로 옮겨 ④가 패널 밖에 오게
+      bench: { pos: [0.7, 2.4, 1.25], target: [-1.2, 0.8, -0.6], fov: 54 },
+      label: { pos: [-0.24, 1.16, 0.72], target: [-0.26, 1.0, 0.17], fov: 38, t: 0.35, freeze: true },
       throw: { pos: [-0.55, 2.1, 1.25], target: [-1.85, 1.05, -1.0], fov: 52, t: 0.3, freeze: true },
       summary: { pos: VIEW.pos, target: VIEW.target, fov: VIEW.fov },
     };

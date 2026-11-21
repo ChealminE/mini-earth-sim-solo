@@ -201,6 +201,21 @@ const FPStageCouncil = (() => {
     const bld = FPWorld.buildings.find(b => Math.abs(b.mesh.position.x - HALL.bx) < 1e-4 && Math.abs(b.mesh.position.z - HALL.bz) < 1e-4);
     if (!bld) return {};
     const city = bld.mesh.parent, GB = FPWorld.GROUND_BASE, ZW = FPWorld.ZONE_W;
+    // 시청 몸채: 이 자리 도시 건물은 짙은 파란 유리 사무동이라 흰 돌 현관만 덧붙어 보였다(2026-11-21 사람 확인 '지금 고치기').
+    // 같은 메시에 돌벽 + 세로 창 그림만 새로 입힌다 — 메시·드로우콜·충돌·연도별 높이(applyWorldState 가 b.facade.repeat.y 로 층수를 맞춤)는 그대로
+    {
+      const stoneTex = kit.canvasTex((c, W, H) => {
+        c.fillStyle = '#d6cebd'; c.fillRect(0, 0, W, H);                                      // 돌벽
+        c.fillStyle = '#c7bea9'; c.fillRect(0, H * 0.9, W, H * 0.1);                          // 층 띠
+        c.fillStyle = '#e4ddcd'; c.fillRect(W * 0.26, H * 0.14, W * 0.48, H * 0.66);          // 창틀
+        c.fillStyle = '#4b5964'; c.fillRect(W * 0.31, H * 0.19, W * 0.38, H * 0.58);          // 유리
+        c.fillStyle = '#e4ddcd'; c.fillRect(W * 0.485, H * 0.19, W * 0.03, H * 0.58); c.fillRect(W * 0.31, H * 0.46, W * 0.38, H * 0.03);
+      }, 128, 128);
+      stoneTex.wrapS = stoneTex.wrapT = THREE.RepeatWrapping;
+      stoneTex.repeat.copy(bld.facade.repeat);
+      bld.mesh.material = new THREE.MeshStandardMaterial({ map: stoneTex, roughness: 0.85, metalness: 0 });
+      bld.facade = stoneTex;
+    }
     const cx = HALL.bx, z0 = HALL.bz + HALL.w / 2;
     const group = new THREE.Group();
     group.name = 'cityHallFront';

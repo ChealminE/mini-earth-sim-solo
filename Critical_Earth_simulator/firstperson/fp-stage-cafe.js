@@ -584,7 +584,10 @@ const FPStageCafe = (() => {
     kit.groundShadow(kiosk, [0.55, 0.45], { y: 0, opacity: 0.45 });
 
     // ── 고르는 컵 두 개 ──
-    const petMat = kit.matOf('clearPET', { thickness: 0.004, roughness: 0.08 });
+    // 빈 컵이 카운터 위에서 거의 안 보였다(보라 강조 고리만 보임, 2026-11-21 사람 결정 '컵을 더 보이게').
+    // 투명 재질 규칙(transmission·ior 1.57)은 그대로 두고, 아주 옅은 회청색 두께 빛깔 + 조금 더 센 환경 반사로 윤곽만 살린다
+    // (빛깔을 더 진하게 하면 컵 안 커피까지 회색으로 바랬다 — 받는 장면 pour 에서 커피색이 남는 정도로 묽게)
+    const petMat = kit.matOf('clearPET', { thickness: 0.006, roughness: 0.12, tint: 0xdde6eb, tintDistance: 0.03, envMapIntensity: 2.2 });
     const pet = new THREE.Group();
     // PET 컵: 얇은 몸통(한 겹), 위 테두리 말림, 돔 뚜껑·빨대는 받을 때 나타난다
     const PET_H = 0.14, PET_R0 = 0.029, PET_R1 = 0.046;

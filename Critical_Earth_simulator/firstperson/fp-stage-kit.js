@@ -263,8 +263,10 @@ const FPStageKit = (() => {
       // 헤어라인 스테인리스: 색 지도는 아주 옅은 결(금속의 색 = 반사색), 거칠기 지도가 결을 만든다(환경 반사가 결 방향으로 번진다)
       brushedSteel: o => new THREE.MeshStandardMaterial({ ...withMaps('brushed', o.noise, o.repeat), color: o.color || 0xe4e6e8, roughness: o.roughness || 1, metalness: 1 }),
       chrome: o => new THREE.MeshStandardMaterial({ color: o.color || 0xf2f4f6, roughness: o.roughness || 0.06, metalness: 1 }),
+      // tint(선택): 두께를 지나며 아주 옅은 빛깔 — 빈 컵이 밝은 나무 카운터 위에서 통째로 사라져 보여서(2026-11-19 사람 확인) 유리처럼 줄 수 있게 했다
       clearPET: o => new THREE.MeshPhysicalMaterial({ color: o.color || 0xffffff, roughness: o.roughness || 0.06, metalness: 0,
-        transmission: 1, thickness: o.thickness || 0.0015, ior: 1.57, specularIntensity: 1, envMapIntensity: 1.2 }),
+        transmission: 1, thickness: o.thickness || 0.0015, ior: 1.57, specularIntensity: 1, envMapIntensity: o.envMapIntensity || 1.2,
+        ...(o.tint ? { attenuationColor: new THREE.Color(o.tint), attenuationDistance: o.tintDistance || 0.02 } : {}) }),
       // 유리: 두께를 지나며 아주 옅은 초록(소다석회 유리) — 완전 무색이면 배경에 묻혀 윤곽만 남았다
       glass: o => new THREE.MeshPhysicalMaterial({ color: o.color || 0xffffff, roughness: o.roughness || 0.02, metalness: 0,
         transmission: 1, thickness: o.thickness || 0.004, ior: 1.5, specularIntensity: 1, envMapIntensity: 1.4,
