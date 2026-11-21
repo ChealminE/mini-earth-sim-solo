@@ -86,7 +86,7 @@ CO₂ 배출이 대기·기온·바다(pH·포화도 Ω)를 어떻게 바꾸는�
 
 1. **`setup.bat`** 더블클릭 — 가상환경 생성 + 라이브러리(fastapi·uvicorn) 설치, 완료되면 바탕화면에 바로가기 생성
 2. **`run_server.bat`** 더블클릭 (또는 바탕화면 바로가기) — `server.py`(정적 파일 서버) 실행 후 `http://127.0.0.1:8000`
-3. 코드를 바꿨다면 **`build_html.bat`**으로 배포본 `dist/MiniEarth.html`(약 7.3 MB)을 다시 만듭니다. `dist/`는 `.gitignore` 대상이고, **배포는 이 단일 HTML 하나뿐**입니다(GitHub Releases에 올림)
+3. 코드를 바꿨다면 **`build_html.bat`**으로 배포본 `dist/MiniEarth.html`(약 7.9 MB — 시작 화면 카드 그림 3장 포함)을 다시 만듭니다. `dist/`는 `.gitignore` 대상이고, **배포는 이 단일 HTML 하나뿐**입니다(GitHub Releases에 올림)
 
 ### 화면 구성
 
